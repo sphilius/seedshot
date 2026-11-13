@@ -1,0 +1,212 @@
+# player.gd - the gardener-bot: WASD to move, mouse to aim, seed pods and the vine.
+class_name Player
+extends CharacterBody2D
+## The player's gardener-bot.
+##
+## VERBS
+##   Move   WASD / arrow keys. Full speed or stopped (no acceleration in v1).
+##   Aim    the bot always faces the mouse pointer.
+##   Seed   hold the "fire" action (left click). The player does not create the
+##          pod itself: it emits seed_fired and the arena spawns it ("signal up").
+##   Vine   press the "vine" action (right click) on a grown tree to zip to it in
+##          a straight line, stopping one cell short. Empty space does nothing.
+##
+## The scene (player.tscn) puts it on physics layer 2, "player", and it collides
+## with layer 1, "world" (walls and grown trees).
+
+## Emitted for every shot. `direction` is a unit vector (length 1).
+signal seed_fired(origin: Vector2, direction: Vector2)
+## Emitted when a vine zip finishes. (Tests wait on this with `await`.)
+signal zip_finished
+
+const CONFIG: GameConfig = preload("res://config/game_config.tres")
+## Physics layer 1 ("world") as a bit mask, for ray and shape queries.
+const WORLD_MASK: int = 1
+const FALLBACK_COLOR: Color = Color(0.30, 0.70, 0.72)
+const VINE_COLOR: Color = Color(0.45, 0.85, 0.35)
+const RETICLE_COLOR: Color = Color(1.0, 1.0, 1.0, 0.8)
+
+## Unit vector from the bot towards the mouse pointer.
+var aim_direction: Vector2 = Vector2.RIGHT
+## True while the bot is travelling along the vine. Walking is locked meanwhile.
+var is_zipping: bool = false
+
+## Seconds until the next seed / next vine is allowed.
+var _fire_cooldown_left: float = 0.0
+var _vine_cooldown_left: float = 0.0
+## Centre of the tree the vine is attached to (only meaningful while zipping).
+var _vine_anchor: Vector2 = Vector2.ZERO
+
+## @onready fills these in just before _ready, once the child nodes exist.
+@onready var _collision: CollisionShape2D = $CollisionShape2D
+@onready var _sprite: Sprite2D = $Sprite2D
+
+
+## _ready runs once when the player enters the scene: size the hit circle and the
+## placeholder sprite from the config.
+func _ready() -> void:
+	(_collision.shape as CircleShape2D).radius = CONFIG.player_radius_cells * CONFIG.cell_size
+	_sprite.texture = CONFIG.player_texture
+	if _sprite.texture != null:
+		var wanted_px: float = CONFIG.sprite_size_cells * CONFIG.cell_size
+		_sprite.scale = Vector2.ONE * (wanted_px / float(_sprite.texture.get_width()))
+
+
+## _physics_process runs 60 times per second: cooldowns, aiming, walking, firing.
+func _physics_process(delta: float) -> void:
+	_fire_cooldown_left = maxf(_fire_cooldown_left - delta, 0.0)
+	_vine_cooldown_left = maxf(_vine_cooldown_left - delta, 0.0)
+	_update_aim()
+
+	if not is_zipping:
+		# get_vector reads the four move actions and returns a direction of length
+		# 0 (no keys) or 1 (any keys), so diagonals are not faster than straights.
+		var input_direction: Vector2 = Input.get_vector(
+			&"move_left", &"move_right", &"move_up", &"move_down"
+		)
+		velocity = input_direction * CONFIG.player_speed
+		move_and_slide()  # moves by `velocity` and slides along walls and trees
+
+	if Input.is_action_pressed(&"fire"):
+		fire(aim_direction)
+
+
+## _process runs every drawn frame: keep the reticle and vine line up to date.
+func _process(_delta: float) -> void:
+	queue_redraw()
+
+
+## _unhandled_input receives input events that no UI element used. The vine is a
+## single press (not a hold), so it is handled here as an event.
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed(&"vine"):
+		try_vine(get_global_mouse_position())
+
+
+## _draw paints, in order: the vine (while zipping), the fallback body square (only
+## if there is no sprite), and the aiming reticle at the mouse pointer.
+func _draw() -> void:
+	if is_zipping:
+		# to_local converts a world position into this node's own coordinates.
+		draw_line(Vector2.ZERO, to_local(_vine_anchor), VINE_COLOR, 4.0)
+	if CONFIG.player_texture == null:
+		var size: float = CONFIG.player_radius_cells * CONFIG.cell_size * 2.0
+		draw_rect(Rect2(-size / 2.0, -size / 2.0, size, size), FALLBACK_COLOR)
+		draw_line(Vector2.ZERO, aim_direction * size * 0.8, FALLBACK_COLOR, 6.0)
+	var mouse_local: Vector2 = get_local_mouse_position()
+	draw_arc(mouse_local, 9.0, 0.0, TAU, 24, RETICLE_COLOR, 2.0)
+	draw_circle(mouse_local, 2.0, RETICLE_COLOR)
+
+
+## Fires one seed pod along `direction` if the cooldown allows.
+## Returns true if a pod was fired.
+func fire(direction: Vector2) -> bool:
+	if _fire_cooldown_left > 0.0 or direction == Vector2.ZERO:
+		return false
+	_fire_cooldown_left = CONFIG.seed_cooldown
+	var unit: Vector2 = direction.normalized()
+	# Start the pod just outside our own hit circle, so it never begins inside us.
+	var muzzle_distance: float = CONFIG.player_radius_cells * CONFIG.cell_size + CONFIG.seed_radius
+	seed_fired.emit(global_position + unit * muzzle_distance, unit)
+	Sfx.play(&"fire")
+	return true
+
+
+## Tries to latch the vine onto the tree at `world_point` and zip to it.
+## Returns true if a zip started; false means nothing happened (no tree there,
+## out of range, a wall in the way, already next to it, or still cooling down).
+func try_vine(world_point: Vector2) -> bool:
+	if is_zipping or _vine_cooldown_left > 0.0:
+		return false
+	var picked: ForestTree = _pick_tree(world_point)
+	if picked == null:
+		return false  # right click on empty space: do nothing
+
+	# Shoot an invisible ray at the tree. Whatever solid thing it meets first is
+	# what the vine really grabs: a nearer tree is fine, a wall means no latch.
+	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
+	var ray := PhysicsRayQueryParameters2D.create(global_position, picked.global_position, WORLD_MASK)
+	var hit: Dictionary = space.intersect_ray(ray)
+	if hit.is_empty():
+		return false
+	var latched := hit["collider"] as ForestTree
+	if latched == null:
+		return false
+	if global_position.distance_to(latched.global_position) > CONFIG.vine_range:
+		return false
+	return _start_zip(latched)
+
+
+## Makes the sprite (and aim_direction) point at the mouse.
+func _update_aim() -> void:
+	var to_mouse: Vector2 = get_global_mouse_position() - global_position
+	if to_mouse.length() > 1.0:
+		aim_direction = to_mouse.normalized()
+	# The art faces "up", and angle() measures from "right", hence the quarter turn.
+	_sprite.rotation = aim_direction.angle() + PI / 2.0
+
+
+## Returns the grown tree nearest to `world_point`, if one is within the pick
+## radius; otherwise null.
+func _pick_tree(world_point: Vector2) -> ForestTree:
+	var best: ForestTree = null
+	var best_distance: float = CONFIG.vine_pick_radius_cells * CONFIG.cell_size
+	# Every tree adds itself to the "trees" group, so this loop sees all of them.
+	for node: Node in get_tree().get_nodes_in_group(ForestTree.GROUP):
+		var tree := node as ForestTree
+		if tree == null or tree.stage != ForestTree.Stage.GROWN:
+			continue
+		var distance: float = tree.global_position.distance_to(world_point)
+		if distance <= best_distance:
+			best = tree
+			best_distance = distance
+	return best
+
+
+## Starts the straight-line zip towards `tree`. Returns false if there is nowhere to go.
+func _start_zip(tree: ForestTree) -> bool:
+	var to_tree: Vector2 = tree.global_position - global_position
+	var distance: float = to_tree.length()
+	var stop_short: float = CONFIG.vine_stop_short_cells * CONFIG.cell_size
+	if distance <= stop_short + 1.0:
+		return false  # already as close as the vine would bring us
+
+	# The full move we would like to make: towards the tree, stopping one cell short.
+	var motion: Vector2 = (to_tree / distance) * (distance - stop_short)
+
+	# The tween below moves us without collision checks, so we check first: sweep
+	# our own hit circle along the line and see how far it gets before touching
+	# anything solid. cast_motion answers with fractions of the motion (0.0 to 1.0);
+	# the first one is the furthest SAFE fraction.
+	var sweep := PhysicsShapeQueryParameters2D.new()
+	sweep.shape = _collision.shape
+	sweep.transform = Transform2D(0.0, global_position)
+	sweep.motion = motion
+	sweep.collision_mask = WORLD_MASK
+	var fractions: PackedFloat32Array = get_world_2d().direct_space_state.cast_motion(sweep)
+	var safe_fraction: float = fractions[0] if fractions.size() > 0 else 1.0
+	var travel: Vector2 = motion * safe_fraction
+	if travel.length() < 4.0:
+		return false  # blocked almost immediately: not worth a zip
+
+	is_zipping = true
+	velocity = Vector2.ZERO
+	_vine_anchor = tree.global_position
+	Sfx.play(&"zip")
+
+	# A Tween animates a property over time. This one slides global_position to the
+	# destination; the duration comes from distance / speed.
+	var tween: Tween = create_tween()
+	tween.set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)  # step in time with physics
+	tween.tween_property(
+		self, "global_position", global_position + travel, travel.length() / CONFIG.vine_zip_speed
+	)
+	tween.finished.connect(_on_zip_tween_finished)
+	return true
+
+
+## Runs when the zip tween ends: unlock walking and start the vine cooldown.
+func _on_zip_tween_finished() -> void:
+	is_zipping = false
+	_vine_cooldown_left = CONFIG.vine_cooldown
+	zip_finished.emit()

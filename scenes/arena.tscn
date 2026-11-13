@@ -1,0 +1,25 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/arena.gd" id="1_arena"]
+
+[node name="Arena" type="Node2D"]
+script = ExtResource("1_arena")
+
+[node name="Walls" type="StaticBody2D" parent="."]
+collision_mask = 0
+
+[node name="Trees" type="Node2D" parent="."]
+
+[node name="Enemies" type="Node2D" parent="."]
+
+[node name="Pods" type="Node2D" parent="."]
+
+[node name="Hud" type="CanvasLayer" parent="."]
+
+[node name="Hint" type="Label" parent="Hud"]
+modulate = Color(1, 1, 1, 0.6)
+offset_left = 28.0
+offset_top = 12.0
+offset_right = 900.0
+offset_bottom = 36.0
+text = "WASD move   |   Left click: seed pod   |   Right click a tree: vine zip"
