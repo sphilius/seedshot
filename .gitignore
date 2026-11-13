@@ -1,0 +1,15 @@
+# Godot's import cache: rebuilt automatically, never committed.
+.godot/
+*.translation
+
+# Exported builds (the web export lands in build/web). Keep the .gdignore marker so
+# Godot never tries to import the exported files back into the project.
+build/*
+!build/.gdignore
+
+# Python caches from tools/
+__pycache__/
+*.pyc
+
+# The art cleaner's check sheet (regenerated on every run).
+art/source/_cleaned_preview.png
