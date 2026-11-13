@@ -46,6 +46,14 @@ func _ready() -> void:
 	await _test_kill_becomes_sapling_then_tree()
 	await _test_felled_tree_clears_its_cell()
 
+	# Layer 2b: touch controls. Headless Godot has no touchscreen, so these call
+	# the touch layer's public touch_down / touch_moved / touch_up directly, which
+	# is exactly what its _input does with real finger events.
+	await _test_touch_move_stick_walks()
+	await _test_touch_aim_stick_fires()
+	await _test_touch_tap_on_tree_zips()
+	await _test_touch_tap_rules()
+
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
 
@@ -249,6 +257,127 @@ func _test_felled_tree_clears_its_cell() -> void:
 	tree.take_damage(1)
 	_check(_arena.tree_at(cell) == null, "tree is removed at 0 HP")
 	_check(not _arena.grid.is_solid(cell), "its grid cell is clear again")
+
+
+## Fetches the touch layer of the current arena.
+func _touch_controls() -> TouchControls:
+	return _arena.get_node("Hud/TouchControls") as TouchControls
+
+
+## Lets the game run for a number of physics steps (60 steps = one second).
+func _wait_frames(count: int) -> void:
+	for i: int in count:
+		await get_tree().physics_frame
+
+
+## Touch: a thumb sliding on the left half walks the bot, at full speed, and
+## lifting the thumb stops it.
+func _test_touch_move_stick_walks() -> void:
+	await _fresh_arena()
+	var touch: TouchControls = _touch_controls()
+	var start: Vector2 = _arena.player.global_position
+	var thumb := Vector2(200.0, 500.0)  # left half of the 1280 px wide screen
+
+	touch.touch_down(0, thumb)
+	_check(touch.touch_mode and _arena.player.touch_mode, "first touch switches touch mode on")
+	touch.touch_moved(0, thumb + Vector2(60.0, 0.0))
+	await _wait_frames(30)
+	var walked: float = _arena.player.global_position.x - start.x
+	var expected: float = CONFIG.player_speed * 0.5
+	_check(absf(walked - expected) < 20.0, "move stick pushed right walks about %d px (got %.0f)" % [expected, walked])
+	_check(absf(_arena.player.global_position.y - start.y) < 1.0, "and does not drift up or down")
+
+	touch.touch_up(0)
+	_check(not Input.is_action_pressed(&"move_right"), "lifting the thumb releases the move action")
+	var stopped_at: Vector2 = _arena.player.global_position
+	await _wait_frames(10)
+	_check(_arena.player.global_position == stopped_at, "the bot stops when the thumb lifts")
+
+	# A thumb that slides only a little (finger wobble) must not move the bot.
+	touch.touch_down(0, thumb)
+	touch.touch_moved(0, thumb + Vector2(CONFIG.touch_drag_threshold * 0.5, 0.0))
+	await _wait_frames(10)
+	_check(_arena.player.global_position == stopped_at, "a tiny slide is ignored")
+	touch.touch_up(0)
+
+
+## Touch: a thumb sliding on the right half aims the bot and fires while held.
+func _test_touch_aim_stick_fires() -> void:
+	await _fresh_arena()
+	var touch: TouchControls = _touch_controls()
+	var pods: Node = _arena.get_node("Pods")
+	var thumb := Vector2(1100.0, 500.0)  # right half
+
+	touch.touch_down(1, thumb)
+	await _wait_frames(5)
+	_check(pods.get_child_count() == 0, "just resting a thumb on the right half does not fire")
+
+	touch.touch_moved(1, thumb + Vector2(0.0, -60.0))  # slide up
+	_check(_arena.player.aim_direction.is_equal_approx(Vector2.UP), "aim stick pushed up aims up")
+	await _wait_frames(3)
+	_check(pods.get_child_count() >= 1, "holding the aim stick fires a pod")
+	if pods.get_child_count() >= 1:
+		_check((pods.get_child(0) as SeedPod).direction.is_equal_approx(Vector2.UP), "the pod flies the way the stick points")
+
+	touch.touch_up(1)
+	_check(not _arena.player.touch_fire_held, "lifting the thumb stops firing")
+	_check(_arena.player.aim_direction.is_equal_approx(Vector2.UP), "the bot keeps facing where it last aimed")
+	# Wait for the pods in flight to hit the wall, then make sure no new ones appear.
+	await _wait_until(func() -> bool: return pods.get_child_count() == 0, 2.0)
+	await _wait_frames(20)
+	_check(pods.get_child_count() == 0, "no more pods after the thumb lifts")
+
+
+## Touch: a quick tap on a tree is the vine, and it obeys the same rules as right
+## click (straight line, one cell short).
+func _test_touch_tap_on_tree_zips() -> void:
+	await _fresh_arena()
+	var touch: TouchControls = _touch_controls()
+	var tree_cell: Vector2i = Arena.TEST_TREE_CELLS[0]
+	var tree_position: Vector2 = _arena.grid.cell_to_world(tree_cell)
+	_arena.player.global_position = _arena.grid.cell_to_world(tree_cell + Vector2i(-6, 0))
+	await get_tree().physics_frame
+
+	# Tap a full cell off-centre: a miss for the mouse (0.9 cells), a hit for a finger.
+	var sloppy_tap: Vector2 = tree_position + Vector2(0.0, float(CONFIG.cell_size))
+	touch.touch_down(0, sloppy_tap)
+	await _wait_frames(3)
+	touch.touch_up(0)
+	_check(_arena.player.is_zipping, "a tap near a tree starts a vine zip")
+	_check(await _wait_until(func() -> bool: return not _arena.player.is_zipping, 2.0), "the zip finishes")
+	var gap: float = _arena.player.global_position.distance_to(tree_position)
+	_check(absf(gap - float(CONFIG.cell_size)) < 2.0, "the tap zip also stops one cell short (gap %.1f px)" % gap)
+	_check(_arena.get_node("Pods").get_child_count() == 0, "a tap does not fire a pod")
+
+
+## Touch: what must NOT trigger the vine - a tap on empty floor, a long press on a
+## tree, and a thumb that is already being used as a stick.
+func _test_touch_tap_rules() -> void:
+	await _fresh_arena()
+	var touch: TouchControls = _touch_controls()
+	var tree_cell: Vector2i = Arena.TEST_TREE_CELLS[0]
+	var tree_position: Vector2 = _arena.grid.cell_to_world(tree_cell)
+	_arena.player.global_position = _arena.grid.cell_to_world(tree_cell + Vector2i(-6, 0))
+	await get_tree().physics_frame
+	var before: Vector2 = _arena.player.global_position
+
+	touch.touch_down(0, _arena.grid.cell_to_world(Vector2i(3, 12)))
+	await _wait_frames(3)
+	touch.touch_up(0)
+	_check(not _arena.player.is_zipping, "a tap on empty floor does nothing")
+
+	touch.touch_down(0, tree_position)
+	await _wait_frames(int(CONFIG.touch_tap_max_time * 60.0) + 12)
+	touch.touch_up(0)
+	_check(not _arena.player.is_zipping, "a long press on a tree is not a tap")
+
+	# Start on the tree, slide away (it becomes the aim stick: the tree is on the
+	# right half), then lift quickly. That was aiming, not a tap.
+	touch.touch_down(0, tree_position)
+	touch.touch_moved(0, tree_position + Vector2(50.0, 0.0))
+	touch.touch_up(0)
+	_check(not _arena.player.is_zipping, "a slide that starts on a tree is not a tap")
+	_check(_arena.player.global_position == before, "the bot never moved")
 
 
 ## Cell <-> pixel conversion must agree in both directions.

@@ -73,6 +73,22 @@ extends Resource
 ## The Scrapper stops walking when it is this close to the player (melee range).
 @export var scrapper_stop_distance_cells: float = 0.8
 
+@export_group("Touch")
+## A finger must slide this far (in game pixels) before its touch becomes a
+## thumb-stick. Anything shorter is finger wobble, so a tap stays a tap.
+@export var touch_drag_threshold: float = 20.0
+## How far the stick's knob can sit from its centre. If the thumb slides further,
+## the whole stick follows it, so reversing direction is always a short move.
+@export var touch_stick_radius: float = 80.0
+## A touch that lifts sooner than this, without sliding, counts as a tap (the vine).
+@export var touch_tap_max_time: float = 0.30
+## Like vine_pick_radius_cells, but for taps. Bigger, because a fingertip is wider
+## and less exact than a mouse pointer.
+@export var touch_vine_pick_radius_cells: float = 1.5
+## On touch there is no pointer to draw the reticle at, so it floats this far in
+## front of the bot, along the aim direction.
+@export var touch_reticle_distance_cells: float = 2.5
+
 @export_group("Debug")
 ## Gray-box helper: seconds after a Scrapper dies before a new one walks in.
 ## Set to 0 to turn respawning off. Real waves will replace this.

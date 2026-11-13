@@ -45,6 +45,8 @@ var _rng := RandomNumberGenerator.new()
 @onready var _trees: Node2D = $Trees
 @onready var _enemies: Node2D = $Enemies
 @onready var _pods: Node2D = $Pods
+## Phone and tablet controls. Optional: the arena works without this node.
+@onready var _touch: TouchControls = get_node_or_null("Hud/TouchControls")
 
 
 ## _ready runs once when the scene starts: build the grid and walls, then place
@@ -60,6 +62,9 @@ func _ready() -> void:
 	player.position = grid.cell_to_world(PLAYER_START_CELL)
 	player.seed_fired.connect(_on_player_seed_fired)
 	add_child(player)
+	# Hand the player to the touch controls, if the scene has them.
+	if _touch != null:
+		_touch.setup(player)
 
 	for cell: Vector2i in TEST_TREE_CELLS:
 		spawn_tree(cell, true)

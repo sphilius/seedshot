@@ -11,6 +11,16 @@ Jamference AI Game Jam Hack 4 entry. Godot 4.7, GDScript, Compatibility renderer
 | Left click (hold) | Fire seed pods |
 | Right click on a tree | Vine zip to it, stopping one cell short |
 
+### Touch (phones and tablets, landscape)
+
+| Input | Verb |
+|---|---|
+| Slide a thumb on the left half | Move |
+| Slide a thumb on the right half | Aim, and fire while held |
+| Quick tap on a tree | Vine zip to it |
+
+Touch switches on at the first finger and off again when a real mouse moves. It is one node (`Hud/TouchControls` in `scenes/arena.tscn`); delete that node to remove touch support.
+
 ## Commands (PowerShell, from this folder)
 
 ```powershell
@@ -32,6 +42,7 @@ On a fresh clone run `.\tools\godot.ps1 import` once first.
 | `scripts/arena_grid.gd` | Grid maths, pathfinding, and the seal guard. No nodes, so it is easy to test. |
 | `scripts/player.gd` | Move, aim, fire, vine. |
 | `scripts/forest_tree.gd`, `scrapper.gd`, `seed_pod.gd` | One script per thing in the arena. |
+| `scripts/touch_controls.gd` | Thumb-sticks and tap-to-vine. Drives the same verbs as mouse and keyboard. |
 | `scripts/sfx.gd` | Generated beeps and the browser audio unlock (autoload `Sfx`). |
 | `tests/check.gd` | The headless checks. |
 | `art/source/` | Raw generated images (ignored by Godot). |

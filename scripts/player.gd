@@ -30,6 +30,11 @@ const RETICLE_COLOR: Color = Color(1.0, 1.0, 1.0, 0.8)
 var aim_direction: Vector2 = Vector2.RIGHT
 ## True while the bot is travelling along the vine. Walking is locked meanwhile.
 var is_zipping: bool = false
+## Set by TouchControls (scripts/touch_controls.gd) on a phone or tablet. While
+## true, the bot ignores the mouse: aim_direction is written by the aim thumb-stick
+## and seeds fire while touch_fire_held is true.
+var touch_mode: bool = false
+var touch_fire_held: bool = false
 
 ## Seconds until the next seed / next vine is allowed.
 var _fire_cooldown_left: float = 0.0
@@ -67,7 +72,11 @@ func _physics_process(delta: float) -> void:
 		velocity = input_direction * CONFIG.player_speed
 		move_and_slide()  # moves by `velocity` and slides along walls and trees
 
-	if Input.is_action_pressed(&"fire"):
+	# `a if condition else b` picks one of two values. On touch the "fire" action
+	# is ignored, because Godot presses it for every finger that lands (see the
+	# note about the fake mouse in touch_controls.gd).
+	var wants_fire: bool = touch_fire_held if touch_mode else Input.is_action_pressed(&"fire")
+	if wants_fire:
 		fire(aim_direction)
 
 
@@ -93,9 +102,13 @@ func _draw() -> void:
 		var size: float = CONFIG.player_radius_cells * CONFIG.cell_size * 2.0
 		draw_rect(Rect2(-size / 2.0, -size / 2.0, size, size), FALLBACK_COLOR)
 		draw_line(Vector2.ZERO, aim_direction * size * 0.8, FALLBACK_COLOR, 6.0)
-	var mouse_local: Vector2 = get_local_mouse_position()
-	draw_arc(mouse_local, 9.0, 0.0, TAU, 24, RETICLE_COLOR, 2.0)
-	draw_circle(mouse_local, 2.0, RETICLE_COLOR)
+	# The reticle sits on the mouse pointer. On touch there is no pointer, so it
+	# floats a fixed distance in front of the bot instead.
+	var reticle: Vector2 = get_local_mouse_position()
+	if touch_mode:
+		reticle = aim_direction * CONFIG.touch_reticle_distance_cells * CONFIG.cell_size
+	draw_arc(reticle, 9.0, 0.0, TAU, 24, RETICLE_COLOR, 2.0)
+	draw_circle(reticle, 2.0, RETICLE_COLOR)
 
 
 ## Fires one seed pod along `direction` if the cooldown allows.
@@ -115,10 +128,15 @@ func fire(direction: Vector2) -> bool:
 ## Tries to latch the vine onto the tree at `world_point` and zip to it.
 ## Returns true if a zip started; false means nothing happened (no tree there,
 ## out of range, a wall in the way, already next to it, or still cooling down).
-func try_vine(world_point: Vector2) -> bool:
+## `pick_radius_cells` is how close `world_point` must be to a tree's centre. Leave
+## it out to use the mouse value from the config; touch taps pass a bigger one.
+func try_vine(world_point: Vector2, pick_radius_cells: float = -1.0) -> bool:
 	if is_zipping or _vine_cooldown_left > 0.0:
 		return false
-	var picked: ForestTree = _pick_tree(world_point)
+	# -1.0 is the "not given" marker (a radius can never really be negative).
+	if pick_radius_cells < 0.0:
+		pick_radius_cells = CONFIG.vine_pick_radius_cells
+	var picked: ForestTree = _pick_tree(world_point, pick_radius_cells * CONFIG.cell_size)
 	if picked == null:
 		return false  # right click on empty space: do nothing
 
@@ -137,20 +155,22 @@ func try_vine(world_point: Vector2) -> bool:
 	return _start_zip(latched)
 
 
-## Makes the sprite (and aim_direction) point at the mouse.
+## Makes the sprite (and aim_direction) point at the mouse. On touch, the aim
+## thumb-stick has already written aim_direction, so only the sprite is turned.
 func _update_aim() -> void:
-	var to_mouse: Vector2 = get_global_mouse_position() - global_position
-	if to_mouse.length() > 1.0:
-		aim_direction = to_mouse.normalized()
+	if not touch_mode:
+		var to_mouse: Vector2 = get_global_mouse_position() - global_position
+		if to_mouse.length() > 1.0:
+			aim_direction = to_mouse.normalized()
 	# The art faces "up", and angle() measures from "right", hence the quarter turn.
 	_sprite.rotation = aim_direction.angle() + PI / 2.0
 
 
-## Returns the grown tree nearest to `world_point`, if one is within the pick
-## radius; otherwise null.
-func _pick_tree(world_point: Vector2) -> ForestTree:
+## Returns the grown tree nearest to `world_point`, if one is within
+## `pick_radius` pixels; otherwise null.
+func _pick_tree(world_point: Vector2, pick_radius: float) -> ForestTree:
 	var best: ForestTree = null
-	var best_distance: float = CONFIG.vine_pick_radius_cells * CONFIG.cell_size
+	var best_distance: float = pick_radius
 	# Every tree adds itself to the "trees" group, so this loop sees all of them.
 	for node: Node in get_tree().get_nodes_in_group(ForestTree.GROUP):
 		var tree := node as ForestTree
