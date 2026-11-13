@@ -38,6 +38,7 @@ func _ready() -> void:
 	# `await` on a function call means: start it, and continue here only once it
 	# has completely finished (including all of its own awaits).
 	await _test_arena_boots()
+	await _test_player_walks_and_stops_at_walls()
 	await _test_pod_stops_on_tree()
 	await _test_vine_on_empty_space_does_nothing()
 	await _test_vine_zips_one_cell_short()
@@ -102,6 +103,29 @@ func _test_arena_boots() -> void:
 		var tree: ForestTree = _arena.tree_at(cell)
 		_check(tree != null and tree.stage == ForestTree.Stage.GROWN, "test tree at %s is grown" % cell)
 		_check(_arena.grid.is_solid(cell), "test tree cell %s is solid in the grid" % cell)
+
+
+## Kickoff step 2: holding a move action walks the player; walls stop it.
+## Input.action_press() switches an action on from code, as if the key were held.
+## That works headless, unlike simulated key events.
+func _test_player_walks_and_stops_at_walls() -> void:
+	await _fresh_arena()
+	var start: Vector2 = _arena.player.global_position
+	Input.action_press(&"move_right")
+	for i: int in 30:  # half a second of physics steps
+		await get_tree().physics_frame
+	Input.action_release(&"move_right")
+	var walked: float = _arena.player.global_position.x - start.x
+	var expected: float = CONFIG.player_speed * 0.5
+	_check(absf(walked - expected) < 20.0, "half a second of 'move_right' walks about %d px (got %.0f)" % [expected, walked])
+
+	# Now walk left for long enough to cross the whole arena: the wall must stop us.
+	Input.action_press(&"move_left")
+	var hit_wall: Callable = func() -> bool: return _arena.player.get_slide_collision_count() > 0
+	_check(await _wait_until(hit_wall, 6.0), "walking left eventually touches the wall")
+	Input.action_release(&"move_left")
+	var cell: Vector2i = _arena.grid.world_to_cell(_arena.player.global_position)
+	_check(cell.x == 1, "the wall stops the player in the first floor column (cell x = %d)" % cell.x)
 
 
 ## Kickoff step 3: a seed pod fired at a tree stops on it and does not pass through.
