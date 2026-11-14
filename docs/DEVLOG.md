@@ -8,8 +8,10 @@ Statuses: Made, Changed, Removed, Revisited, Parked, Archived, Proposed.
 
 | ID | Date | Status | Choice |
 |---|---|---|---|
-| D-008 | 2026-11-13 | Proposed | Final sprites from SpriteCook Pixel Engine at one fixed size |
-| D-007 | 2026-11-13 | Proposed | Upload the web build to itch as a draft now |
+| D-010 | 2026-11-13 | Made | One art spec for every tool: 64 px, top-down, 12 colours, red for enemies only |
+| D-009 | 2026-11-13 | Made | Scrapper melee is a telegraphed swing; 5 hit points; defeat restarts the arena |
+| D-008 | 2026-11-13 | Revisited | Final art source: three-way test first (SpriteCook, ChatGPT Images, Klad) |
+| D-007 | 2026-11-13 | Made | Upload the web build to itch as a draft (waiting on the game page) |
 | D-006 | 2026-11-13 | Made | Touch controls: two floating thumb-sticks, tap a tree for the vine |
 | D-005 | 2026-11-13 | Made | Placeholder sprites are in the gray box (player and Scrapper) |
 | D-004 | 2026-11-13 | Made | Debug respawn: a new Scrapper 2 s after each death |
@@ -17,13 +19,31 @@ Statuses: Made, Changed, Removed, Revisited, Parked, Archived, Proposed.
 | D-002 | 2026-11-13 | Made | The vine latches the first tree its ray meets |
 | D-001 | 2026-11-13 | Made | Every tunable in one config resource |
 
-## D-008: Final sprites from SpriteCook Pixel Engine (Proposed, 2026-11-13)
+## D-010: One art spec for every tool (Made, 2026-11-13)
 
-The eight placeholders have mixed pixel sizes, which no script can fix. SpriteCook's Pixel Engine makes transparent PNGs at an exact size (16 to 128 px), so a set matches. Cost: 6 credits a sprite, 30 credits in the account. Open in the guidebook as decision `d2-final-art-source`. Do it only after Saturday's gate passes.
+Written down in `art/PROMPTS.md` so any generator gets the same brief.
 
-## D-007: itch draft now (Proposed, 2026-11-13)
+- **64 x 64 pixels.** A cell is 48 px and sprites are drawn slightly larger than a cell. When final art goes in, set `sprite_size_cells` to 1.333 so one art pixel is exactly one screen pixel.
+- **Top-down, front at the top.** The game rotates sprites to face their aim or travel. The placeholders are front views, which look wrong when rotated. The cat is the exception: it never rotates.
+- **12 colours, red for enemies only.** DESIGN.md asks for one accent colour reserved for enemy tells; the melee windup glow (D-009) already uses red.
+- **Differs from DESIGN.md:** the lock says "grayscale kit plus palette-swap shader". The test uses colour so results compare directly with the colour placeholders. Revisit once a tool wins.
 
-The Friday plan asks for a draft on itch. It is also the only reliable way to test touch with two thumbs on a real phone. Open in the guidebook as decision `d1-itch-draft`.
+## D-009: Telegraphed melee, 5 hit points, restart on defeat (Made, 2026-11-13)
+
+First slice of Saturday's work, pulled forward.
+
+- **The swing:** within 1.0 cells a Scrapper glows red for 0.35 s and stands still, then hits if the bot is still in reach. Leaving its reach makes it miss. A hit you could not have avoided would make trees feel pointless; a hit you can dodge by zipping makes them matter.
+- **Health:** 5 hit points, one per swing, 0.8 s of blinking invulnerability after a hit so two enemies landing together cost one point.
+- **Defeat:** the whole arena reloads after 1.2 s. This is a stand-in. DESIGN.md says death restarts the current wave with the forest as it stood at wave start; that needs waves first.
+- **How it is wired:** the Scrapper emits `struck`, the arena connects it to the player. The Scrapper never touches the player's health directly.
+
+## D-008: Final art source (Revisited, 2026-11-13)
+
+Was: SpriteCook Pixel Engine, proposed. Now: Sasha wants a three-way test first, SpriteCook vs ChatGPT Images vs Klad, against the Nano Banana placeholders as the baseline. Three sprites per tool, scorecard in `art/PROMPTS.md`. Guidebook decision `d2-final-art-source` stays open until the scorecard is filled in.
+
+## D-007: itch draft (Made, 2026-11-13)
+
+Decided in chat: upload now. The first `butler push` to `kingriot/seedshot:html5` was refused because the game page does not exist yet; butler cannot create one. Blocked on Sasha creating the page.
 
 ## D-006: Touch controls (Made, 2026-11-13)
 

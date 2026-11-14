@@ -11,6 +11,10 @@ Jamference AI Game Jam Hack 4 entry. Godot 4.7, GDScript, Compatibility renderer
 | Left click (hold) | Fire seed pods |
 | Right click on a tree | Vine zip to it, stopping one cell short |
 
+The green squares in the top-right corner are your hit points. A Scrapper glows red just before it swings: get out of its reach and the swing misses.
+
+The itch page is `kingriot/seedshot` (channel `html5`).
+
 ### Touch (phones and tablets, landscape)
 
 | Input | Verb |
@@ -45,6 +49,8 @@ On a fresh clone run `.\tools\godot.ps1 import` once first.
 | `scripts/touch_controls.gd` | Thumb-sticks and tap-to-vine. Drives the same verbs as mouse and keyboard. |
 | `scripts/sfx.gd` | Generated beeps and the browser audio unlock (autoload `Sfx`). |
 | `tests/check.gd` | The headless checks. |
+| `scripts/health_pips.gd` | The hit-point squares on the HUD. |
+| `art/PROMPTS.md` | The art spec and the paste-ready prompts for the generator comparison. |
 | `art/source/` | Raw generated images (ignored by Godot). |
 | `art/placeholder/` | Cleaned transparent PNGs the game can load. |
 | `AI_LOG.md` | AI-use log for the itch page. |
