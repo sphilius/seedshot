@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/arena.gd" id="1_arena"]
 [ext_resource type="Script" path="res://scripts/touch_controls.gd" id="2_touch"]
+[ext_resource type="Script" path="res://scripts/health_pips.gd" id="3_pips"]
 
 [node name="Arena" type="Node2D"]
 script = ExtResource("1_arena")
@@ -23,7 +24,10 @@ offset_left = 28.0
 offset_top = 12.0
 offset_right = 900.0
 offset_bottom = 36.0
-text = "WASD move   |   Left click: seed pod   |   Right click a tree: vine zip"
+text = "WASD move   |   Left click: seed pod   |   Right click a tree: vine zip   |   Red glow = incoming hit"
+
+[node name="HealthPips" type="Node2D" parent="Hud"]
+script = ExtResource("3_pips")
 
 [node name="TouchControls" type="Node2D" parent="Hud" node_paths=PackedStringArray("hint_label")]
 script = ExtResource("2_touch")

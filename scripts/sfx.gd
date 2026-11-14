@@ -34,6 +34,9 @@ func _ready() -> void:
 	_streams[&"enemy_down"] = _make_blip(600.0, 120.0, 0.18, 0.35)
 	_streams[&"zip"] = _make_blip(300.0, 1200.0, 0.14, 0.25)
 	_streams[&"grow"] = _make_blip(400.0, 800.0, 0.20, 0.25)
+	_streams[&"windup"] = _make_blip(180.0, 360.0, 0.10, 0.20)
+	_streams[&"hurt"] = _make_blip(320.0, 90.0, 0.16, 0.40)
+	_streams[&"player_down"] = _make_blip(440.0, 55.0, 0.60, 0.40)
 
 	for i: int in PLAYER_COUNT:
 		var player := AudioStreamPlayer.new()

@@ -13,10 +13,16 @@ extends CharacterBody2D
 
 ## Emitted once, when HP reaches zero. The arena plants a sapling where it fell.
 signal died(scrapper: Scrapper)
+## Emitted when a melee swing lands. The Scrapper does not touch the player's
+## health itself: the arena connects this to the player ("signal up").
+signal struck(damage: int)
 
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
 const GROUP: StringName = &"enemies"
 const FALLBACK_COLOR: Color = Color(0.72, 0.42, 0.25)
+## The sprite is tinted this colour during the windup. Values above 1.0 brighten.
+## Red is the one colour reserved for "an enemy is about to hurt you".
+const WINDUP_TINT: Color = Color(1.9, 0.55, 0.45)
 ## How close (pixels) to a cell centre counts as "arrived at this waypoint".
 const WAYPOINT_REACHED_DISTANCE: float = 5.0
 
@@ -29,6 +35,12 @@ var _is_dead: bool = false
 var _path: Array[Vector2i] = []
 ## Seconds until the next path recalculation.
 var _repath_time_left: float = 0.0
+## True from the start of a swing's warning glow until the hit lands or misses.
+## Public (no underscore) so the tests can watch it.
+var is_winding_up: bool = false
+## Seconds left in the current windup / until the next swing is allowed.
+var _windup_time_left: float = 0.0
+var _melee_cooldown_left: float = 0.0
 
 @onready var _collision: CollisionShape2D = $CollisionShape2D
 @onready var _sprite: Sprite2D = $Sprite2D
@@ -65,9 +77,12 @@ func _physics_process(delta: float) -> void:
 		_repath_time_left = CONFIG.scrapper_repath_interval
 		_recalculate_path()
 
-	var to_target: Vector2 = _target.global_position - global_position
-	if to_target.length() <= CONFIG.scrapper_stop_distance_cells * CONFIG.cell_size:
-		velocity = Vector2.ZERO  # in melee range: stand still (attacks come later)
+	var distance: float = global_position.distance_to(_target.global_position)
+	_update_melee(delta, distance)
+	# A Scrapper commits to its swing: it stands still while winding up. It also
+	# stands still once it is close enough that walking further would only shove.
+	if is_winding_up or distance <= CONFIG.scrapper_stop_distance_cells * CONFIG.cell_size:
+		velocity = Vector2.ZERO
 		return
 
 	var goal: Vector2 = _next_goal()
@@ -93,6 +108,34 @@ func take_damage(amount: int) -> void:
 		_is_dead = true
 		died.emit(self)
 		queue_free()
+
+
+## The melee attack, one step at a time. `distance` is how far the target is.
+##   1. Target in range and the cooldown is over: start the windup (red glow).
+##   2. Windup ends: if the target is STILL in range the swing lands (emit
+##      `struck`); if it got away, the swing misses. Either way, cool down.
+## The windup is the player's chance to react, which is what makes the hit fair.
+func _update_melee(delta: float, distance: float) -> void:
+	var in_range: bool = distance <= CONFIG.scrapper_melee_range_cells * CONFIG.cell_size
+	_melee_cooldown_left = maxf(_melee_cooldown_left - delta, 0.0)
+
+	if not is_winding_up:
+		if in_range and _melee_cooldown_left <= 0.0:
+			is_winding_up = true
+			_windup_time_left = CONFIG.scrapper_melee_windup
+			modulate = WINDUP_TINT  # tints this node and everything it draws
+			Sfx.play(&"windup")
+		return
+
+	_windup_time_left -= delta
+	if _windup_time_left > 0.0:
+		return
+	# The windup just ended: resolve the swing.
+	is_winding_up = false
+	_melee_cooldown_left = CONFIG.scrapper_melee_cooldown
+	modulate = Color.WHITE  # white = "no tint"
+	if in_range:
+		struck.emit(CONFIG.scrapper_melee_damage)
 
 
 ## Asks the grid for a fresh route to the target.

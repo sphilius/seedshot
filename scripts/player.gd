@@ -18,6 +18,10 @@ extends CharacterBody2D
 signal seed_fired(origin: Vector2, direction: Vector2)
 ## Emitted when a vine zip finishes. (Tests wait on this with `await`.)
 signal zip_finished
+## Emitted whenever hit points change. The arena forwards it to the HUD pips.
+signal health_changed(current: int, maximum: int)
+## Emitted once, when hit points reach zero. The arena restarts the run.
+signal died
 
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
 ## Physics layer 1 ("world") as a bit mask, for ray and shape queries.
@@ -35,6 +39,13 @@ var is_zipping: bool = false
 ## and seeds fire while touch_fire_held is true.
 var touch_mode: bool = false
 var touch_fire_held: bool = false
+## Hit points left. Starts at CONFIG.player_max_hp.
+var hp: int = 0
+## True once hp reaches zero: the bot stops moving, firing and zipping.
+var is_dead: bool = false
+
+## Seconds of "cannot be hurt" left after the last hit (the bot blinks meanwhile).
+var _invulnerable_left: float = 0.0
 
 ## Seconds until the next seed / next vine is allowed.
 var _fire_cooldown_left: float = 0.0
@@ -50,6 +61,7 @@ var _vine_anchor: Vector2 = Vector2.ZERO
 ## _ready runs once when the player enters the scene: size the hit circle and the
 ## placeholder sprite from the config.
 func _ready() -> void:
+	hp = CONFIG.player_max_hp
 	(_collision.shape as CircleShape2D).radius = CONFIG.player_radius_cells * CONFIG.cell_size
 	_sprite.texture = CONFIG.player_texture
 	if _sprite.texture != null:
@@ -61,6 +73,9 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	_fire_cooldown_left = maxf(_fire_cooldown_left - delta, 0.0)
 	_vine_cooldown_left = maxf(_vine_cooldown_left - delta, 0.0)
+	_update_hit_blink(delta)
+	if is_dead:
+		return  # a downed bot does nothing until the arena restarts
 	_update_aim()
 
 	if not is_zipping:
@@ -114,7 +129,7 @@ func _draw() -> void:
 ## Fires one seed pod along `direction` if the cooldown allows.
 ## Returns true if a pod was fired.
 func fire(direction: Vector2) -> bool:
-	if _fire_cooldown_left > 0.0 or direction == Vector2.ZERO:
+	if is_dead or _fire_cooldown_left > 0.0 or direction == Vector2.ZERO:
 		return false
 	_fire_cooldown_left = CONFIG.seed_cooldown
 	var unit: Vector2 = direction.normalized()
@@ -131,7 +146,7 @@ func fire(direction: Vector2) -> bool:
 ## `pick_radius_cells` is how close `world_point` must be to a tree's centre. Leave
 ## it out to use the mouse value from the config; touch taps pass a bigger one.
 func try_vine(world_point: Vector2, pick_radius_cells: float = -1.0) -> bool:
-	if is_zipping or _vine_cooldown_left > 0.0:
+	if is_dead or is_zipping or _vine_cooldown_left > 0.0:
 		return false
 	# -1.0 is the "not given" marker (a radius can never really be negative).
 	if pick_radius_cells < 0.0:
@@ -153,6 +168,39 @@ func try_vine(world_point: Vector2, pick_radius_cells: float = -1.0) -> bool:
 	if global_position.distance_to(latched.global_position) > CONFIG.vine_range:
 		return false
 	return _start_zip(latched)
+
+
+## Takes `amount` hit points away. Returns true if the hit counted, false if it
+## was ignored (already down, or still blinking from the previous hit).
+func take_damage(amount: int) -> bool:
+	if is_dead or _invulnerable_left > 0.0 or amount <= 0:
+		return false
+	hp = maxi(hp - amount, 0)  # maxi = the larger of two whole numbers: never below 0
+	health_changed.emit(hp, CONFIG.player_max_hp)
+	if hp == 0:
+		is_dead = true
+		velocity = Vector2.ZERO
+		modulate = Color(0.45, 0.45, 0.45, 0.8)  # greyed out
+		Sfx.play(&"player_down")
+		died.emit()
+		return true
+	_invulnerable_left = CONFIG.player_hit_invulnerable_time
+	Sfx.play(&"hurt")
+	return true
+
+
+## Counts down the "cannot be hurt" time and blinks the bot while it lasts.
+func _update_hit_blink(delta: float) -> void:
+	if is_dead or _invulnerable_left <= 0.0:
+		return
+	_invulnerable_left = maxf(_invulnerable_left - delta, 0.0)
+	if _invulnerable_left == 0.0:
+		modulate = Color.WHITE  # white = fully visible, no tint
+		return
+	# Flip between faint and solid about eight times a second. fmod is the
+	# remainder after division, so this repeats every 0.12 s.
+	var is_faint: bool = fmod(_invulnerable_left, 0.12) < 0.06
+	modulate = Color(1.0, 1.0, 1.0, 0.35 if is_faint else 1.0)
 
 
 ## Makes the sprite (and aim_direction) point at the mouse. On touch, the aim

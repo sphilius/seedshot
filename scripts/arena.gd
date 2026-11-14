@@ -9,7 +9,12 @@ extends Node2D
 ## arena reacts by spawning nodes and updating the pathfinding grid.
 ##
 ## GRAY-BOX SCOPE: three hand-placed test trees, one Scrapper at a time (a new one
-## walks in a moment after the last one dies), no waves, no player damage yet.
+## walks in a moment after the last one dies), no waves. The Scrapper's melee hit
+## costs a hit point; at zero the whole arena starts over.
+
+## Emitted when the player goes down. (Tests listen for this; the game itself
+## reacts in _on_player_died.)
+signal player_defeated
 
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
 ## preload() loads a scene file once, when the script itself loads. instantiate()
@@ -47,6 +52,7 @@ var _rng := RandomNumberGenerator.new()
 @onready var _pods: Node2D = $Pods
 ## Phone and tablet controls. Optional: the arena works without this node.
 @onready var _touch: TouchControls = get_node_or_null("Hud/TouchControls")
+@onready var _health_pips: HealthPips = $Hud/HealthPips
 
 
 ## _ready runs once when the scene starts: build the grid and walls, then place
@@ -61,7 +67,11 @@ func _ready() -> void:
 	player = PLAYER_SCENE.instantiate()
 	player.position = grid.cell_to_world(PLAYER_START_CELL)
 	player.seed_fired.connect(_on_player_seed_fired)
+	# The pips redraw themselves every time the player's health changes.
+	player.health_changed.connect(_health_pips.show_health)
+	player.died.connect(_on_player_died)
 	add_child(player)
+	_health_pips.show_health(player.hp, CONFIG.player_max_hp)
 	# Hand the player to the touch controls, if the scene has them.
 	if _touch != null:
 		_touch.setup(player)
@@ -117,6 +127,9 @@ func spawn_scrapper_at(cell: Vector2i) -> Scrapper:
 	scrapper.position = grid.cell_to_world(cell)
 	scrapper.setup(grid, player)
 	scrapper.died.connect(_on_scrapper_died)
+	# A landed swing goes straight to the player's take_damage. The Scrapper only
+	# announces the hit; it never reaches into the player itself.
+	scrapper.struck.connect(player.take_damage)
 	_enemies.add_child(scrapper)
 	return scrapper
 
@@ -194,6 +207,21 @@ func _on_player_seed_fired(origin: Vector2, direction: Vector2) -> void:
 	pod.position = origin
 	pod.direction = direction
 	_pods.add_child(pod)
+
+
+## Signal handler: the player went down. Wait a moment, then start the arena over.
+## (Gray-box stand-in: once waves exist, this restarts the current wave with the
+## forest as it stood when that wave began.)
+func _on_player_died() -> void:
+	player_defeated.emit()
+	await get_tree().create_timer(CONFIG.death_restart_delay).timeout
+	# After an `await`, anything may have changed: this arena may already be gone.
+	if not is_inside_tree():
+		return
+	# Only reload when the arena IS the running scene. In the headless tests the
+	# arena is a child of the test scene, and reloading would restart the tests.
+	if get_tree().current_scene == self:
+		get_tree().reload_current_scene()
 
 
 ## Signal handler: a Scrapper died. Plant a sapling where it fell.

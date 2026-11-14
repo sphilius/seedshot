@@ -54,6 +54,12 @@ func _ready() -> void:
 	await _test_touch_tap_on_tree_zips()
 	await _test_touch_tap_rules()
 
+	# Layer 2c: player health and the Scrapper's melee swing.
+	await _test_player_health_and_blink()
+	await _test_scrapper_swing_lands_after_windup()
+	await _test_scrapper_swing_misses_if_you_leave()
+	await _test_player_goes_down()
+
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
 
@@ -378,6 +384,93 @@ func _test_touch_tap_rules() -> void:
 	touch.touch_up(0)
 	_check(not _arena.player.is_zipping, "a slide that starts on a tree is not a tap")
 	_check(_arena.player.global_position == before, "the bot never moved")
+
+
+## Health: a hit costs a hit point, the HUD pips follow, and the bot cannot be
+## hurt again while it is still blinking from the last hit.
+func _test_player_health_and_blink() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	var pips: HealthPips = _arena.get_node("Hud/HealthPips") as HealthPips
+	var full: int = CONFIG.player_max_hp
+	_check(player.hp == full, "the bot starts with full health (%d)" % full)
+	_check(pips.current == full and pips.maximum == full, "the HUD pips start full")
+
+	# take_damage returns true when the hit counted, false when it was ignored.
+	# The pips are never told directly: the arena connected the player's
+	# health_changed signal to them with connect(), so they update by themselves.
+	_check(player.take_damage(1), "a hit counts")
+	_check(player.hp == full - 1, "a hit costs one hit point")
+	_check(pips.current == full - 1, "the HUD pips follow the health")
+	_check(not player.take_damage(1), "a second hit straight away is ignored (still blinking)")
+	_check(player.hp == full - 1, "and costs nothing")
+
+	await _wait_frames(int(CONFIG.player_hit_invulnerable_time * 60.0) + 3)
+	_check(player.modulate == Color.WHITE, "the blink ends and the bot is fully visible again")
+	_check(player.take_damage(1), "after the blink, hits count again")
+
+
+## Melee: a Scrapper next to the bot glows first (the warning), and only then does
+## the hit land.
+func _test_scrapper_swing_lands_after_windup() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	player.global_position = _arena.grid.cell_to_world(Vector2i(5, 11))
+	var scrapper: Scrapper = _arena.spawn_scrapper_at(Vector2i(8, 11))
+	# Put it just inside swing range (the range is a config number, in cells).
+	var reach: float = CONFIG.scrapper_melee_range_cells * CONFIG.cell_size
+	scrapper.global_position = player.global_position + Vector2(reach * 0.9, 0.0)
+
+	await _wait_frames(3)
+	_check(scrapper.is_winding_up, "a Scrapper in range starts its windup")
+	_check(player.hp == CONFIG.player_max_hp, "the windup itself does no damage")
+
+	var was_hit: Callable = func() -> bool: return player.hp < CONFIG.player_max_hp
+	_check(await _wait_until(was_hit, CONFIG.scrapper_melee_windup + 0.5), "the swing lands when the windup ends")
+	_check(player.hp == CONFIG.player_max_hp - CONFIG.scrapper_melee_damage, "it costs exactly the melee damage")
+	_check(not scrapper.is_winding_up, "the Scrapper rests after the swing (cooldown)")
+
+
+## Melee: leave the Scrapper's reach during the warning and the swing misses.
+func _test_scrapper_swing_misses_if_you_leave() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	player.global_position = _arena.grid.cell_to_world(Vector2i(5, 11))
+	var scrapper: Scrapper = _arena.spawn_scrapper_at(Vector2i(8, 11))
+	var reach: float = CONFIG.scrapper_melee_range_cells * CONFIG.cell_size
+	scrapper.global_position = player.global_position + Vector2(reach * 0.9, 0.0)
+	await _wait_frames(3)
+	_check(scrapper.is_winding_up, "the windup has started")
+
+	# Step well out of reach (as a vine zip would) while it is still glowing.
+	player.global_position = _arena.grid.cell_to_world(Vector2i(5, 3))
+	await _wait_frames(int(CONFIG.scrapper_melee_windup * 60.0) + 15)
+	_check(not scrapper.is_winding_up, "the windup is over")
+	_check(player.hp == CONFIG.player_max_hp, "the swing missed: no damage")
+
+
+## Death: at zero health the bot is down, can do nothing, and the arena is told.
+func _test_player_goes_down() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	# One-item-box trick again: the lambda appends, so the test can count calls.
+	var defeats: Array[bool] = []
+	_arena.player_defeated.connect(func() -> void: defeats.append(true))
+
+	_check(player.take_damage(CONFIG.player_max_hp), "a hit for all remaining health counts")
+	# The arena waits death_restart_delay and then reloads the scene, but only when
+	# it IS the running scene. Here it is a child of this test scene, so no reload.
+	_check(player.hp == 0 and player.is_dead, "the bot is down at zero health")
+	_check(defeats.size() == 1, "the arena announces the defeat exactly once")
+	_check(not player.take_damage(1), "a downed bot cannot be hit again")
+	_check(not player.fire(Vector2.RIGHT), "a downed bot cannot fire")
+	_check(not player.try_vine(_arena.grid.cell_to_world(Arena.TEST_TREE_CELLS[0])), "or use the vine")
+
+	var fell_at: Vector2 = player.global_position
+	Input.action_press(&"move_right")
+	await _wait_frames(10)
+	Input.action_release(&"move_right")
+	_check(player.global_position == fell_at, "or walk")
 
 
 ## Cell <-> pixel conversion must agree in both directions.

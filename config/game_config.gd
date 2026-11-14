@@ -31,6 +31,13 @@ extends Resource
 ## Collision circle radius as a fraction of a cell. Under 0.5 so the player fits
 ## through a gap that is one cell wide.
 @export_range(0.1, 0.49) var player_radius_cells: float = 0.33
+## How many hits the bot can take. Each pip on the HUD is one hit point.
+@export var player_max_hp: int = 5
+## After a hit the bot blinks and cannot be hurt again for this long, so two
+## enemies landing together cost one hit point, not two.
+@export var player_hit_invulnerable_time: float = 0.8
+## Seconds between the bot going down and the arena starting over.
+@export var death_restart_delay: float = 1.2
 
 @export_group("Seed pod")
 @export var seed_speed: float = 720.0
@@ -72,6 +79,15 @@ extends Resource
 @export var scrapper_repath_interval: float = 0.35
 ## The Scrapper stops walking when it is this close to the player (melee range).
 @export var scrapper_stop_distance_cells: float = 0.8
+## The player must be this close for a swing to start, and still this close when
+## it lands. A little more than the stop distance, so a standing Scrapper reaches.
+@export var scrapper_melee_range_cells: float = 1.0
+@export var scrapper_melee_damage: int = 1
+## The warning: the Scrapper glows for this long before the hit lands. Walk (or
+## zip) out of range in that time and the swing misses.
+@export var scrapper_melee_windup: float = 0.35
+## Rest time after a swing (hit or miss) before the next windup can start.
+@export var scrapper_melee_cooldown: float = 0.9
 
 @export_group("Touch")
 ## A finger must slide this far (in game pixels) before its touch becomes a
