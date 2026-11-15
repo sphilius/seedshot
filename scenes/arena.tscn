@@ -18,6 +18,8 @@ collision_mask = 0
 
 [node name="Pods" type="Node2D" parent="."]
 
+[node name="Shots" type="Node2D" parent="."]
+
 [node name="WaveDirector" type="Node" parent="."]
 script = ExtResource("5_waves")
 

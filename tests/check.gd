@@ -70,6 +70,12 @@ func _ready() -> void:
 	await _test_wave_three_sends_faster_scrappers_and_a_sawbot()
 	await _test_going_down_restarts_the_wave_with_its_forest()
 
+	# Layer 2f: the Spitter and its shots.
+	await _test_spitter_warns_then_hits_the_player()
+	await _test_tree_stops_a_spit_shot()
+	await _test_spitter_keeps_its_distance()
+	await _test_spitter_closes_in_when_it_cannot_see_you()
+
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
 
@@ -609,7 +615,7 @@ func _test_wave_director_counts_and_advances() -> void:
 	# (Comparing size and first item, rather than `started == [1]`, keeps the
 	# types simple: a typed Array[int] and a plain [1] are different types.)
 	_check(started.size() == 1 and started[0] == 1, "starting wave 1 announces wave 1")
-	var wave_one_size: int = CONFIG.wave_scrappers[0] + CONFIG.wave_sawbots[0]
+	var wave_one_size: int = CONFIG.wave_scrappers[0] + CONFIG.wave_spitters[0] + CONFIG.wave_sawbots[0]
 	var all_sent: Callable = func() -> bool: return director.state == WaveDirector.State.FIGHTING
 	_check(await _wait_until(all_sent, 2.0), "the director sends the whole wave, then waits for the fight")
 	_check(spawned.size() == wave_one_size, "wave 1 asked for %d machine(s) (got %d)" % [wave_one_size, spawned.size()])
@@ -629,6 +635,8 @@ func _test_wave_director_counts_and_advances() -> void:
 	await _wait_until(all_sent, 3.0)
 	var sawbots_sent: int = spawned.count(WaveDirector.SAWBOT)
 	_check(sawbots_sent == CONFIG.wave_sawbots[last - 1], "the last wave sends %d Sawbot(s) (got %d)" % [CONFIG.wave_sawbots[last - 1], sawbots_sent])
+	var spitters_sent: int = spawned.count(WaveDirector.SPITTER)
+	_check(spitters_sent == CONFIG.wave_spitters[last - 1], "and %d Spitter(s) (got %d)" % [CONFIG.wave_spitters[last - 1], spitters_sent])
 	_check(spawned[0] == WaveDirector.SCRAPPER, "a wave opens with a Scrapper, with Sawbots spread through it")
 	for i: int in spawned.size():
 		director.enemy_gone()
@@ -641,22 +649,31 @@ func _test_wave_director_counts_and_advances() -> void:
 func _test_wave_three_sends_faster_scrappers_and_a_sawbot() -> void:
 	await _fresh_arena()
 	_arena.waves.time_scale = 20.0
-	_arena.waves.start_wave(3)
-	var expected: int = CONFIG.wave_scrappers[2] + CONFIG.wave_sawbots[2]
+	# Wave 4 is the first wave with all three kinds of machine in it.
+	var wave: int = 4
+	_arena.waves.start_wave(wave)
+	var expected: int = CONFIG.wave_scrappers[wave - 1] + CONFIG.wave_spitters[wave - 1] + CONFIG.wave_sawbots[wave - 1]
 	var all_in: Callable = func() -> bool: return get_tree().get_nodes_in_group(Enemy.GROUP).size() == expected
-	_check(await _wait_until(all_in, 3.0), "wave 3 puts %d machines in the arena" % expected)
+	_check(await _wait_until(all_in, 3.0), "wave %d puts %d machines in the arena" % [wave, expected])
 
+	# Count what actually walked in. Every machine joins the "enemies" group in
+	# its _ready (see Enemy._configure_body), so one loop over the group sees
+	# them all, whatever kind they are.
 	var sawbots: int = 0
+	var spitters: int = 0
 	var scrapper_scale: float = 0.0
 	for node: Node in get_tree().get_nodes_in_group(Enemy.GROUP):
 		if node is Sawbot:  # `is` asks "is this node of that type?"
 			sawbots += 1
+		elif node is Spitter:
+			spitters += 1
 		elif node is Scrapper:
 			scrapper_scale = (node as Scrapper).speed_scale
-	_check(sawbots == CONFIG.wave_sawbots[2], "wave 3 includes %d Sawbot(s)" % CONFIG.wave_sawbots[2])
-	var expected_scale: float = 1.0 + CONFIG.scrapper_speed_gain_per_wave * 2.0
-	_check(is_equal_approx(scrapper_scale, expected_scale), "wave 3 Scrappers walk at %.2fx speed (got %.2f)" % [expected_scale, scrapper_scale])
-	_check((_arena.get_node("Hud/WaveLabel") as Label).text == "Wave 3 / %d" % _arena.waves.total_waves(), "the HUD shows the wave number")
+	_check(sawbots == CONFIG.wave_sawbots[wave - 1], "wave %d includes %d Sawbot(s)" % [wave, CONFIG.wave_sawbots[wave - 1]])
+	_check(spitters == CONFIG.wave_spitters[wave - 1], "and %d Spitter(s)" % CONFIG.wave_spitters[wave - 1])
+	var expected_scale: float = 1.0 + CONFIG.scrapper_speed_gain_per_wave * (wave - 1)
+	_check(is_equal_approx(scrapper_scale, expected_scale), "wave %d Scrappers walk at %.2fx speed (got %.2f)" % [wave, expected_scale, scrapper_scale])
+	_check((_arena.get_node("Hud/WaveLabel") as Label).text == "Wave %d / %d" % [wave, _arena.waves.total_waves()], "the HUD shows the wave number")
 
 
 ## Waves: going down restarts the same wave, with the forest put back to how it
@@ -688,6 +705,95 @@ func _test_going_down_restarts_the_wave_with_its_forest() -> void:
 	for cell: Vector2i in Arena.TEST_TREE_CELLS:
 		_check(_arena.tree_at(cell) != null and _arena.grid.is_solid(cell), "the tree at %s from wave start is back" % cell)
 	_check(await _wait_until(enemy_in, 1.0), "and the wave sends its machines in again")
+
+
+## Spitter: with a clear line to the player it glows first (the warning), then
+## its shot flies at the player and costs a hit point.
+func _test_spitter_warns_then_hits_the_player() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	var shots: Node = _arena.get_node("Shots")
+	# Row 12 has no trees in it, so the Spitter can see the player straight away.
+	player.global_position = _arena.grid.cell_to_world(Vector2i(5, 12))
+	var spitter: Spitter = _arena.spawn_spitter_at(Vector2i(10, 12))  # 5 cells away: in range
+	await get_tree().physics_frame
+	_check(spitter.hp == CONFIG.spitter_hp, "a Spitter starts with %d hit points" % CONFIG.spitter_hp)
+
+	var glowing: Callable = func() -> bool: return spitter.is_winding_up
+	_check(await _wait_until(glowing, CONFIG.spitter_cooldown), "a Spitter that can see the player starts its windup")
+	_check(shots.get_child_count() == 0, "nothing is fired during the warning")
+	_check(player.hp == CONFIG.player_max_hp, "and the warning does no damage")
+
+	var fired: Callable = func() -> bool: return shots.get_child_count() == 1
+	_check(await _wait_until(fired, CONFIG.spitter_windup + 0.5), "when the windup ends it fires one shot")
+	if shots.get_child_count() == 1:
+		var shot := shots.get_child(0) as SpitShot
+		_check(shot.direction.is_equal_approx(Vector2.LEFT), "the shot flies straight at the player")
+
+	var was_hit: Callable = func() -> bool: return player.hp < CONFIG.player_max_hp
+	_check(await _wait_until(was_hit, 2.0), "the shot reaches the player")
+	_check(player.hp == CONFIG.player_max_hp - CONFIG.spit_damage, "and costs exactly the spit damage")
+	# queue_free() removes a node at the END of the current frame, so give it one
+	# more physics step before looking.
+	await get_tree().physics_frame
+	_check(shots.get_child_count() == 0, "the shot is used up by the hit")
+
+
+## Cover: a grown tree between the shot and the player stops the shot.
+func _test_tree_stops_a_spit_shot() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	var shots: Node = _arena.get_node("Shots")
+	var tree_cell: Vector2i = Arena.TEST_TREE_CELLS[0]
+	var tree_x: float = _arena.grid.cell_to_world(tree_cell).x
+	# Player two cells left of the tree; the shot starts three cells right of it.
+	player.global_position = _arena.grid.cell_to_world(tree_cell + Vector2i(-2, 0))
+	_arena.spawn_spit_shot(_arena.grid.cell_to_world(tree_cell + Vector2i(3, 0)), Vector2.LEFT)
+	await get_tree().physics_frame
+
+	# Track how far left the shot ever gets (same one-item-box trick as the pod test).
+	var furthest_left: Array[float] = [INF]
+	var shot_gone: Callable = func() -> bool:
+		if shots.get_child_count() == 0:
+			return true
+		furthest_left[0] = minf(furthest_left[0], (shots.get_child(0) as Node2D).global_position.x)
+		return false
+	_check(await _wait_until(shot_gone, 2.0), "the shot is removed when it reaches the tree")
+	_check(furthest_left[0] > tree_x, "it never got past the tree's centre")
+	_check(player.hp == CONFIG.player_max_hp, "the player behind the tree is unhurt")
+	_check(_arena.tree_at(tree_cell).hp == CONFIG.tree_hp, "and the tree is not damaged by it")
+
+
+## Spitter: it backs away when the player gets too close.
+func _test_spitter_keeps_its_distance() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	player.global_position = _arena.grid.cell_to_world(Vector2i(5, 12))
+	var spitter: Spitter = _arena.spawn_spitter_at(Vector2i(7, 12))  # 2 cells: too close
+	await get_tree().physics_frame
+	var distance_before: float = spitter.global_position.distance_to(player.global_position)
+	# It waits half a cooldown before its first shot; use that time to watch it move.
+	await _wait_frames(int(CONFIG.spitter_cooldown * 0.5 * 60.0) - 6)
+	var distance_after: float = spitter.global_position.distance_to(player.global_position)
+	_check(distance_after > distance_before + 20.0, "a crowded Spitter backs away (%.0f px to %.0f px)" % [distance_before, distance_after])
+
+
+## Spitter: with a tree in the way it cannot shoot, so it walks round for a clear line.
+func _test_spitter_closes_in_when_it_cannot_see_you() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	var shots: Node = _arena.get_node("Shots")
+	var tree_cell: Vector2i = Arena.TEST_TREE_CELLS[0]
+	# Player hard against the left of the tree, Spitter four cells to its right:
+	# the tree hides the player completely.
+	player.global_position = _arena.grid.cell_to_world(tree_cell + Vector2i(-1, 0))
+	var spitter: Spitter = _arena.spawn_spitter_at(tree_cell + Vector2i(4, 0))
+	var start: Vector2 = spitter.global_position
+	await _wait_frames(40)
+	_check(not spitter.is_winding_up and shots.get_child_count() == 0, "a Spitter that cannot see the player does not fire")
+	_check(spitter.global_position.distance_to(start) > 20.0, "it walks to find a clear line instead")
+	var glowing: Callable = func() -> bool: return spitter.is_winding_up
+	_check(await _wait_until(glowing, 6.0), "once it has walked round the tree, it starts a shot")
 
 
 ## The split guard must spot any cell whose tree would cut the open floor in two,

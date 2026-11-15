@@ -24,6 +24,8 @@ const PLAYER_SCENE: PackedScene = preload("res://scenes/player.tscn")
 const TREE_SCENE: PackedScene = preload("res://scenes/forest_tree.tscn")
 const SCRAPPER_SCENE: PackedScene = preload("res://scenes/scrapper.tscn")
 const SAWBOT_SCENE: PackedScene = preload("res://scenes/sawbot.tscn")
+const SPITTER_SCENE: PackedScene = preload("res://scenes/spitter.tscn")
+const SPIT_SHOT_SCENE: PackedScene = preload("res://scenes/spit_shot.tscn")
 const SEED_POD_SCENE: PackedScene = preload("res://scenes/seed_pod.tscn")
 
 ## Level layout for the gray box (grid cells, not tunables).
@@ -61,6 +63,8 @@ var _banner_time_left: float = 0.0
 @onready var _trees: Node2D = $Trees
 @onready var _enemies: Node2D = $Enemies
 @onready var _pods: Node2D = $Pods
+## Enemy shots get their own folder, so "how many seed pods exist" stays simple.
+@onready var _shots: Node2D = $Shots
 ## Phone and tablet controls. Optional: the arena works without this node.
 @onready var _touch: TouchControls = get_node_or_null("Hud/TouchControls")
 @onready var _health_pips: HealthPips = $Hud/HealthPips
@@ -175,6 +179,29 @@ func spawn_sawbot_at(cell: Vector2i) -> Sawbot:
 	return sawbot
 
 
+## Creates a Spitter on a cell and points it at the player.
+func spawn_spitter_at(cell: Vector2i) -> Spitter:
+	var spitter: Spitter = SPITTER_SCENE.instantiate()
+	spitter.position = grid.cell_to_world(cell)
+	spitter.setup(grid)
+	spitter.aim_at(player)
+	spitter.died.connect(_on_enemy_died)
+	# The Spitter only announces "I fired"; the arena makes the shot appear.
+	spitter.spat.connect(spawn_spit_shot)
+	_enemies.add_child(spitter)
+	return spitter
+
+
+## Creates one enemy shot at `origin`, flying along `direction` (a unit vector).
+## Connected to every Spitter's `spat` signal; public so tests can fire one too.
+func spawn_spit_shot(origin: Vector2, direction: Vector2) -> SpitShot:
+	var shot: SpitShot = SPIT_SHOT_SCENE.instantiate()
+	shot.position = origin
+	shot.direction = direction
+	_shots.add_child(shot)
+	return shot
+
+
 ## How many grown trees are standing right now (the "bloom" count on the HUD).
 func count_grown_trees() -> int:
 	var count: int = 0
@@ -266,7 +293,7 @@ func _restart_current_wave() -> void:
 	# Remove every machine, pod and tree. remove_child takes a node out of the
 	# scene right now (so it stops counting as "in the arena" this very frame);
 	# queue_free then deletes it at the end of the frame.
-	for folder: Node in [_enemies, _pods, _trees]:
+	for folder: Node in [_enemies, _pods, _shots, _trees]:
 		for child: Node in folder.get_children():
 			folder.remove_child(child)
 			child.queue_free()
@@ -302,6 +329,8 @@ func _on_spawn_requested(kind: StringName, wave_number: int) -> void:
 		return
 	if kind == WaveDirector.SAWBOT:
 		spawn_sawbot_at(cell)
+	elif kind == WaveDirector.SPITTER:
+		spawn_spitter_at(cell)
 	else:
 		var scrapper: Scrapper = spawn_scrapper_at(cell)
 		# Faster every wave: wave 1 is 1.0, wave 2 is 1.12, wave 3 is 1.24, ...

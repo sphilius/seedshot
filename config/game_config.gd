@@ -105,12 +105,38 @@ extends Resource
 @export var sawbot_saw_damage: int = 1
 @export var sawbot_saw_interval: float = 0.5
 
+@export_group("Spitter")
+@export var spitter_speed: float = 100.0
+## Takes two pods.
+@export var spitter_hp: int = 2
+@export_range(0.1, 0.49) var spitter_radius_cells: float = 0.33
+## How often a Spitter recalculates its route while closing in.
+@export var spitter_repath_interval: float = 0.4
+## It backs away if the player comes closer than this...
+@export var spitter_min_range_cells: float = 3.5
+## ...and walks closer if the player is further than this (or out of sight).
+@export var spitter_max_range_cells: float = 7.0
+## The warning: it glows red for this long before the shot leaves.
+@export var spitter_windup: float = 0.5
+## Rest time between shots.
+@export var spitter_cooldown: float = 1.8
+## Shot speed. Slow on purpose: the bot walks at 260 and zips at 1100.
+@export var spit_speed: float = 300.0
+@export var spit_damage: int = 1
+## Collision (and drawn) radius of the shot in pixels.
+@export var spit_radius: float = 7.0
+## A shot that hits nothing deletes itself after this long.
+@export var spit_lifetime: float = 3.0
+
 @export_group("Waves")
 ## How many Scrappers each wave sends. Entry 0 is wave 1. The length of this
 ## list is the number of waves. Wave 1 is the single "teaching" Scrapper.
-@export var wave_scrappers: Array[int] = [1, 3, 4, 5, 6]
+@export var wave_scrappers: Array[int] = [1, 3, 3, 4, 4]
+## How many Spitters each wave sends, lined up with the list above. They arrive
+## first (wave 2), so cover matters before anything starts cutting it down.
+@export var wave_spitters: Array[int] = [0, 1, 2, 2, 2]
 ## How many Sawbots each wave sends, lined up with the list above.
-@export var wave_sawbots: Array[int] = [0, 0, 1, 1, 2]
+@export var wave_sawbots: Array[int] = [0, 0, 0, 1, 2]
 ## Seconds before the first machine of a wave walks in.
 @export var wave_first_delay: float = 1.0
 ## Seconds between one machine walking in and the next.
@@ -145,5 +171,6 @@ extends Resource
 @export var player_texture: Texture2D
 @export var scrapper_texture: Texture2D
 @export var sawbot_texture: Texture2D
+@export var spitter_texture: Texture2D
 ## Drawn size of a sprite relative to one cell (1.0 = exactly one cell wide).
 @export var sprite_size_cells: float = 1.3

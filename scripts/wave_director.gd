@@ -14,13 +14,13 @@ extends Node
 ##   BREAK     a short rest, then the next wave starts by itself
 ##   DONE      the last wave is cleared
 ##
-## WHAT IS IN A WAVE comes from two lists in the config (wave_scrappers and
-## wave_sawbots): entry 0 is wave 1, entry 1 is wave 2, and so on. The number of
-## waves is simply the length of those lists.
+## WHAT IS IN A WAVE comes from three lists in the config (wave_scrappers,
+## wave_spitters and wave_sawbots): entry 0 is wave 1, entry 1 is wave 2, and so
+## on. The number of waves is simply the length of the Scrapper list.
 
 ## Emitted when a wave begins. `total` is how many waves there are.
 signal wave_started(number: int, total: int)
-## Emitted each time a machine should walk in. `kind` is SCRAPPER or SAWBOT.
+## Emitted each time a machine should walk in. `kind` is SCRAPPER, SPITTER or SAWBOT.
 signal spawn_requested(kind: StringName, wave_number: int)
 ## Emitted when every machine of a wave is down.
 signal wave_cleared(number: int)
@@ -32,6 +32,7 @@ enum State { IDLE, SPAWNING, FIGHTING, BREAK, DONE }
 
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
 const SCRAPPER: StringName = &"scrapper"
+const SPITTER: StringName = &"spitter"
 const SAWBOT: StringName = &"sawbot"
 
 ## Runs the timetable faster or slower. 1.0 is normal. The headless tests set
@@ -111,16 +112,35 @@ func _check_cleared() -> void:
 
 
 ## Builds the order machines walk in for one wave: all its Scrappers, with its
-## Sawbots slotted in at even gaps so they do not all arrive together.
+## Spitters and Sawbots slotted in at even gaps so they do not arrive together.
 func _build_queue(number: int) -> Array[StringName]:
 	var index: int = clampi(number - 1, 0, total_waves() - 1)  # lists count from 0
 	var queue: Array[StringName] = []
 	for i: int in CONFIG.wave_scrappers[index]:
 		queue.append(SCRAPPER)
-	# The Sawbot list may be shorter than the Scrapper list; missing entries mean 0.
-	var sawbots: int = CONFIG.wave_sawbots[index] if index < CONFIG.wave_sawbots.size() else 0
-	for i: int in sawbots:
-		# Spread them out: with 2 Sawbots among 6 Scrappers, at 1/3 and 2/3 of the way.
-		var position: int = (i + 1) * queue.size() / (sawbots + 1)
-		queue.insert(position, SAWBOT)
+
+	# The "specials" for this wave, Spitters and Sawbots taking turns.
+	var spitters: int = _count_for(CONFIG.wave_spitters, index)
+	var sawbots: int = _count_for(CONFIG.wave_sawbots, index)
+	var specials: Array[StringName] = []
+	for i: int in maxi(spitters, sawbots):
+		if i < spitters:
+			specials.append(SPITTER)
+		if i < sawbots:
+			specials.append(SAWBOT)
+
+	for i: int in specials.size():
+		# Spread them through the queue: with 2 specials, about 1/3 and 2/3 of the
+		# way along. maxi(..., 1) keeps slot 0 for a Scrapper, so a wave always
+		# opens with the simplest machine (unless it has no Scrappers at all).
+		var slot: int = (i + 1) * queue.size() / (specials.size() + 1)
+		if not queue.is_empty():
+			slot = maxi(slot, 1)
+		queue.insert(slot, specials[i])
 	return queue
+
+
+## How many of one kind wave `index` sends. A list may be shorter than the
+## Scrapper list; a missing entry means none.
+func _count_for(list: Array[int], index: int) -> int:
+	return list[index] if index < list.size() else 0
