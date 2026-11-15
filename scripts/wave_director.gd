@@ -82,6 +82,10 @@ func _physics_process(delta: float) -> void:
 	delta *= time_scale  # stretch or squeeze time for this node only
 	match state:
 		State.SPAWNING:
+			# A staged wave (wave 1) sends one machine at a time: the next one
+			# waits until the one before it is down.
+			if wave <= CONFIG.wave_staged_waves and _alive > 0:
+				return
 			_timer -= delta
 			if _timer > 0.0:
 				return

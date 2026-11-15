@@ -55,6 +55,8 @@ func _on_body_entered(body: Node2D) -> void:
 	var enemy := body as Enemy
 	if enemy != null:
 		enemy.take_damage(CONFIG.seed_damage)
+	elif body is CatShop:
+		(body as CatShop).hit_by_seed()  # the hidden lucky cat's shop counts pods
 	else:
 		Sfx.play(&"thunk")  # stopped by a tree or a wall
 	queue_free()

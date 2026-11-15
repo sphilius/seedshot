@@ -41,6 +41,9 @@ var is_zipping: bool = false
 ## and seeds fire while touch_fire_held is true.
 var touch_mode: bool = false
 var touch_fire_held: bool = false
+## True once the hidden lucky cat has been found: every shot is a pair of pods.
+## It lasts for the rest of the run, including wave restarts.
+var double_shot: bool = false
 ## Hit points left. Starts at CONFIG.player_max_hp.
 var hp: int = 0
 ## True once hp reaches zero: the bot stops moving, firing and zipping.
@@ -145,7 +148,15 @@ func fire(direction: Vector2) -> bool:
 	var unit: Vector2 = direction.normalized()
 	# Start the pod just outside our own hit circle, so it never begins inside us.
 	var muzzle_distance: float = CONFIG.player_radius_cells * CONFIG.cell_size + CONFIG.seed_radius
-	seed_fired.emit(global_position + unit * muzzle_distance, unit)
+	var muzzle: Vector2 = global_position + unit * muzzle_distance
+	if double_shot:
+		# The lucky cat's gift: two pods side by side. orthogonal() gives the
+		# direction at right angles to `unit`, so the pair sits across the aim line.
+		var side: Vector2 = unit.orthogonal() * CONFIG.cat_pair_spacing * 0.5
+		seed_fired.emit(muzzle + side, unit)
+		seed_fired.emit(muzzle - side, unit)
+	else:
+		seed_fired.emit(muzzle, unit)
 	Sfx.play(&"fire")
 	return true
 

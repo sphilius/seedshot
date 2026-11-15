@@ -36,6 +36,9 @@ var cell: Vector2i
 var starts_grown: bool = false
 var stage: Stage = Stage.SAPLING
 var hp: int = 0
+## While true, a ring pulses on the tree: "you can vine to this". The arena
+## switches it on for the first tree you grow and off after your first zip.
+var show_vine_hint: bool = false
 
 ## @onready means "fill this in just before _ready runs", once the child node exists.
 @onready var _collision: CollisionShape2D = $CollisionShape2D
@@ -80,6 +83,13 @@ func take_damage(amount: int) -> void:
 		queue_free()       # then remove this node at the end of the frame
 
 
+## _process runs every drawn frame. Only the hinted tree needs to redraw each
+## frame (its ring is animated); every other tree does nothing here.
+func _process(_delta: float) -> void:
+	if show_vine_hint:
+		queue_redraw()
+
+
 ## _draw is Godot's custom-drawing callback. Coordinates are relative to this node,
 ## so (0, 0) is the centre of the cell.
 func _draw() -> void:
@@ -95,6 +105,12 @@ func _draw() -> void:
 		# HP falls, so you can see at a glance which trees a Sawbot has bitten.
 		var health: float = clampf(float(hp) / float(CONFIG.tree_hp), 0.0, 1.0)
 		draw_circle(Vector2.ZERO, cell_px * 0.36 * lerpf(0.45, 1.0, health), CANOPY_COLOR)
+		if show_vine_hint:
+			# A ring that grows and fades once a second. fmod(x, 1.0) is the part
+			# of x after the decimal point, so `beat` runs 0 -> 1 over and over.
+			var beat: float = fmod(Time.get_ticks_msec() / 1000.0, 1.0)
+			var ring := Color(SAPLING_COLOR, 1.0 - beat)  # same colour, fading out
+			draw_arc(Vector2.ZERO, cell_px * lerpf(0.45, 0.95, beat), 0.0, TAU, 40, ring, 3.0)
 
 
 ## Waits `seconds`, then asks the arena whether this sapling may turn solid.

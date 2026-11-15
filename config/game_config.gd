@@ -136,13 +136,24 @@ extends Resource
 ## A shot that hits nothing deletes itself after this long.
 @export var spit_lifetime: float = 3.0
 
+@export_group("Lucky cat")
+## Seed pods that must land on the shuttered shop before it opens.
+@export var cat_hits_needed: int = 3
+## Seconds between glints on the shop's shutter (the hint that it is special).
+@export var cat_glint_interval: float = 3.0
+## Gap in pixels between the two pods once the cat's gift is active.
+@export var cat_pair_spacing: float = 14.0
+
 @export_group("Waves")
+## The first this-many waves are "staged": the next machine only walks in once
+## the one before it is down. Wave 1 uses this to teach one thing at a time.
+@export var wave_staged_waves: int = 1
 ## How many Scrappers each wave sends. Entry 0 is wave 1. The length of this
 ## list is the number of waves. Wave 1 is the single "teaching" Scrapper.
 @export var wave_scrappers: Array[int] = [1, 3, 3, 4, 4, 5, 5, 6, 6, 7]
 ## How many Spitters each wave sends, lined up with the list above. They arrive
 ## first (wave 2), so cover matters before anything starts cutting it down.
-@export var wave_spitters: Array[int] = [0, 1, 2, 2, 2, 2, 3, 3, 4, 4]
+@export var wave_spitters: Array[int] = [1, 1, 2, 2, 2, 2, 3, 3, 4, 4]
 ## How many Sawbots each wave sends, lined up with the list above.
 @export var wave_sawbots: Array[int] = [0, 0, 0, 1, 2, 2, 2, 3, 3, 4]
 ## Seconds before the first machine of a wave walks in.
@@ -181,5 +192,6 @@ extends Resource
 @export var scrapper_texture: Texture2D
 @export var sawbot_texture: Texture2D
 @export var spitter_texture: Texture2D
+@export var cat_texture: Texture2D
 ## Drawn size of a sprite relative to one cell (1.0 = exactly one cell wide).
 @export var sprite_size_cells: float = 1.3

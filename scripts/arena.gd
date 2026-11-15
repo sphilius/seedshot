@@ -31,6 +31,9 @@ const SEED_POD_SCENE: PackedScene = preload("res://scenes/seed_pod.tscn")
 ## Level layout for the gray box (grid cells, not tunables).
 const TEST_TREE_CELLS: Array[Vector2i] = [Vector2i(9, 4), Vector2i(13, 10), Vector2i(17, 5)]
 const PLAYER_START_CELL: Vector2i = Vector2i(6, 7)
+## The hidden shop fills this wall cell and the one to its right: top wall, well
+## to the right, away from where the fight naturally happens.
+const CAT_SHOP_CELL: Vector2i = Vector2i(20, 0)
 ## Physics layers 2 + 3 ("player" + "enemies") as a bit mask: 2 + 4 = 6.
 const BODIES_MASK: int = 6
 
@@ -52,6 +55,15 @@ var _rng := RandomNumberGenerator.new()
 var _forest_at_wave_start: Dictionary[Vector2i, bool] = {}
 ## Seconds the banner stays up. 0 or less means "until replaced".
 var _banner_time_left: float = 0.0
+## The cell of the most recent sapling planted by a downed machine.
+var _last_planted_cell: Vector2i = ArenaGrid.NO_CELL
+## True once the player has zipped (or the hint is otherwise no longer needed).
+var _vine_hint_done: bool = false
+
+## The hidden lucky cat's shop, in the top wall. Public so tests can reach it.
+var cat_shop: CatShop
+## True after the last wave is cleared. Public so tests can read it.
+var is_run_finished: bool = false
 
 ## Start wave 1 as soon as the arena loads. The headless tests switch this off
 ## (before adding the arena to the scene) so no surprise enemy walks into a test.
@@ -98,6 +110,14 @@ func _ready() -> void:
 	for cell: Vector2i in TEST_TREE_CELLS:
 		spawn_tree(cell, true)
 
+	# The hidden lucky cat's shop. It is two cells wide, so its centre sits on
+	# the line between its two cells: half a cell right of the first one's centre.
+	cat_shop = CatShop.new()
+	cat_shop.position = grid.cell_to_world(CAT_SHOP_CELL) + Vector2(CONFIG.cell_size / 2.0, 0.0)
+	cat_shop.opened.connect(_on_cat_shop_opened)
+	add_child(cat_shop)
+	player.zip_finished.connect(_on_player_zip_finished)
+
 	# Listen to the wave director: it says when, the arena does the spawning.
 	waves.wave_started.connect(_on_wave_started)
 	waves.spawn_requested.connect(_on_spawn_requested)
@@ -111,6 +131,9 @@ func _ready() -> void:
 
 ## _process runs every drawn frame: hide the banner when its time is up.
 func _process(delta: float) -> void:
+	# The corner label doubles as the "bloom meter": how many trees are standing.
+	if waves.wave > 0:
+		_wave_label.text = "Wave %d / %d     Trees %d" % [waves.wave, waves.total_waves(), count_grown_trees()]
 	if _banner_time_left > 0.0:
 		_banner_time_left -= delta
 		if _banner_time_left <= 0.0:
@@ -264,6 +287,31 @@ func _nearest_free_cell(cell: Vector2i) -> Vector2i:
 ## Where the next machine walks in: a random open cell on the edge of the floor
 ## that is far from the player. Returns ArenaGrid.NO_CELL if there is none.
 func _pick_spawn_cell() -> Vector2i:
+	var candidates: Array[Vector2i] = _spawn_candidates()
+	if candidates.is_empty():
+		return ArenaGrid.NO_CELL
+	return candidates[_rng.randi_range(0, candidates.size() - 1)]
+
+
+## Staged wave 1 only: picks the spawn cell that puts `cover` (a tree's position)
+## most nearly on the straight line between the newcomer and the player. So the
+## first Spitter's first shot is aimed at a tree, and the player sees it stop.
+func _pick_spawn_cell_behind(cover: Vector2) -> Vector2i:
+	var best: Vector2i = ArenaGrid.NO_CELL
+	var best_miss: float = INF  # how far the line passes from the tree (smaller is better)
+	for cell: Vector2i in _spawn_candidates():
+		var from: Vector2 = grid.cell_to_world(cell)
+		# The point on the line (newcomer -> player) that is nearest to the tree.
+		var nearest: Vector2 = Geometry2D.get_closest_point_to_segment(cover, from, player.global_position)
+		var miss: float = nearest.distance_to(cover)
+		if miss < best_miss:
+			best = cell
+			best_miss = miss
+	return best
+
+
+## Every open cell on the edge of the floor that is far from the player.
+func _spawn_candidates() -> Array[Vector2i]:
 	var player_cell: Vector2i = grid.world_to_cell(player.global_position)
 	var candidates: Array[Vector2i] = []
 	for x: int in range(1, grid.cols - 1):
@@ -273,9 +321,7 @@ func _pick_spawn_cell() -> Vector2i:
 			var far_enough: bool = (cell - player_cell).length() >= 8.0
 			if is_edge and far_enough and not grid.is_solid(cell):
 				candidates.append(cell)
-	if candidates.is_empty():
-		return ArenaGrid.NO_CELL
-	return candidates[_rng.randi_range(0, candidates.size() - 1)]
+	return candidates
 
 
 ## Shows a line of big text in the middle of the screen. `seconds` is how long it
@@ -317,13 +363,17 @@ func _on_wave_started(number: int, total: int) -> void:
 	_forest_at_wave_start.clear()
 	for cell: Vector2i in _trees_by_cell.keys():
 		_forest_at_wave_start[cell] = _trees_by_cell[cell].stage == ForestTree.Stage.GROWN
-	_wave_label.text = "Wave %d / %d" % [number, total]
 	_show_banner("Wave %d" % number, 1.5)
 
 
 ## Signal handler: the director wants one machine sent in.
 func _on_spawn_requested(kind: StringName, wave_number: int) -> void:
 	var cell: Vector2i = _pick_spawn_cell()
+	# STAGED WAVE 1: the Spitter arrives after the Scrapper has become a tree, and
+	# walks in from behind that tree, so its first shot visibly stops on it.
+	var is_staged: bool = wave_number <= CONFIG.wave_staged_waves
+	if is_staged and kind == WaveDirector.SPITTER and tree_at(_last_planted_cell) != null:
+		cell = _pick_spawn_cell_behind(grid.cell_to_world(_last_planted_cell))
 	if cell == ArenaGrid.NO_CELL:
 		waves.enemy_gone()  # nowhere to put it: tell the director not to wait for it
 		return
@@ -345,7 +395,40 @@ func _on_wave_cleared(number: int) -> void:
 
 ## Signal handler: the last wave is cleared. Show the forest you ended with.
 func _on_all_waves_cleared() -> void:
-	_show_banner("Forest complete: %d trees" % count_grown_trees(), 0.0)
+	is_run_finished = true
+	Sfx.play(&"cat")
+	# The arena is left exactly as it is: the end screen IS your forest.
+	_show_banner("Forest complete: %d trees standing\nPress R or tap here to plant again" % count_grown_trees(), 0.0)
+
+
+## Signal handler: the third pod landed on the hidden shop and the cat is out.
+func _on_cat_shop_opened() -> void:
+	player.double_shot = true
+	_show_banner("Lucky cat! Seed pods now fire in pairs", 3.0)
+
+
+## Signal handler: the player finished a vine zip. The "you can vine to this"
+## ring has done its job, so switch it off on every tree.
+func _on_player_zip_finished() -> void:
+	for tree: ForestTree in _trees_by_cell.values():
+		tree.show_vine_hint = false
+	_vine_hint_done = true
+
+
+## _unhandled_input receives input that nothing else used. After the last wave,
+## R / Enter, or a tap or click on the banner, starts a fresh run.
+func _unhandled_input(event: InputEvent) -> void:
+	if not is_run_finished:
+		return
+	var wants_restart: bool = event.is_action_pressed(&"restart")
+	if event is InputEventScreenTouch and event.pressed:
+		wants_restart = _banner.get_global_rect().has_point((event as InputEventScreenTouch).position)
+	elif event is InputEventMouseButton and event.pressed:
+		wants_restart = _banner.get_global_rect().has_point((event as InputEventMouseButton).position)
+	# Only reload when the arena IS the running scene. In the headless tests it
+	# is a child of the test scene, and reloading would restart the tests.
+	if wants_restart and get_tree().current_scene == self:
+		get_tree().reload_current_scene()
 
 
 ## Signal handler: the player fired. Spawn the pod where the signal says.
@@ -380,6 +463,7 @@ func _on_enemy_died(enemy: Enemy) -> void:
 		# callback caused the death), and Godot forbids adding physics bodies at
 		# that moment. call_deferred queues the call for the end of the frame.
 		spawn_tree.call_deferred(cell, false)
+		_last_planted_cell = cell
 	waves.enemy_gone()  # the wave director keeps count of who is still standing
 
 
@@ -399,6 +483,9 @@ func _on_tree_ready_to_solidify(tree: ForestTree) -> void:
 	grid.set_solid(tree.cell, true)
 	tree.solidify()
 	Sfx.play(&"grow")
+	# Teach the vine once: the first tree the player grows pulses until they zip.
+	if not _vine_hint_done and tree.cell == _last_planted_cell:
+		tree.show_vine_hint = true
 
 
 ## Signal handler: a grown tree was destroyed. Open its cell up again.

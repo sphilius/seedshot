@@ -81,6 +81,11 @@ func _ready() -> void:
 	await _test_vine_bind_needs_a_clear_line()
 	await _test_touch_tap_on_a_machine_binds_it()
 
+	# Layer 2h: the hidden lucky cat, the staged first wave, the end of a run.
+	await _test_three_pods_open_the_cat_shop()
+	await _test_staged_wave_one_teaches_cover_and_the_vine()
+	await _test_clearing_the_last_wave_ends_the_run()
+
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
 
@@ -622,12 +627,16 @@ func _test_wave_director_counts_and_advances() -> void:
 	_check(started.size() == 1 and started[0] == 1, "starting wave 1 announces wave 1")
 	var wave_one_size: int = CONFIG.wave_scrappers[0] + CONFIG.wave_spitters[0] + CONFIG.wave_sawbots[0]
 	var all_sent: Callable = func() -> bool: return director.state == WaveDirector.State.FIGHTING
-	_check(await _wait_until(all_sent, 2.0), "the director sends the whole wave, then waits for the fight")
-	_check(spawned.size() == wave_one_size, "wave 1 asked for %d machine(s) (got %d)" % [wave_one_size, spawned.size()])
-	_check(cleared.is_empty(), "the wave is not over while a machine still stands")
-
+	# Wave 1 is STAGED: one machine at a time, the next only after the last is down.
 	for i: int in wave_one_size:
+		var next_sent: Callable = func() -> bool: return spawned.size() == i + 1
+		_check(await _wait_until(next_sent, 2.0), "staged wave 1 sends machine %d" % (i + 1))
+		await _wait_frames(20)
+		_check(spawned.size() == i + 1, "and holds the next one back while that one stands")
+		_check(cleared.is_empty(), "the wave is not over while a machine still stands")
 		director.enemy_gone()
+	_check(spawned.size() == wave_one_size, "wave 1 asked for %d machine(s) (got %d)" % [wave_one_size, spawned.size()])
+	_check(spawned[0] == WaveDirector.SCRAPPER and spawned[-1] == WaveDirector.SPITTER, "wave 1 is a Scrapper first, then a Spitter")
 	# enemy_gone() is what the arena calls each time a machine is shot down.
 	_check(cleared.size() == 1 and cleared[0] == 1, "when the last machine falls, wave 1 is cleared")
 	_check(director.state == WaveDirector.State.BREAK, "then comes a rest")
@@ -678,7 +687,12 @@ func _test_wave_three_sends_faster_scrappers_and_a_sawbot() -> void:
 	_check(spitters == CONFIG.wave_spitters[wave - 1], "and %d Spitter(s)" % CONFIG.wave_spitters[wave - 1])
 	var expected_scale: float = 1.0 + CONFIG.scrapper_speed_gain_per_wave * (wave - 1)
 	_check(is_equal_approx(scrapper_scale, expected_scale), "wave %d Scrappers walk at %.2fx speed (got %.2f)" % [wave, expected_scale, scrapper_scale])
-	_check((_arena.get_node("Hud/WaveLabel") as Label).text == "Wave %d / %d" % [wave, _arena.waves.total_waves()], "the HUD shows the wave number")
+	# The arena rewrites the corner label in its _process, which runs once per
+	# DRAWN frame (not per physics step), so wait for one drawn frame first.
+	await get_tree().process_frame
+	var label: String = (_arena.get_node("Hud/WaveLabel") as Label).text
+	_check(label.begins_with("Wave %d / %d" % [wave, _arena.waves.total_waves()]), "the HUD shows the wave number")
+	_check(label.ends_with("Trees %d" % _arena.count_grown_trees()), "and the bloom meter: how many trees are standing")
 
 
 ## Waves: going down restarts the same wave, with the forest put back to how it
@@ -869,6 +883,105 @@ func _test_touch_tap_on_a_machine_binds_it() -> void:
 	touch.touch_up(0)
 	_check(spitter.is_bound, "a tap on a machine binds it")
 	_check(_arena.get_node("Shots").get_child_count() == 0 and not spitter.is_winding_up, "a bound Spitter is not shooting")
+
+
+## The hidden lucky cat: three pods on the shop open it, and from then on every
+## shot is a pair of pods. Pods on the plain wall do not count.
+func _test_three_pods_open_the_cat_shop() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	var shop: CatShop = _arena.cat_shop
+	var pods: Node = _arena.get_node("Pods")
+	_check(shop != null and not shop.is_open and shop.hits == 0, "the arena has a closed shop")
+	_check(not player.double_shot, "pods are single to begin with")
+
+	# A pod on the ordinary wall, well left of the shop, must not count.
+	player.global_position = _arena.grid.cell_to_world(Vector2i(4, 3))
+	player.fire(Vector2.UP)
+	await _wait_until(func() -> bool: return pods.get_child_count() == 0, 1.5)
+	_check(shop.hits == 0, "a pod on the plain wall does not count")
+
+	# Stand three cells below the shop and fire straight up at it.
+	player.global_position = Vector2(shop.global_position.x, _arena.grid.cell_to_world(Vector2i(0, 4)).y)
+	for shot: int in CONFIG.cat_hits_needed:
+		# fire() refuses while the cooldown runs, so keep asking until it agrees.
+		await _wait_until(func() -> bool: return player.fire(Vector2.UP), 1.0)
+		var landed: Callable = func() -> bool: return shop.hits == shot + 1
+		_check(await _wait_until(landed, 1.5), "pod %d lands on the shop" % (shot + 1))
+		if shot < CONFIG.cat_hits_needed - 1:
+			_check(not shop.is_open, "the shop stays shut after %d pod(s)" % (shot + 1))
+	_check(shop.is_open, "the third pod opens the shop")
+	_check(player.double_shot, "the cat's gift: pods now fire in pairs")
+	await _wait_until(func() -> bool: return pods.get_child_count() == 0, 1.5)
+
+	# Fire sideways, away from the shop, and count the pods in flight.
+	await _wait_until(func() -> bool: return player.fire(Vector2.LEFT), 1.0)
+	await get_tree().physics_frame
+	_check(pods.get_child_count() == 2, "one shot is now two pods")
+	shop.hit_by_seed()
+	_check(shop.hits == CONFIG.cat_hits_needed, "an open shop ignores further pods")
+
+
+## Staged wave 1: the lone Scrapper, then (only once it is a tree) a Spitter that
+## walks in from behind that tree. The first tree pulses until the player zips.
+func _test_staged_wave_one_teaches_cover_and_the_vine() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	_arena.waves.time_scale = 20.0
+	_arena.waves.start_wave(1)
+	var one_in: Callable = func() -> bool: return get_tree().get_nodes_in_group(Enemy.GROUP).size() == 1
+	_check(await _wait_until(one_in, 1.0), "wave 1 opens with one machine")
+	var scrapper := get_tree().get_first_node_in_group(Enemy.GROUP) as Scrapper
+	_check(scrapper != null, "and it is a Scrapper")
+	if scrapper == null:
+		return
+	await _wait_frames(30)
+	_check(get_tree().get_nodes_in_group(Enemy.GROUP).size() == 1, "the Spitter waits while the Scrapper stands")
+
+	# Down the Scrapper somewhere open, between the player and the right-hand wall.
+	_arena.waves.time_scale = 1.0  # real timing now, so the tree is grown before the Spitter
+	scrapper.global_position = _arena.grid.cell_to_world(Vector2i(12, 7))
+	var tree_cell: Vector2i = _arena.grid.world_to_cell(scrapper.global_position)
+	scrapper.take_damage(CONFIG.scrapper_hp)
+	var grown: Callable = func() -> bool:
+		var tree: ForestTree = _arena.tree_at(tree_cell)
+		return tree != null and tree.stage == ForestTree.Stage.GROWN
+	_check(await _wait_until(grown, CONFIG.sapling_time + 1.0), "the downed Scrapper becomes a tree")
+	var tree: ForestTree = _arena.tree_at(tree_cell)
+	_check(tree.show_vine_hint, "the first tree you grow pulses: you can vine to this")
+
+	var spitter_in: Callable = func() -> bool: return get_tree().get_first_node_in_group(Enemy.GROUP) is Spitter
+	_check(await _wait_until(spitter_in, CONFIG.wave_spawn_interval + 1.0), "then the Spitter walks in")
+	var spitter := get_tree().get_first_node_in_group(Enemy.GROUP) as Spitter
+	if spitter != null:
+		# The tree should sit close to the straight line from Spitter to player.
+		var nearest: Vector2 = Geometry2D.get_closest_point_to_segment(tree.global_position, spitter.global_position, player.global_position)
+		_check(nearest.distance_to(tree.global_position) < CONFIG.cell_size, "it comes in from behind the new tree (line misses the tree by %.0f px)" % nearest.distance_to(tree.global_position))
+
+	# One zip to that tree and the hint has done its job.
+	_check(player.try_vine(tree.global_position), "the player zips to the pulsing tree")
+	_check(await _wait_until(func() -> bool: return not player.is_zipping, 2.0), "the zip finishes")
+	_check(not tree.show_vine_hint, "and the pulse stops")
+
+
+## The end of a run: clearing the last wave leaves the arena as it is and says so.
+func _test_clearing_the_last_wave_ends_the_run() -> void:
+	await _fresh_arena()
+	_arena.waves.time_scale = 20.0
+	var last: int = _arena.waves.total_waves()
+	_arena.waves.start_wave(last)
+	_check(not _arena.is_run_finished, "the run is not over while the last wave is on")
+	var all_sent: Callable = func() -> bool: return _arena.waves.state == WaveDirector.State.FIGHTING
+	_check(await _wait_until(all_sent, 4.0), "the last wave sends everything in")
+	# Down every machine. Each one roots where it stands.
+	for node: Node in get_tree().get_nodes_in_group(Enemy.GROUP):
+		(node as Enemy).take_damage(99)
+	_check(_arena.waves.state == WaveDirector.State.DONE, "with the last machine down, the waves are done")
+	_check(_arena.is_run_finished, "and the arena marks the run finished")
+	await _wait_frames(int(CONFIG.sapling_time * 60.0) + 30)
+	var banner := _arena.get_node("Hud/Banner") as Label
+	_check(banner.visible and banner.text.begins_with("Forest complete"), "the end banner is up")
+	_check(_arena.count_grown_trees() > Arena.TEST_TREE_CELLS.size(), "and the forest is left standing (%d trees)" % _arena.count_grown_trees())
 
 
 ## The split guard must spot any cell whose tree would cut the open floor in two,
