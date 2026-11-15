@@ -30,15 +30,10 @@ func _ready() -> void:
 	# Layer 2: the real arena scene, driven through its public methods. (Headless
 	# Godot drops simulated mouse/keyboard input, so we call fire() and try_vine()
 	# directly instead of faking clicks.)
-	# Shorten the wave timings so the wave tests take a blink instead of seconds.
-	# GDScript will not assign through a `const` name, so we go through a normal
-	# variable that points at the same shared config object. This only changes
-	# the copy in memory for this test run; nothing is saved to the .tres file.
-	var config: GameConfig = CONFIG
-	config.wave_first_delay = 0.05
-	config.wave_spawn_interval = 0.05
-	config.wave_break_time = 0.2
-	config.death_restart_delay = 0.2
+	# NOTE: tests cannot change config numbers. Writing to the shared config from
+	# here was tried and had no effect (CONFIG is a preloaded constant). Where a
+	# test needs things to happen sooner, it uses a knob on the node instead,
+	# such as WaveDirector.time_scale.
 	# `await` on a function call means: start it, and continue here only once it
 	# has completely finished (including all of its own awaits).
 	await _test_arena_boots()
@@ -126,6 +121,7 @@ func _test_input_actions_exist() -> void:
 func _test_arena_boots() -> void:
 	_arena = ARENA_SCENE.instantiate()
 	add_child(_arena)
+	_arena.waves.time_scale = 20.0  # run the wave timetable 20x faster for the test
 	await get_tree().physics_frame
 	_check(_arena.player != null, "arena has a player")
 	_check(_arena.waves.wave == 1, "wave 1 starts by itself")
@@ -595,6 +591,7 @@ func _test_sawbot_takes_three_pods_and_becomes_a_tree() -> void:
 ## of machines, notice when they are all down, rest, and move to the next wave.
 func _test_wave_director_counts_and_advances() -> void:
 	var director := WaveDirector.new()
+	director.time_scale = 20.0  # 20x faster, so the test does not sit through real waits
 	add_child(director)
 	# Write down everything the director announces. Each lambda appends to a list
 	# the test can read afterwards (connect() + a lambda = a one-off listener).
@@ -609,7 +606,9 @@ func _test_wave_director_counts_and_advances() -> void:
 
 	_check(director.total_waves() == CONFIG.wave_scrappers.size(), "there is one wave per entry in the config list")
 	director.start_wave(1)
-	_check(started == [1] as Array[int], "starting wave 1 announces wave 1")
+	# (Comparing size and first item, rather than `started == [1]`, keeps the
+	# types simple: a typed Array[int] and a plain [1] are different types.)
+	_check(started.size() == 1 and started[0] == 1, "starting wave 1 announces wave 1")
 	var wave_one_size: int = CONFIG.wave_scrappers[0] + CONFIG.wave_sawbots[0]
 	var all_sent: Callable = func() -> bool: return director.state == WaveDirector.State.FIGHTING
 	_check(await _wait_until(all_sent, 2.0), "the director sends the whole wave, then waits for the fight")
@@ -618,7 +617,8 @@ func _test_wave_director_counts_and_advances() -> void:
 
 	for i: int in wave_one_size:
 		director.enemy_gone()
-	_check(cleared == [1] as Array[int], "when the last machine falls, wave 1 is cleared")
+	# enemy_gone() is what the arena calls each time a machine is shot down.
+	_check(cleared.size() == 1 and cleared[0] == 1, "when the last machine falls, wave 1 is cleared")
 	_check(director.state == WaveDirector.State.BREAK, "then comes a rest")
 	_check(await _wait_until(func() -> bool: return director.wave == 2, CONFIG.wave_break_time + 1.0), "after the rest, wave 2 starts by itself")
 
@@ -640,6 +640,7 @@ func _test_wave_director_counts_and_advances() -> void:
 ## Waves in the real arena: wave 3 brings a Sawbot and faster Scrappers.
 func _test_wave_three_sends_faster_scrappers_and_a_sawbot() -> void:
 	await _fresh_arena()
+	_arena.waves.time_scale = 20.0
 	_arena.waves.start_wave(3)
 	var expected: int = CONFIG.wave_scrappers[2] + CONFIG.wave_sawbots[2]
 	var all_in: Callable = func() -> bool: return get_tree().get_nodes_in_group(Enemy.GROUP).size() == expected
@@ -662,12 +663,16 @@ func _test_wave_three_sends_faster_scrappers_and_a_sawbot() -> void:
 ## stood when that wave began.
 func _test_going_down_restarts_the_wave_with_its_forest() -> void:
 	await _fresh_arena()
+	_arena.waves.time_scale = 20.0
 	_arena.waves.start_wave(2)  # the forest snapshot is taken right here
 	var late_tree_cell := Vector2i(3, 3)
 	_check(_arena.spawn_tree(late_tree_cell, true) != null, "a tree grows during the wave")
 	var enemy_in: Callable = func() -> bool: return get_tree().get_nodes_in_group(Enemy.GROUP).size() >= 1
 	await _wait_until(enemy_in, 1.0)
 
+	# Move the player away from the start, then knock out all its health at once.
+	# The arena hears the player's `died` signal, waits death_restart_delay, and
+	# rebuilds the wave from its snapshot.
 	_arena.player.global_position = _arena.grid.cell_to_world(Vector2i(20, 12))
 	_arena.player.take_damage(CONFIG.player_max_hp)
 	_check(_arena.player.is_dead, "the player goes down")

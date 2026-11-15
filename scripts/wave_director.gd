@@ -34,6 +34,9 @@ const CONFIG: GameConfig = preload("res://config/game_config.tres")
 const SCRAPPER: StringName = &"scrapper"
 const SAWBOT: StringName = &"sawbot"
 
+## Runs the timetable faster or slower. 1.0 is normal. The headless tests set
+## this to 20 so a wave's worth of spawning takes a blink instead of seconds.
+var time_scale: float = 1.0
 ## The current wave, counting from 1. 0 means no wave has started yet.
 var wave: int = 0
 var state: State = State.IDLE
@@ -75,6 +78,7 @@ func enemy_gone() -> void:
 ## _physics_process runs 60 times per second: count down to the next spawn or
 ## the next wave. (`match` is GDScript's "switch": it picks the matching branch.)
 func _physics_process(delta: float) -> void:
+	delta *= time_scale  # stretch or squeeze time for this node only
 	match state:
 		State.SPAWNING:
 			_timer -= delta
