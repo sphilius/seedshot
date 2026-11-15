@@ -8,6 +8,9 @@ Statuses: Made, Changed, Removed, Revisited, Parked, Archived, Proposed.
 
 | ID | Date | Status | Choice |
 |---|---|---|---|
+| D-022 | 2026-11-15 | Made | End of a run: the forest is left standing, with a tree count and a restart |
+| D-021 | 2026-11-15 | Made | Staged wave 1: Scrapper, then a Spitter from behind the new tree; first tree pulses |
+| D-020 | 2026-11-15 | Made | Hidden lucky cat: shuttered shop in the top wall, three pods, paired pods |
 | D-019 | 2026-11-15 | Made | Ten waves; Scrapper speed gain lowered to 8% per wave |
 | D-018 | 2026-11-15 | Made | Vine on a machine: yank it to 1.5 cells and bind it for 1.5 s |
 | D-017 | 2026-11-15 | Made | Spitter: keeps range, red windup, slow shot that trees stop; waves reshuffled |
@@ -27,6 +30,33 @@ Statuses: Made, Changed, Removed, Revisited, Parked, Archived, Proposed.
 | D-003 | 2026-11-13 | Made | Seal guard keeps a sapling walk-through for good; an occupied sapling retries |
 | D-002 | 2026-11-13 | Made | The vine latches the first tree its ray meets |
 | D-001 | 2026-11-13 | Made | Every tunable in one config resource |
+
+## D-022: The end of a run (Made, 2026-11-15)
+
+- Clearing wave 10 leaves the arena exactly as it is, with a banner: how many trees are standing, and "Press R or tap here to plant again". DESIGN.md: "The final screen shows the arena as you left it."
+- **Bloom meter:** the corner label reads "Wave 3 / 10   Trees 12" throughout the run.
+- R, Enter, or a tap or click on the banner starts a fresh run. A fresh run closes the cat's shop again.
+- No score, no time, no menu. The tree count is the score.
+
+## D-021: Staged wave 1 (Made, 2026-11-15)
+
+From DESIGN.md: one Scrapper walks in, dies in one pod, grows into a tree, and a Spitter's shot visibly stops on that tree; a vine icon pulses on the tree until the player zips once.
+
+- **One at a time:** in a staged wave the next machine only walks in after the one before is down (`wave_staged_waves = 1`). Wave 1 is now one Scrapper, then one Spitter.
+- **The Spitter comes from behind the tree:** of the possible entry cells, the arena picks the one whose straight line to the player passes closest to the newly grown tree. The player can still walk out of cover, so the shot stopping on the tree is likely, not guaranteed.
+- **The pulse:** the first tree the player grows shows an expanding ring until the first zip finishes. A ring, not an icon: no art needed.
+- No text is added for any of this.
+
+## D-020: The hidden lucky cat (Made, 2026-11-15)
+
+The jam's mandatory restriction. Built as DESIGN.md describes it.
+
+- **Where:** a shuttered shop set into the top wall, towards the right (cells 20 and 21), away from the middle.
+- **Hints:** the shutter glints every 3 seconds, and a paw print is painted on the wall beside it.
+- **How:** three seed pods on the shop. A vine grows up the front with each hit; on the third the shutter lifts and the cat rocks from side to side.
+- **Reward:** every shot is a pair of pods, 14 px apart, for the rest of the run. It survives wave restarts.
+- **A ledge, for a technical reason:** the shop front sticks 16 px out of the wall. Flush with the wall, the wall behind it registered the pod first and the hit did not count.
+- **Still to do for the jam (s11):** the itch description must say the game has a hidden lucky cat, and a screenshot goes to the organiser.
 
 ## D-019: Ten waves (Made, 2026-11-15)
 

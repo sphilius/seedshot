@@ -12,6 +12,8 @@ Jamference AI Game Jam Hack 4 entry. Godot 4.7, GDScript, Compatibility renderer
 | Right click on a tree | Vine zip to it, stopping one cell short |
 | Right click on a machine | Vine yanks it towards you and binds it for 1.5 s |
 
+After the last wave, R or Enter starts a fresh run.
+
 Pause with P or Esc, or the two-bar button in the top-right corner.
 
 The green squares at the top centre are your hit points. A Scrapper glows red just before it swings: get out of its reach and the swing misses.
@@ -53,6 +55,7 @@ On a fresh clone run `.\tools\godot.ps1 import` once first.
 | `scripts/enemy.gd` | What every machine shares: health, dying into a tree, walking a route. |
 | `scripts/scrapper.gd`, `spitter.gd`, `sawbot.gd` | The three machines. All extend `enemy.gd`. |
 | `scripts/spit_shot.gd` | The Spitter's shot. Trees stop it. |
+| `scripts/cat_shop.gd` | The hidden lucky cat (the jam's mandatory restriction). |
 | `scripts/wave_director.gd` | When each machine walks in and when a wave is over. Wave sizes are lists in the config. |
 | `scripts/touch_controls.gd` | Thumb-sticks and tap-to-vine. Drives the same verbs as mouse and keyboard. |
 | `scripts/sfx.gd` | Generated beeps and the browser audio unlock (autoload `Sfx`). |
