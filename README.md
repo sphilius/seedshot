@@ -49,7 +49,8 @@ On a fresh clone run `.\tools\godot.ps1 import` once first.
 | `scripts/player.gd` | Move, aim, fire, vine. |
 | `scripts/forest_tree.gd`, `seed_pod.gd` | One script per thing in the arena. |
 | `scripts/enemy.gd` | What every machine shares: health, dying into a tree, walking a route. |
-| `scripts/scrapper.gd`, `sawbot.gd` | The two machines so far. Both extend `enemy.gd`. |
+| `scripts/scrapper.gd`, `spitter.gd`, `sawbot.gd` | The three machines. All extend `enemy.gd`. |
+| `scripts/spit_shot.gd` | The Spitter's shot. Trees stop it. |
 | `scripts/wave_director.gd` | When each machine walks in and when a wave is over. Wave sizes are lists in the config. |
 | `scripts/touch_controls.gd` | Thumb-sticks and tap-to-vine. Drives the same verbs as mouse and keyboard. |
 | `scripts/sfx.gd` | Generated beeps and the browser audio unlock (autoload `Sfx`). |

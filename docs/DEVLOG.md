@@ -8,6 +8,7 @@ Statuses: Made, Changed, Removed, Revisited, Parked, Archived, Proposed.
 
 | ID | Date | Status | Choice |
 |---|---|---|---|
+| D-017 | 2026-11-15 | Made | Spitter: keeps range, red windup, slow shot that trees stop; waves reshuffled |
 | D-016 | 2026-11-14 | Made | Sawbot: saws any tree in reach, takes 3 pods, never attacks |
 | D-015 | 2026-11-14 | Made | Five waves from two config lists; Scrappers 12% faster per wave; defeat restarts the wave |
 | D-014 | 2026-11-14 | Proposed | Something to protect: not yet, build waves, Sawbot and Spitter first |
@@ -24,6 +25,15 @@ Statuses: Made, Changed, Removed, Revisited, Parked, Archived, Proposed.
 | D-003 | 2026-11-13 | Made | Seal guard keeps a sapling walk-through for good; an occupied sapling retries |
 | D-002 | 2026-11-13 | Made | The vine latches the first tree its ray meets |
 | D-001 | 2026-11-13 | Made | Every tunable in one config resource |
+
+## D-017: The Spitter (Made, 2026-11-15)
+
+- **Behaviour:** it wants a clear line to the player from 3.5 to 7 cells away. No clear line or too far: it walks closer along the grid route. Too close: it backs away. Clear line and ready: it glows red for 0.5 s, then fires one shot at where the player is.
+- **The shot** is slow (300; the bot walks at 260 and zips at 1100), costs 1 hit point, and stops on walls and grown trees. That is the design's "trees block shots, yours and theirs".
+- **Shots do not damage trees.** Felling trees is the Sawbot's job; if Spitters eroded cover too, the two machines would blur together.
+- **2 hit points, 1.8 s between shots.** A new Spitter waits half a cooldown before its first shot, so nothing fires the instant it walks in.
+- **Own physics layer:** layer 5, "enemy_shots", looking only at world and player, so shots pass through other machines and seed pods.
+- **Waves reshuffled** now that all three machines exist: `wave_scrappers = [1, 3, 3, 4, 4]`, `wave_spitters = [0, 1, 2, 2, 2]`, `wave_sawbots = [0, 0, 0, 1, 2]`. Spitters first (cover matters before anything cuts it down), as DESIGN.md orders them. The lock has Sawbots from wave 5; they start at wave 4 here so a five-wave build shows them twice. Revisit when waves 6 to 10 are added.
 
 ## D-016: The Sawbot (Made, 2026-11-14)
 
