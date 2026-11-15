@@ -76,6 +76,11 @@ func _ready() -> void:
 	await _test_spitter_keeps_its_distance()
 	await _test_spitter_closes_in_when_it_cannot_see_you()
 
+	# Layer 2g: the vine's second use, yank and bind.
+	await _test_vine_yanks_and_binds_a_machine()
+	await _test_vine_bind_needs_a_clear_line()
+	await _test_touch_tap_on_a_machine_binds_it()
+
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
 
@@ -794,6 +799,76 @@ func _test_spitter_closes_in_when_it_cannot_see_you() -> void:
 	_check(spitter.global_position.distance_to(start) > 20.0, "it walks to find a clear line instead")
 	var glowing: Callable = func() -> bool: return spitter.is_winding_up
 	_check(await _wait_until(glowing, 6.0), "once it has walked round the tree, it starts a shot")
+
+
+## Vine on a machine: it is dragged towards the bot, held still for the bind
+## time, and then carries on as before.
+func _test_vine_yanks_and_binds_a_machine() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	player.global_position = _arena.grid.cell_to_world(Vector2i(5, 12))
+	var scrapper: Scrapper = _arena.spawn_scrapper_at(Vector2i(11, 12))  # 6 cells away
+	await get_tree().physics_frame
+
+	_check(player.try_vine(scrapper.global_position), "the vine lands on a machine in clear view")
+	_check(scrapper.is_bound, "the machine is bound")
+	_check(not player.is_zipping, "the bot itself does not move")
+	_check(not player.try_vine(scrapper.global_position), "the vine needs its cooldown before the next use")
+
+	# The drag stops vine_yank_stop_cells from the bot.
+	var stop: float = CONFIG.vine_yank_stop_cells * CONFIG.cell_size
+	var arrived: Callable = func() -> bool: return absf(scrapper.global_position.distance_to(player.global_position) - stop) < 3.0
+	_check(await _wait_until(arrived, 1.0), "it is dragged to %.1f cells from the bot" % CONFIG.vine_yank_stop_cells)
+
+	# While bound it must not creep closer or start a swing.
+	var held_at: Vector2 = scrapper.global_position
+	await _wait_frames(30)
+	_check(scrapper.is_bound and scrapper.global_position.distance_to(held_at) < 1.0, "it stays put while bound")
+	_check(not scrapper.is_winding_up and player.hp == CONFIG.player_max_hp, "and cannot attack")
+
+	var released: Callable = func() -> bool: return not scrapper.is_bound
+	_check(await _wait_until(released, CONFIG.vine_bind_time + 0.5), "the binding wears off after %.1f s" % CONFIG.vine_bind_time)
+	_check(scrapper.modulate == Color.WHITE, "and the green tint goes with it")
+	var swinging: Callable = func() -> bool: return scrapper.is_winding_up
+	_check(await _wait_until(swinging, 2.0), "then it comes at the bot again")
+
+
+## Vine on a machine: a tree in the way blocks it, and a bound Sawbot stops sawing.
+func _test_vine_bind_needs_a_clear_line() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	var tree_cell: Vector2i = Arena.TEST_TREE_CELLS[0]
+	# The tree sits exactly between the bot and the Sawbot.
+	player.global_position = _arena.grid.cell_to_world(tree_cell + Vector2i(-3, 0))
+	var sawbot: Sawbot = _arena.spawn_sawbot_at(tree_cell + Vector2i(3, 0))
+	await get_tree().physics_frame
+	_check(not player.try_vine(sawbot.global_position), "a machine behind a tree cannot be lashed")
+	_check(not sawbot.is_bound, "so it is not bound")
+
+	# Let it reach the tree and start cutting, then lash it from the open side.
+	_check(await _wait_until(func() -> bool: return sawbot.is_sawing, 4.0), "the Sawbot starts sawing the tree")
+	player.global_position = sawbot.global_position + Vector2(0.0, 4.0 * CONFIG.cell_size)
+	await get_tree().physics_frame
+	var tree_hp: int = _arena.tree_at(tree_cell).hp
+	_check(player.try_vine(sawbot.global_position), "from the open side the vine lands")
+	_check(sawbot.is_bound and not sawbot.is_sawing, "a bound Sawbot stops sawing")
+	await _wait_frames(40)
+	_check(_arena.tree_at(tree_cell).hp == tree_hp, "and the tree takes no more damage while it is bound")
+
+
+## Touch: a quick tap on a machine is the same vine bind.
+func _test_touch_tap_on_a_machine_binds_it() -> void:
+	await _fresh_arena()
+	var touch: TouchControls = _touch_controls()
+	_arena.player.global_position = _arena.grid.cell_to_world(Vector2i(5, 12))
+	var spitter: Spitter = _arena.spawn_spitter_at(Vector2i(10, 12))
+	await get_tree().physics_frame
+	# Tap a little off-centre, as a fingertip would.
+	touch.touch_down(0, spitter.global_position + Vector2(20.0, 15.0))
+	await _wait_frames(3)
+	touch.touch_up(0)
+	_check(spitter.is_bound, "a tap on a machine binds it")
+	_check(_arena.get_node("Shots").get_child_count() == 0 and not spitter.is_winding_up, "a bound Spitter is not shooting")
 
 
 ## The split guard must spot any cell whose tree would cut the open floor in two,

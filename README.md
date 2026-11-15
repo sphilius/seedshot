@@ -10,6 +10,7 @@ Jamference AI Game Jam Hack 4 entry. Godot 4.7, GDScript, Compatibility renderer
 | Mouse | Aim |
 | Left click (hold) | Fire seed pods |
 | Right click on a tree | Vine zip to it, stopping one cell short |
+| Right click on a machine | Vine yanks it towards you and binds it for 1.5 s |
 
 Pause with P or Esc, or the two-bar button in the top-right corner.
 
@@ -24,6 +25,7 @@ The itch page is `kingriot/seedshot` (channel `html5`).
 | Slide a thumb on the left half | Move |
 | Slide a thumb on the right half | Aim, and fire while held |
 | Quick tap on a tree | Vine zip to it |
+| Quick tap on a machine | Vine yank and bind |
 
 Touch switches on at the first finger and off again when a real mouse moves. It is one node (`Hud/TouchControls` in `scenes/arena.tscn`); delete that node to remove touch support.
 

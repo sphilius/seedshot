@@ -61,6 +61,14 @@ extends Resource
 ## The zip stops this far from the tree's centre ("one cell short").
 @export var vine_stop_short_cells: float = 1.0
 
+## VINE ON A MACHINE: it is dragged towards the bot and tied up for this long.
+@export var vine_bind_time: float = 1.5
+## The drag stops this far from the bot. More than the Scrapper's melee reach
+## (1.0), so a yanked Scrapper still has to step in before it can swing.
+@export var vine_yank_stop_cells: float = 1.5
+## How fast a yanked machine travels along the vine.
+@export var vine_yank_speed: float = 900.0
+
 @export_group("Trees")
 ## Hit points of a grown tree. Nothing damages trees yet; Sawbots will (waves 5+).
 @export var tree_hp: int = 6
@@ -131,12 +139,12 @@ extends Resource
 @export_group("Waves")
 ## How many Scrappers each wave sends. Entry 0 is wave 1. The length of this
 ## list is the number of waves. Wave 1 is the single "teaching" Scrapper.
-@export var wave_scrappers: Array[int] = [1, 3, 3, 4, 4]
+@export var wave_scrappers: Array[int] = [1, 3, 3, 4, 4, 5, 5, 6, 6, 7]
 ## How many Spitters each wave sends, lined up with the list above. They arrive
 ## first (wave 2), so cover matters before anything starts cutting it down.
-@export var wave_spitters: Array[int] = [0, 1, 2, 2, 2]
+@export var wave_spitters: Array[int] = [0, 1, 2, 2, 2, 2, 3, 3, 4, 4]
 ## How many Sawbots each wave sends, lined up with the list above.
-@export var wave_sawbots: Array[int] = [0, 0, 0, 1, 2]
+@export var wave_sawbots: Array[int] = [0, 0, 0, 1, 2, 2, 2, 3, 3, 4]
 ## Seconds before the first machine of a wave walks in.
 @export var wave_first_delay: float = 1.0
 ## Seconds between one machine walking in and the next.
@@ -144,8 +152,9 @@ extends Resource
 ## Rest time between clearing a wave and the next one starting.
 @export var wave_break_time: float = 3.0
 ## Each wave's Scrappers are this much faster than the wave before
-## (0.12 = 12%). Wave 5 Scrappers therefore walk at 148% speed.
-@export var scrapper_speed_gain_per_wave: float = 0.12
+## (0.08 = 8%). Wave 10 Scrappers therefore walk at 172% speed: about 206,
+## still slower than the bot's 260. (Was 0.12 when there were only five waves.)
+@export var scrapper_speed_gain_per_wave: float = 0.08
 
 @export_group("Touch")
 ## A finger must slide this far (in game pixels) before its touch becomes a

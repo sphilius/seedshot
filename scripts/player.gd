@@ -29,6 +29,8 @@ const WORLD_MASK: int = 1
 const FALLBACK_COLOR: Color = Color(0.30, 0.70, 0.72)
 const VINE_COLOR: Color = Color(0.45, 0.85, 0.35)
 const RETICLE_COLOR: Color = Color(1.0, 1.0, 1.0, 0.8)
+## How long the vine stays drawn after it lashes a machine.
+const LASH_SHOW_SECONDS: float = 0.25
 
 ## Unit vector from the bot towards the mouse pointer.
 var aim_direction: Vector2 = Vector2.RIGHT
@@ -44,6 +46,9 @@ var hp: int = 0
 ## True once hp reaches zero: the bot stops moving, firing and zipping.
 var is_dead: bool = false
 
+## The machine the vine last lashed, and how much longer to draw that vine.
+var _lash_target: Enemy = null
+var _lash_time_left: float = 0.0
 ## Seconds of "cannot be hurt" left after the last hit (the bot blinks meanwhile).
 var _invulnerable_left: float = 0.0
 
@@ -73,6 +78,7 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	_fire_cooldown_left = maxf(_fire_cooldown_left - delta, 0.0)
 	_vine_cooldown_left = maxf(_vine_cooldown_left - delta, 0.0)
+	_lash_time_left = maxf(_lash_time_left - delta, 0.0)
 	_update_hit_blink(delta)
 	if is_dead:
 		return  # a downed bot does nothing until the arena restarts
@@ -113,6 +119,10 @@ func _draw() -> void:
 	if is_zipping:
 		# to_local converts a world position into this node's own coordinates.
 		draw_line(Vector2.ZERO, to_local(_vine_anchor), VINE_COLOR, 4.0)
+	# The vine to a machine that was just lashed. is_instance_valid: it may have
+	# been shot and deleted since.
+	if _lash_time_left > 0.0 and is_instance_valid(_lash_target):
+		draw_line(Vector2.ZERO, to_local(_lash_target.global_position), VINE_COLOR, 4.0)
 	if CONFIG.player_texture == null:
 		var size: float = CONFIG.player_radius_cells * CONFIG.cell_size * 2.0
 		draw_rect(Rect2(-size / 2.0, -size / 2.0, size, size), FALLBACK_COLOR)
@@ -151,7 +161,14 @@ func try_vine(world_point: Vector2, pick_radius_cells: float = -1.0) -> bool:
 	# -1.0 is the "not given" marker (a radius can never really be negative).
 	if pick_radius_cells < 0.0:
 		pick_radius_cells = CONFIG.vine_pick_radius_cells
-	var picked: ForestTree = _pick_tree(world_point, pick_radius_cells * CONFIG.cell_size)
+	var pick_radius: float = pick_radius_cells * CONFIG.cell_size
+
+	# A machine under the pointer comes first: yank it over and tie it up.
+	var enemy: Enemy = _pick_enemy(world_point, pick_radius)
+	if enemy != null and _lash_enemy(enemy):
+		return true
+
+	var picked: ForestTree = _pick_tree(world_point, pick_radius)
 	if picked == null:
 		return false  # right click on empty space: do nothing
 
@@ -225,6 +242,42 @@ func _update_aim() -> void:
 			aim_direction = to_mouse.normalized()
 	# The art faces "up", and angle() measures from "right", hence the quarter turn.
 	_sprite.rotation = aim_direction.angle() + PI / 2.0
+
+
+## Returns the machine nearest to `world_point`, if one is within `pick_radius`
+## pixels; otherwise null.
+func _pick_enemy(world_point: Vector2, pick_radius: float) -> Enemy:
+	var best: Enemy = null
+	var best_distance: float = pick_radius
+	# Every machine adds itself to the "enemies" group.
+	for node: Node in get_tree().get_nodes_in_group(Enemy.GROUP):
+		var enemy := node as Enemy
+		if enemy == null or enemy.is_dead:
+			continue
+		var distance: float = enemy.global_position.distance_to(world_point)
+		if distance <= best_distance:
+			best = enemy
+			best_distance = distance
+	return best
+
+
+## The vine's second use: lash a machine, drag it towards the bot and bind it.
+## Returns false (nothing happens) if it is out of range or behind a wall or tree.
+func _lash_enemy(enemy: Enemy) -> bool:
+	if global_position.distance_to(enemy.global_position) > CONFIG.vine_range:
+		return false
+	# The vine needs a clear line: a ray that only looks at walls and trees must
+	# reach the machine without touching anything.
+	var ray := PhysicsRayQueryParameters2D.create(global_position, enemy.global_position, WORLD_MASK)
+	if not get_world_2d().direct_space_state.intersect_ray(ray).is_empty():
+		return false
+	enemy.yank_and_bind(global_position, CONFIG.vine_yank_stop_cells * CONFIG.cell_size, CONFIG.vine_bind_time)
+	_vine_cooldown_left = CONFIG.vine_cooldown
+	# Remember it for a moment so _draw can show the vine reaching out.
+	_lash_target = enemy
+	_lash_time_left = LASH_SHOW_SECONDS
+	Sfx.play(&"bind")
+	return true
 
 
 ## Returns the grown tree nearest to `world_point`, if one is within

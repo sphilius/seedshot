@@ -44,7 +44,7 @@ const AIM_REST_SPOT: Vector2 = Vector2(0.87, 0.76)
 const MOVE_COLOR: Color = Color(1.0, 1.0, 1.0, 0.55)
 const AIM_COLOR: Color = Color(0.75, 0.95, 0.45, 0.60)
 const REST_ALPHA: float = 0.30
-const TOUCH_HINT: String = "Left thumb: move   |   Right thumb: aim + fire   |   Tap a tree: vine zip"
+const TOUCH_HINT: String = "Left thumb: move   |   Right thumb: aim + fire   |   Tap a tree: zip   |   Tap a machine: bind"
 const ROTATE_TEXT: String = "Turn your phone sideways"
 
 

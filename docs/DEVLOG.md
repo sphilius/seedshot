@@ -8,6 +8,8 @@ Statuses: Made, Changed, Removed, Revisited, Parked, Archived, Proposed.
 
 | ID | Date | Status | Choice |
 |---|---|---|---|
+| D-019 | 2026-11-15 | Made | Ten waves; Scrapper speed gain lowered to 8% per wave |
+| D-018 | 2026-11-15 | Made | Vine on a machine: yank it to 1.5 cells and bind it for 1.5 s |
 | D-017 | 2026-11-15 | Made | Spitter: keeps range, red windup, slow shot that trees stop; waves reshuffled |
 | D-016 | 2026-11-14 | Made | Sawbot: saws any tree in reach, takes 3 pods, never attacks |
 | D-015 | 2026-11-14 | Made | Five waves from two config lists; Scrappers 12% faster per wave; defeat restarts the wave |
@@ -25,6 +27,23 @@ Statuses: Made, Changed, Removed, Revisited, Parked, Archived, Proposed.
 | D-003 | 2026-11-13 | Made | Seal guard keeps a sapling walk-through for good; an occupied sapling retries |
 | D-002 | 2026-11-13 | Made | The vine latches the first tree its ray meets |
 | D-001 | 2026-11-13 | Made | Every tunable in one config resource |
+
+## D-019: Ten waves (Made, 2026-11-15)
+
+- `wave_scrappers = [1, 3, 3, 4, 4, 5, 5, 6, 6, 7]`, `wave_spitters = [0, 1, 2, 2, 2, 2, 3, 3, 4, 4]`, `wave_sawbots = [0, 0, 0, 1, 2, 2, 2, 3, 3, 4]`. Wave 10 is 15 machines.
+- **Speed gain lowered from 12% to 8% per wave.** At 12% a wave 10 Scrapper would walk at 250, almost the bot's 260, and could not be outrun. At 8% it walks at about 206.
+- These numbers are a first guess and have not been played. DESIGN.md aims at 6 to 8 minutes for a full run; tune the lists after the first playthrough.
+
+## D-018: Vine on a machine (Made, 2026-11-15)
+
+From DESIGN.md: "On an enemy: yank it toward you and bind it for 1.5 s."
+
+- **Same input as the zip.** Right click (or tap) on a machine instead of a tree. A machine under the pointer wins over a tree.
+- **Yank:** dragged in a straight line to 1.5 cells from the bot. That is outside a Scrapper's 1.0 cell reach, so a yanked Scrapper still has to step in and wind up.
+- **Bind:** 1.5 s tinted green. It cannot walk, swing, shoot or saw, and a windup or saw cut in progress is cancelled. It can still be shot.
+- **Needs a clear line:** a wall or tree between the bot and the machine blocks it, the same rule as the Spitter's line of sight.
+- **Shares the vine cooldown** (0.35 s) with the zip.
+- **Why it matters for the open movement decision (D-013):** the vine is now also how you pull a Spitter out of cover, stop a Sawbot mid-cut, or line a machine up where you want its tree.
 
 ## D-017: The Spitter (Made, 2026-11-15)
 

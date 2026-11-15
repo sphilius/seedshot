@@ -45,6 +45,8 @@ func _physics_process(delta: float) -> void:
 	# is_instance_valid guards against the target having been deleted.
 	if _grid == null or not is_instance_valid(_target):
 		return
+	if _tick_bound(delta):
+		return  # tied up by the vine: do nothing this step
 	if _repath_due(delta, CONFIG.scrapper_repath_interval):
 		_path_to(_grid.world_to_cell(_target.global_position))
 
@@ -56,6 +58,11 @@ func _physics_process(delta: float) -> void:
 		velocity = Vector2.ZERO
 		return
 	_walk_towards(_next_goal(_target.global_position), CONFIG.scrapper_speed)
+
+
+## Overrides Enemy._on_bound: being tied up cancels a swing that was winding up.
+func _on_bound() -> void:
+	is_winding_up = false
 
 
 ## The melee attack, one step at a time. `distance` is how far the target is.

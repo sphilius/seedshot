@@ -41,6 +41,8 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if _grid == null:
 		return
+	if _tick_bound(delta):
+		return  # tied up by the vine: do nothing this step
 
 	var reach: float = CONFIG.sawbot_reach_cells * CONFIG.cell_size
 	var in_reach: ForestTree = _nearest_tree(ForestTree.Stage.GROWN, reach)
@@ -59,6 +61,12 @@ func _physics_process(delta: float) -> void:
 		velocity = Vector2.ZERO
 		return
 	_walk_towards(_next_goal(_destination), CONFIG.sawbot_speed)
+
+
+## Overrides Enemy._on_bound: being tied up stops the saw. (When the binding
+## ends it has to line up and start its cut again.)
+func _on_bound() -> void:
+	is_sawing = false
 
 
 ## Stands still, faces the tree, and takes a bite out of it on a timer.

@@ -58,6 +58,8 @@ func _physics_process(delta: float) -> void:
 	# is_instance_valid guards against the target having been deleted.
 	if _grid == null or not is_instance_valid(_target):
 		return
+	if _tick_bound(delta):
+		return  # tied up by the vine: do nothing this step
 	_cooldown_left = maxf(_cooldown_left - delta, 0.0)
 	var to_target: Vector2 = _target.global_position - global_position
 	var distance: float = to_target.length()
@@ -97,6 +99,11 @@ func _physics_process(delta: float) -> void:
 	# 5. In a good spot, waiting for the next shot.
 	velocity = Vector2.ZERO
 	_face(to_target)
+
+
+## Overrides Enemy._on_bound: being tied up cancels a shot that was winding up.
+func _on_bound() -> void:
+	is_winding_up = false
 
 
 ## Ends the windup and sends one shot towards the player.

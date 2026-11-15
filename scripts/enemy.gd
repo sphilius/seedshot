@@ -23,8 +23,18 @@ const GROUP: StringName = &"enemies"
 ## How close (pixels) to a cell centre counts as "arrived at this waypoint".
 const WAYPOINT_REACHED_DISTANCE: float = 5.0
 
+## Tint while tied up by the vine (values above 1.0 brighten): leafy green.
+const BOUND_TINT: Color = Color(0.6, 1.5, 0.6)
+## Physics layer 1 ("world") as a bit mask, for the yank's safety sweep.
+const WORLD_BODY_MASK: int = 1
+
 ## Multiplies walking speed. 1.0 is normal; later waves send faster machines.
 var speed_scale: float = 1.0
+## True while the player's vine has this machine tied up: it cannot walk, swing,
+## shoot or saw. It can still be shot.
+var is_bound: bool = false
+## Seconds of binding left.
+var _bound_time_left: float = 0.0
 var hp: int = 0
 var is_dead: bool = false
 
@@ -56,6 +66,63 @@ func take_damage(amount: int) -> void:
 		is_dead = true
 		died.emit(self)
 		queue_free()
+
+
+## The vine's second use: drags this machine towards `puller` in a straight line,
+## stopping `stop_distance` pixels short, and ties it up for `seconds`.
+## Called by the player when the vine lands on a machine instead of a tree.
+func yank_and_bind(puller: Vector2, stop_distance: float, seconds: float) -> void:
+	if is_dead:
+		return
+	is_bound = true
+	_bound_time_left = seconds
+	velocity = Vector2.ZERO
+	modulate = BOUND_TINT
+	_on_bound()  # let the machine drop whatever it was in the middle of
+
+	var to_puller: Vector2 = puller - global_position
+	var distance: float = to_puller.length()
+	if distance <= stop_distance + 1.0:
+		return  # already close enough: bind it where it stands
+	var motion: Vector2 = (to_puller / distance) * (distance - stop_distance)
+
+	# Same safety check as the player's zip: sweep our own hit circle along the
+	# line and only travel as far as it stays clear of walls and trees.
+	var sweep := PhysicsShapeQueryParameters2D.new()
+	sweep.shape = _collision.shape
+	sweep.transform = Transform2D(0.0, global_position)
+	sweep.motion = motion
+	sweep.collision_mask = WORLD_BODY_MASK
+	var fractions: PackedFloat32Array = get_world_2d().direct_space_state.cast_motion(sweep)
+	var travel: Vector2 = motion * (fractions[0] if fractions.size() > 0 else 1.0)
+	if travel.length() < 4.0:
+		return
+
+	# A Tween slides global_position to the end point over distance / speed seconds.
+	var tween: Tween = create_tween()
+	tween.set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)  # step in time with physics
+	tween.tween_property(self, "global_position", global_position + travel, travel.length() / CONFIG.vine_yank_speed)
+
+
+## Called the moment the vine binds this machine. Does nothing here; a machine
+## that has something to cancel (a windup, a saw cut) writes its own version.
+## (This is "overriding": a child class replaces a parent's function.)
+func _on_bound() -> void:
+	pass
+
+
+## Each machine calls this first thing in its _physics_process. It counts the
+## binding down and returns true while the machine must stay frozen.
+func _tick_bound(delta: float) -> bool:
+	if not is_bound:
+		return false
+	_bound_time_left -= delta
+	if _bound_time_left <= 0.0:
+		is_bound = false
+		modulate = Color.WHITE  # white = "no tint"
+		return false
+	velocity = Vector2.ZERO
+	return true
 
 
 ## _draw paints a plain square, only when there is no sprite texture.
