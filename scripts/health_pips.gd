@@ -1,4 +1,4 @@
-# health_pips.gd - the row of hit-point squares in the top-right corner of the HUD.
+# health_pips.gd - the row of hit-point squares at the top centre of the HUD.
 # It lives in arena.tscn at Hud/HealthPips.
 class_name HealthPips
 extends Node2D
@@ -8,10 +8,10 @@ extends Node2D
 ## player's health_changed signal fires ("call down"), so this stays a dumb display.
 
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
-const PIP_SIZE: float = 18.0
-const PIP_GAP: float = 6.0
-## Distance from the top-right corner of the screen to the last pip.
-const MARGIN: Vector2 = Vector2(28.0, 14.0)
+const PIP_SIZE: float = 26.0
+const PIP_GAP: float = 8.0
+## Distance from the top edge of the screen to the pips.
+const TOP_MARGIN: float = 11.0
 const FULL_COLOR: Color = Color(0.50, 0.85, 0.40)
 const EMPTY_COLOR: Color = Color(1.0, 1.0, 1.0, 0.30)
 
@@ -27,14 +27,17 @@ func show_health(new_current: int, new_maximum: int) -> void:
 	queue_redraw()  # ask Godot to call _draw again on the next frame
 
 
-## _draw paints the pips right-aligned: the row grows leftwards from the corner.
+## _draw paints the pips as one row, centred at the top of the screen. (They
+## started in the top-right corner; the first phone playtest found that too far
+## from the fight to read at a glance.)
 func _draw() -> void:
-	var right_edge: float = get_viewport_rect().size.x - MARGIN.x
+	# Width of the whole row: every pip, plus the gaps between them.
+	var row_width: float = maximum * PIP_SIZE + maxi(maximum - 1, 0) * PIP_GAP
+	var left_edge: float = (get_viewport_rect().size.x - row_width) / 2.0
 	for i: int in maximum:
-		# Pip 0 is the leftmost. Work out its left edge from the right-hand side.
-		var slots_from_right: int = maximum - i
-		var x: float = right_edge - slots_from_right * PIP_SIZE - (slots_from_right - 1) * PIP_GAP
-		var pip := Rect2(x, MARGIN.y, PIP_SIZE, PIP_SIZE)
+		# Pip 0 is the leftmost; each one sits a pip-and-a-gap further right.
+		var x: float = left_edge + i * (PIP_SIZE + PIP_GAP)
+		var pip := Rect2(x, TOP_MARGIN, PIP_SIZE, PIP_SIZE)
 		if i < current:
 			draw_rect(pip, FULL_COLOR)
 		else:

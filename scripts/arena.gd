@@ -214,7 +214,8 @@ func _on_player_seed_fired(origin: Vector2, direction: Vector2) -> void:
 ## forest as it stood when that wave began.)
 func _on_player_died() -> void:
 	player_defeated.emit()
-	await get_tree().create_timer(CONFIG.death_restart_delay).timeout
+	# The `false` means "this timer stops while the game is paused".
+	await get_tree().create_timer(CONFIG.death_restart_delay, false).timeout
 	# After an `await`, anything may have changed: this arena may already be gone.
 	if not is_inside_tree():
 		return
@@ -243,10 +244,12 @@ func _on_tree_ready_to_solidify(tree: ForestTree) -> void:
 	if _is_cell_occupied(tree.cell):
 		tree.retry_later()
 		return
-	# SEAL GUARD (from the design doc): if this tree would cut the player off from
-	# the arena centre, it stays a walk-through sapling for good.
-	var player_cell: Vector2i = grid.world_to_cell(player.global_position)
-	if grid.would_seal(tree.cell, player_cell, grid.center_cell()):
+	# SPLIT GUARD: if this tree would cut the open floor in two, it stays a
+	# walk-through sapling for good. That way nobody is ever walled in, and no
+	# enemy is ever walled out. (The design doc only asked for "the player can
+	# reach the centre", but the first phone playtest sealed the player into a
+	# pocket that CONTAINED the centre, where the Scrapper could never follow.)
+	if grid.would_split(tree.cell):
 		return
 	grid.set_solid(tree.cell, true)
 	tree.solidify()

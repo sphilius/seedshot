@@ -92,12 +92,15 @@ extends Resource
 @export_group("Touch")
 ## A finger must slide this far (in game pixels) before its touch becomes a
 ## thumb-stick. Anything shorter is finger wobble, so a tap stays a tap.
-@export var touch_drag_threshold: float = 20.0
+## (Was 20. On a real phone a tap wobbles more than that, so taps were being
+## read as tiny stick pushes and the vine "sometimes missed".)
+@export var touch_drag_threshold: float = 30.0
 ## How far the stick's knob can sit from its centre. If the thumb slides further,
 ## the whole stick follows it, so reversing direction is always a short move.
 @export var touch_stick_radius: float = 80.0
 ## A touch that lifts sooner than this, without sliding, counts as a tap (the vine).
-@export var touch_tap_max_time: float = 0.30
+## (Was 0.30; loosened after the first phone playtest.)
+@export var touch_tap_max_time: float = 0.40
 ## Like vine_pick_radius_cells, but for taps. Bigger, because a fingertip is wider
 ## and less exact than a mouse pointer.
 @export var touch_vine_pick_radius_cells: float = 1.5

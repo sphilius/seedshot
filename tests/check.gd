@@ -24,6 +24,7 @@ func _ready() -> void:
 	_test_grid_coordinates()
 	_test_grid_walls_and_paths()
 	_test_seal_guard()
+	_test_split_guard()
 	_test_input_actions_exist()
 
 	# Layer 2: the real arena scene, driven through its public methods. (Headless
@@ -59,6 +60,10 @@ func _ready() -> void:
 	await _test_scrapper_swing_lands_after_windup()
 	await _test_scrapper_swing_misses_if_you_leave()
 	await _test_player_goes_down()
+
+	# Layer 2d: fixes from the first phone playtest (2026-11-14).
+	await _test_sapling_never_walls_the_floor_in_two()
+	await _test_pause_freezes_the_game()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -102,7 +107,7 @@ func _wait_until(condition: Callable, max_seconds: float) -> bool:
 
 ## Every action name the scripts rely on must exist in Project Settings > Input Map.
 func _test_input_actions_exist() -> void:
-	for action: StringName in [&"move_left", &"move_right", &"move_up", &"move_down", &"fire", &"vine"]:
+	for action: StringName in [&"move_left", &"move_right", &"move_up", &"move_down", &"fire", &"vine", &"pause"]:
 		_check(InputMap.has_action(action), "input action '%s' exists" % action)
 
 
@@ -471,6 +476,88 @@ func _test_player_goes_down() -> void:
 	await _wait_frames(10)
 	Input.action_release(&"move_right")
 	_check(player.global_position == fell_at, "or walk")
+
+
+## Playtest fix: a sapling that would cut the floor in two never turns solid, so
+## an enemy on the far side can always still walk to the player.
+func _test_sapling_never_walls_the_floor_in_two() -> void:
+	await _fresh_arena()
+	# Build a wall of grown trees down one column, top to bottom, with one gap.
+	var wall_x: int = 20
+	var gap := Vector2i(wall_x, 7)
+	for y: int in range(1, CONFIG.grid_rows - 1):  # every floor row (not the wall ring)
+		if y != gap.y:
+			_arena.spawn_tree(Vector2i(wall_x, y), true)
+	# Now a machine "dies" in the gap: plant a sapling there and let its timer run.
+	var sapling: ForestTree = _arena.spawn_tree(gap, false)
+	_check(sapling != null, "a sapling is planted in the last gap")
+	if sapling == null:
+		return
+	await _wait_frames(int((CONFIG.sapling_time + 0.5) * 60.0))
+	_check(sapling.stage == ForestTree.Stage.SAPLING, "it stays a sapling: growing would cut the arena in two")
+	_check(not _arena.grid.is_solid(gap), "so the gap stays open")
+	var player_cell: Vector2i = _arena.grid.world_to_cell(_arena.player.global_position)
+	_check(_arena.grid.has_path(Vector2i(wall_x + 2, 7), player_cell), "an enemy on the far side can still reach the player")
+
+	# A sapling somewhere harmless still grows as normal.
+	var harmless: ForestTree = _arena.spawn_tree(Vector2i(3, 3), false)
+	var grown: Callable = func() -> bool: return harmless.stage == ForestTree.Stage.GROWN
+	_check(await _wait_until(grown, CONFIG.sapling_time + 1.0), "a sapling in open floor still becomes a tree")
+
+
+## Playtest fix: pausing freezes the bot, un-pausing lets it move again.
+func _test_pause_freezes_the_game() -> void:
+	await _fresh_arena()
+	var pause: PauseOverlay = _arena.get_node("Hud/PauseOverlay") as PauseOverlay
+	var player: Player = _arena.player
+	var start: Vector2 = player.global_position
+
+	pause.set_paused(true)
+	_check(get_tree().paused, "set_paused(true) pauses the game")
+	Input.action_press(&"move_right")
+	# This test keeps running while paused because `await` on a SceneTree signal
+	# is not something the pause can freeze; only node callbacks are frozen.
+	await _wait_frames(15)
+	_check(player.global_position == start, "the bot does not move while paused")
+
+	pause.set_paused(false)
+	_check(not get_tree().paused, "set_paused(false) carries on")
+	await _wait_frames(15)
+	Input.action_release(&"move_right")
+	_check(player.global_position.x > start.x + 10.0, "the bot moves again after un-pausing")
+
+
+## The split guard must spot any cell whose tree would cut the open floor in two,
+## including the two cases the older seal guard missed.
+func _test_split_guard() -> void:
+	# Case 1: a straight wall with one gap.
+	var grid := ArenaGrid.new(10, 8, 48)
+	for y: int in range(1, 7):
+		if y != 3:
+			grid.set_solid(Vector2i(4, y), true)
+	_check(grid.would_split(Vector2i(4, 3)), "filling the last gap in a wall splits the floor")
+	_check(not grid.would_split(Vector2i(6, 5)), "a tree in open floor splits nothing")
+	_check(not grid.would_split(Vector2i(1, 1)), "a tree in a corner splits nothing")
+	_check(not grid.is_solid(Vector2i(4, 3)), "would_split leaves the grid unchanged")
+
+	# Case 2 (the phone playtest): a pocket that holds BOTH the player and the
+	# centre cell. The old guard only asked "can the player reach the centre?",
+	# and here the answer stays yes, so it let the last tree grow.
+	var pocket := ArenaGrid.new(10, 8, 48)
+	var centre: Vector2i = pocket.center_cell()  # (5, 4)
+	var beside: Vector2i = centre + Vector2i(1, 0)
+	for cell: Vector2i in [centre + Vector2i(-1, 0), centre + Vector2i(0, -1), centre + Vector2i(0, 1), beside + Vector2i(0, -1), beside + Vector2i(0, 1)]:
+		pocket.set_solid(cell, true)
+	var last_gap: Vector2i = beside + Vector2i(1, 0)
+	_check(not pocket.would_seal(last_gap, beside, centre), "the old seal guard misses a pocket around the centre")
+	_check(pocket.would_split(last_gap), "the split guard catches it")
+
+	# Case 3: trees touching only at their corners still make a wall (nobody can
+	# squeeze diagonally between them), so the last cell of a diagonal line counts.
+	var diagonal := ArenaGrid.new(10, 8, 48)
+	for i: int in 5:
+		diagonal.set_solid(Vector2i(2 + i, 1 + i), true)  # (2,1) (3,2) (4,3) (5,4) (6,5)
+	_check(diagonal.would_split(Vector2i(7, 6)), "finishing a corner-to-corner diagonal wall splits the floor")
 
 
 ## Cell <-> pixel conversion must agree in both directions.

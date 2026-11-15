@@ -106,7 +106,52 @@ func has_path(from_cell: Vector2i, to_cell: Vector2i) -> bool:
 	return not _astar.get_id_path(from_cell, to_cell).is_empty()
 
 
+## SPLIT GUARD: would turning `cell` solid cut the open floor into two or more
+## separate areas? The arena uses this before a sapling becomes a tree, so the
+## forest can never wall anyone in OR out: every open cell stays reachable from
+## every other, which means an enemy can always walk to the player.
+##
+## HOW: a new tree can only cut the floor where it stands. So look at the open
+## cells directly beside it (up, down, left, right). If you can still walk from
+## the first of them to all the others WITHOUT stepping on `cell`, nothing was
+## cut. That walk is a "flood fill": start somewhere, keep spreading to open
+## neighbours until there is nowhere new to go.
+## (Only straight steps are counted. Diagonal steps between two trees that touch
+## at a corner are not allowed by the pathfinder either, so the two agree.)
+func would_split(cell: Vector2i) -> bool:
+	if not in_bounds(cell) or is_solid(cell):
+		return false  # nothing would change
+	var steps: Array[Vector2i] = [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]
+	var open_neighbours: Array[Vector2i] = []
+	for step: Vector2i in steps:
+		if not is_solid(cell + step):
+			open_neighbours.append(cell + step)
+	if open_neighbours.size() <= 1:
+		return false  # a dead end (or fully enclosed): filling it cuts nothing
+
+	# Flood fill from the first open neighbour. `reached` is used as a set: only
+	# its keys matter. `frontier` is the to-do list of cells still to spread from.
+	var reached: Dictionary[Vector2i, bool] = {cell: true, open_neighbours[0]: true}
+	var frontier: Array[Vector2i] = [open_neighbours[0]]
+	while not frontier.is_empty():
+		var current: Vector2i = frontier.pop_back()  # take one cell off the list
+		for step: Vector2i in steps:
+			var next: Vector2i = current + step
+			if not reached.has(next) and not is_solid(next):
+				reached[next] = true
+				frontier.append(next)
+
+	# Any open neighbour the fill never reached is now on the far side of a wall.
+	for neighbour: Vector2i in open_neighbours:
+		if not reached.has(neighbour):
+			return true
+	return false
+
+
 ## SEAL GUARD: would turning `cell` solid cut the route between the two cells?
+## (Narrower than would_split: it only protects one route. The arena used this
+## first, but a player could still be sealed into a pocket TOGETHER with the
+## other cell, so the arena now calls would_split instead.)
 ## We temporarily block the cell, ask the pathfinder, then put it back, so the
 ## grid is unchanged when this returns.
 func would_seal(cell: Vector2i, from_cell: Vector2i, to_cell: Vector2i) -> bool:
