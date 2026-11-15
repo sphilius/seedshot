@@ -50,10 +50,11 @@ func _on_body_entered(body: Node2D) -> void:
 	if _is_spent:
 		return
 	_is_spent = true
-	# `as` tries to treat the body as a Scrapper and gives null if it is not one.
-	var scrapper := body as Scrapper
-	if scrapper != null:
-		scrapper.take_damage(CONFIG.seed_damage)
+	# `as` tries to treat the body as an Enemy (any machine: Scrapper, Sawbot...)
+	# and gives null if it is something else, such as a tree or a wall.
+	var enemy := body as Enemy
+	if enemy != null:
+		enemy.take_damage(CONFIG.seed_damage)
 	else:
 		Sfx.play(&"thunk")  # stopped by a tree or a wall
 	queue_free()

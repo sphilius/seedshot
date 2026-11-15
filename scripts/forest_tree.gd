@@ -74,6 +74,7 @@ func take_damage(amount: int) -> void:
 	if stage != Stage.GROWN:
 		return
 	hp -= amount
+	queue_redraw()  # the canopy shrinks as HP drops (see _draw)
 	if hp <= 0:
 		felled.emit(self)  # tell the arena first, so it can clear the grid cell
 		queue_free()       # then remove this node at the end of the frame
@@ -90,7 +91,10 @@ func _draw() -> void:
 	else:
 		var half: float = cell_px * 0.5
 		draw_rect(Rect2(-half, -half, cell_px, cell_px), TRUNK_COLOR)
-		draw_circle(Vector2.ZERO, cell_px * 0.36, CANOPY_COLOR)
+		# A hurt tree shows it: the canopy shrinks from full size down to 45% as
+		# HP falls, so you can see at a glance which trees a Sawbot has bitten.
+		var health: float = clampf(float(hp) / float(CONFIG.tree_hp), 0.0, 1.0)
+		draw_circle(Vector2.ZERO, cell_px * 0.36 * lerpf(0.45, 1.0, health), CANOPY_COLOR)
 
 
 ## Waits `seconds`, then asks the arena whether this sapling may turn solid.

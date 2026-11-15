@@ -30,12 +30,15 @@ func _ready() -> void:
 	# Layer 2: the real arena scene, driven through its public methods. (Headless
 	# Godot drops simulated mouse/keyboard input, so we call fire() and try_vine()
 	# directly instead of faking clicks.)
-	# Turn off Scrapper respawning so no surprise enemy walks into a test. GDScript
-	# will not assign through a `const` name, so we go through a normal variable
-	# that points at the same shared config object. This only changes the copy in
-	# memory for this test run; nothing is saved to the .tres file.
+	# Shorten the wave timings so the wave tests take a blink instead of seconds.
+	# GDScript will not assign through a `const` name, so we go through a normal
+	# variable that points at the same shared config object. This only changes
+	# the copy in memory for this test run; nothing is saved to the .tres file.
 	var config: GameConfig = CONFIG
-	config.debug_respawn_delay = 0.0
+	config.wave_first_delay = 0.05
+	config.wave_spawn_interval = 0.05
+	config.wave_break_time = 0.2
+	config.death_restart_delay = 0.2
 	# `await` on a function call means: start it, and continue here only once it
 	# has completely finished (including all of its own awaits).
 	await _test_arena_boots()
@@ -65,6 +68,13 @@ func _ready() -> void:
 	await _test_sapling_never_walls_the_floor_in_two()
 	await _test_pause_freezes_the_game()
 
+	# Layer 2e: the Sawbot and the waves.
+	await _test_sawbot_fells_a_tree_and_ignores_the_player()
+	await _test_sawbot_takes_three_pods_and_becomes_a_tree()
+	await _test_wave_director_counts_and_advances()
+	await _test_wave_three_sends_faster_scrappers_and_a_sawbot()
+	await _test_going_down_restarts_the_wave_with_its_forest()
+
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
 
@@ -84,10 +94,10 @@ func _fresh_arena() -> void:
 		_arena.queue_free()
 		await get_tree().physics_frame
 	_arena = ARENA_SCENE.instantiate()
+	# Switch the waves off BEFORE the arena enters the scene (its _ready reads
+	# this), so each test controls exactly which enemies exist.
+	_arena.autostart_waves = false
 	add_child(_arena)
-	# Remove the Scrapper the arena starts with, so each test controls its own.
-	for enemy: Node in get_tree().get_nodes_in_group(Scrapper.GROUP):
-		enemy.queue_free()
 	# Give the physics engine two steps to register the new bodies.
 	await get_tree().physics_frame
 	await get_tree().physics_frame
@@ -111,13 +121,19 @@ func _test_input_actions_exist() -> void:
 		_check(InputMap.has_action(action), "input action '%s' exists" % action)
 
 
-## Kickoff steps 1-3: the arena starts with a player, three solid trees, one Scrapper.
+## Kickoff steps 1-3: the arena starts with a player and three solid trees, and
+## wave 1 begins by itself with its single "teaching" Scrapper.
 func _test_arena_boots() -> void:
 	_arena = ARENA_SCENE.instantiate()
 	add_child(_arena)
 	await get_tree().physics_frame
 	_check(_arena.player != null, "arena has a player")
-	_check(get_tree().get_nodes_in_group(Scrapper.GROUP).size() == 1, "arena starts with one Scrapper")
+	_check(_arena.waves.wave == 1, "wave 1 starts by itself")
+	var one_enemy: Callable = func() -> bool: return get_tree().get_nodes_in_group(Enemy.GROUP).size() == 1
+	_check(await _wait_until(one_enemy, 1.0), "wave 1 sends one machine in")
+	await _wait_frames(20)
+	var enemies: Array[Node] = get_tree().get_nodes_in_group(Enemy.GROUP)
+	_check(enemies.size() == 1 and enemies[0] is Scrapper, "and it is a single Scrapper, nothing more")
 	for cell: Vector2i in Arena.TEST_TREE_CELLS:
 		var tree: ForestTree = _arena.tree_at(cell)
 		_check(tree != null and tree.stage == ForestTree.Stage.GROWN, "test tree at %s is grown" % cell)
@@ -525,6 +541,148 @@ func _test_pause_freezes_the_game() -> void:
 	await _wait_frames(15)
 	Input.action_release(&"move_right")
 	_check(player.global_position.x > start.x + 10.0, "the bot moves again after un-pausing")
+
+
+## Sawbot: it walks to the nearest tree, saws it down bite by bite, and never
+## touches the player.
+func _test_sawbot_fells_a_tree_and_ignores_the_player() -> void:
+	await _fresh_arena()
+	var tree_cell: Vector2i = Arena.TEST_TREE_CELLS[1]
+	var tree: ForestTree = _arena.tree_at(tree_cell)
+	# Park the player right beside where the Sawbot starts: it must not care.
+	_arena.player.global_position = _arena.grid.cell_to_world(tree_cell + Vector2i(4, 1))
+	var sawbot: Sawbot = _arena.spawn_sawbot_at(tree_cell + Vector2i(3, 0))
+
+	_check(await _wait_until(func() -> bool: return sawbot.is_sawing, 4.0), "the Sawbot walks to the nearest tree and starts sawing")
+	_check(sawbot.global_position.distance_to(tree.global_position) <= CONFIG.sawbot_reach_cells * CONFIG.cell_size + 1.0, "it saws from within its reach")
+	# One bite lands every sawbot_saw_interval seconds, so the tree's HP steps down.
+	_check(await _wait_until(func() -> bool: return tree.hp < CONFIG.tree_hp, 1.5), "the tree loses hit points while being sawn")
+
+	var seconds_to_fell: float = CONFIG.tree_hp * CONFIG.sawbot_saw_interval / float(CONFIG.sawbot_saw_damage)
+	var felled: Callable = func() -> bool: return _arena.tree_at(tree_cell) == null
+	_check(await _wait_until(felled, seconds_to_fell + 1.5), "the tree falls")
+	_check(not _arena.grid.is_solid(tree_cell), "and its grid cell opens up again")
+	_check(_arena.player.hp == CONFIG.player_max_hp, "the player was never hurt: a Sawbot ignores you")
+	await _wait_frames(40)
+	_check(not sawbot.is_sawing, "with that tree gone it stops sawing and moves on")
+
+
+## Sawbot: tougher than a Scrapper, and like every machine it roots when downed.
+func _test_sawbot_takes_three_pods_and_becomes_a_tree() -> void:
+	await _fresh_arena()
+	var player_cell := Vector2i(5, 12)
+	_arena.player.global_position = _arena.grid.cell_to_world(player_cell)
+	var sawbot: Sawbot = _arena.spawn_sawbot_at(player_cell + Vector2i(5, 0))
+	await get_tree().physics_frame
+	_check(sawbot.hp == CONFIG.sawbot_hp, "a Sawbot starts with %d hit points" % CONFIG.sawbot_hp)
+
+	# The seed pod only knows it hit "an Enemy". That it works on a Sawbot too is
+	# the point of the shared Enemy base class.
+	_check(_arena.player.fire(sawbot.global_position - _arena.player.global_position), "the player fires at it")
+	_check(await _wait_until(func() -> bool: return sawbot.hp == CONFIG.sawbot_hp - 1, 1.5), "one pod takes one hit point off")
+
+	var fell_at: Array[Vector2] = []
+	sawbot.died.connect(func(dead: Enemy) -> void: fell_at.append(dead.global_position))
+	sawbot.take_damage(CONFIG.sawbot_hp)
+	_check(fell_at.size() == 1, "at zero hit points it goes down")
+	if fell_at.is_empty():
+		return
+	await get_tree().physics_frame  # the sapling is planted at the end of the frame
+	_check(_arena.tree_at(_arena.grid.world_to_cell(fell_at[0])) != null, "and a sapling is planted where it fell")
+
+
+## Waves: the director on its own, with no arena. It must send the right number
+## of machines, notice when they are all down, rest, and move to the next wave.
+func _test_wave_director_counts_and_advances() -> void:
+	var director := WaveDirector.new()
+	add_child(director)
+	# Write down everything the director announces. Each lambda appends to a list
+	# the test can read afterwards (connect() + a lambda = a one-off listener).
+	var spawned: Array[StringName] = []
+	var started: Array[int] = []
+	var cleared: Array[int] = []
+	var finished: Array[bool] = []
+	director.spawn_requested.connect(func(kind: StringName, _wave: int) -> void: spawned.append(kind))
+	director.wave_started.connect(func(number: int, _total: int) -> void: started.append(number))
+	director.wave_cleared.connect(func(number: int) -> void: cleared.append(number))
+	director.all_waves_cleared.connect(func() -> void: finished.append(true))
+
+	_check(director.total_waves() == CONFIG.wave_scrappers.size(), "there is one wave per entry in the config list")
+	director.start_wave(1)
+	_check(started == [1] as Array[int], "starting wave 1 announces wave 1")
+	var wave_one_size: int = CONFIG.wave_scrappers[0] + CONFIG.wave_sawbots[0]
+	var all_sent: Callable = func() -> bool: return director.state == WaveDirector.State.FIGHTING
+	_check(await _wait_until(all_sent, 2.0), "the director sends the whole wave, then waits for the fight")
+	_check(spawned.size() == wave_one_size, "wave 1 asked for %d machine(s) (got %d)" % [wave_one_size, spawned.size()])
+	_check(cleared.is_empty(), "the wave is not over while a machine still stands")
+
+	for i: int in wave_one_size:
+		director.enemy_gone()
+	_check(cleared == [1] as Array[int], "when the last machine falls, wave 1 is cleared")
+	_check(director.state == WaveDirector.State.BREAK, "then comes a rest")
+	_check(await _wait_until(func() -> bool: return director.wave == 2, CONFIG.wave_break_time + 1.0), "after the rest, wave 2 starts by itself")
+
+	# Jump to the last wave and clear it: the director must announce the end.
+	var last: int = director.total_waves()
+	spawned.clear()
+	director.start_wave(last)
+	await _wait_until(all_sent, 3.0)
+	var sawbots_sent: int = spawned.count(WaveDirector.SAWBOT)
+	_check(sawbots_sent == CONFIG.wave_sawbots[last - 1], "the last wave sends %d Sawbot(s) (got %d)" % [CONFIG.wave_sawbots[last - 1], sawbots_sent])
+	_check(spawned[0] == WaveDirector.SCRAPPER, "a wave opens with a Scrapper, with Sawbots spread through it")
+	for i: int in spawned.size():
+		director.enemy_gone()
+	_check(finished.size() == 1, "clearing the last wave announces that all waves are done")
+	_check(director.state == WaveDirector.State.DONE, "and the director stops")
+	director.queue_free()
+
+
+## Waves in the real arena: wave 3 brings a Sawbot and faster Scrappers.
+func _test_wave_three_sends_faster_scrappers_and_a_sawbot() -> void:
+	await _fresh_arena()
+	_arena.waves.start_wave(3)
+	var expected: int = CONFIG.wave_scrappers[2] + CONFIG.wave_sawbots[2]
+	var all_in: Callable = func() -> bool: return get_tree().get_nodes_in_group(Enemy.GROUP).size() == expected
+	_check(await _wait_until(all_in, 3.0), "wave 3 puts %d machines in the arena" % expected)
+
+	var sawbots: int = 0
+	var scrapper_scale: float = 0.0
+	for node: Node in get_tree().get_nodes_in_group(Enemy.GROUP):
+		if node is Sawbot:  # `is` asks "is this node of that type?"
+			sawbots += 1
+		elif node is Scrapper:
+			scrapper_scale = (node as Scrapper).speed_scale
+	_check(sawbots == CONFIG.wave_sawbots[2], "wave 3 includes %d Sawbot(s)" % CONFIG.wave_sawbots[2])
+	var expected_scale: float = 1.0 + CONFIG.scrapper_speed_gain_per_wave * 2.0
+	_check(is_equal_approx(scrapper_scale, expected_scale), "wave 3 Scrappers walk at %.2fx speed (got %.2f)" % [expected_scale, scrapper_scale])
+	_check((_arena.get_node("Hud/WaveLabel") as Label).text == "Wave 3 / %d" % _arena.waves.total_waves(), "the HUD shows the wave number")
+
+
+## Waves: going down restarts the same wave, with the forest put back to how it
+## stood when that wave began.
+func _test_going_down_restarts_the_wave_with_its_forest() -> void:
+	await _fresh_arena()
+	_arena.waves.start_wave(2)  # the forest snapshot is taken right here
+	var late_tree_cell := Vector2i(3, 3)
+	_check(_arena.spawn_tree(late_tree_cell, true) != null, "a tree grows during the wave")
+	var enemy_in: Callable = func() -> bool: return get_tree().get_nodes_in_group(Enemy.GROUP).size() >= 1
+	await _wait_until(enemy_in, 1.0)
+
+	_arena.player.global_position = _arena.grid.cell_to_world(Vector2i(20, 12))
+	_arena.player.take_damage(CONFIG.player_max_hp)
+	_check(_arena.player.is_dead, "the player goes down")
+	var back_up: Callable = func() -> bool: return not _arena.player.is_dead
+	_check(await _wait_until(back_up, CONFIG.death_restart_delay + 1.0), "after a moment the player is back up")
+	_check(_arena.player.hp == CONFIG.player_max_hp, "with full health")
+	var start: Vector2 = _arena.grid.cell_to_world(Arena.PLAYER_START_CELL)
+	_check(_arena.player.global_position.distance_to(start) < 1.0, "back at the starting spot")
+	_check(_arena.waves.wave == 2, "still on wave 2")
+	_check(get_tree().get_nodes_in_group(Enemy.GROUP).is_empty(), "the old machines are gone")
+	_check(_arena.tree_at(late_tree_cell) == null, "the tree that grew during the wave is gone")
+	_check(not _arena.grid.is_solid(late_tree_cell), "and its cell is open again")
+	for cell: Vector2i in Arena.TEST_TREE_CELLS:
+		_check(_arena.tree_at(cell) != null and _arena.grid.is_solid(cell), "the tree at %s from wave start is back" % cell)
+	_check(await _wait_until(enemy_in, 1.0), "and the wave sends its machines in again")
 
 
 ## The split guard must spot any cell whose tree would cut the open floor in two,

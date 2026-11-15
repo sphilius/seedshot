@@ -89,6 +89,38 @@ extends Resource
 ## Rest time after a swing (hit or miss) before the next windup can start.
 @export var scrapper_melee_cooldown: float = 0.9
 
+@export_group("Sawbot")
+## Slower than a Scrapper (120): you have time to reach it before a tree falls.
+@export var sawbot_speed: float = 90.0
+## Takes three pods. It ignores you, so the cost of leaving it alone is trees.
+@export var sawbot_hp: int = 3
+@export_range(0.1, 0.49) var sawbot_radius_cells: float = 0.36
+## How often a Sawbot picks its next tree and recalculates its route.
+@export var sawbot_repath_interval: float = 0.5
+## A grown tree this close (to its centre) gets sawn. Just over one cell, so a
+## Sawbot standing in the next cell reaches.
+@export var sawbot_reach_cells: float = 1.15
+## Damage per bite, and seconds between bites. With tree_hp 6 that is 3 seconds
+## to fell one tree.
+@export var sawbot_saw_damage: int = 1
+@export var sawbot_saw_interval: float = 0.5
+
+@export_group("Waves")
+## How many Scrappers each wave sends. Entry 0 is wave 1. The length of this
+## list is the number of waves. Wave 1 is the single "teaching" Scrapper.
+@export var wave_scrappers: Array[int] = [1, 3, 4, 5, 6]
+## How many Sawbots each wave sends, lined up with the list above.
+@export var wave_sawbots: Array[int] = [0, 0, 1, 1, 2]
+## Seconds before the first machine of a wave walks in.
+@export var wave_first_delay: float = 1.0
+## Seconds between one machine walking in and the next.
+@export var wave_spawn_interval: float = 1.4
+## Rest time between clearing a wave and the next one starting.
+@export var wave_break_time: float = 3.0
+## Each wave's Scrappers are this much faster than the wave before
+## (0.12 = 12%). Wave 5 Scrappers therefore walk at 148% speed.
+@export var scrapper_speed_gain_per_wave: float = 0.12
+
 @export_group("Touch")
 ## A finger must slide this far (in game pixels) before its touch becomes a
 ## thumb-stick. Anything shorter is finger wobble, so a tap stays a tap.
@@ -108,14 +140,10 @@ extends Resource
 ## front of the bot, along the aim direction.
 @export var touch_reticle_distance_cells: float = 2.5
 
-@export_group("Debug")
-## Gray-box helper: seconds after a Scrapper dies before a new one walks in.
-## Set to 0 to turn respawning off. Real waves will replace this.
-@export var debug_respawn_delay: float = 2.0
-
 @export_group("Placeholder art")
 ## Leave a texture empty to fall back to a plain coloured rectangle.
 @export var player_texture: Texture2D
 @export var scrapper_texture: Texture2D
+@export var sawbot_texture: Texture2D
 ## Drawn size of a sprite relative to one cell (1.0 = exactly one cell wide).
 @export var sprite_size_cells: float = 1.3

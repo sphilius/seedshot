@@ -189,6 +189,19 @@ func take_damage(amount: int) -> bool:
 	return true
 
 
+## Brings a downed bot back at full health at `world_position`. Called by the
+## arena when a wave restarts. The short blink gives a moment of safety.
+func revive(world_position: Vector2) -> void:
+	global_position = world_position
+	velocity = Vector2.ZERO
+	hp = CONFIG.player_max_hp
+	is_dead = false
+	is_zipping = false
+	modulate = Color.WHITE
+	_invulnerable_left = CONFIG.player_hit_invulnerable_time
+	health_changed.emit(hp, CONFIG.player_max_hp)
+
+
 ## Counts down the "cannot be hurt" time and blinks the bot while it lasts.
 func _update_hit_blink(delta: float) -> void:
 	if is_dead or _invulnerable_left <= 0.0:

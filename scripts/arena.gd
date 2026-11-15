@@ -8,9 +8,10 @@ extends Node2D
 ## (the player fired, a Scrapper died, a sapling wants to turn solid) and the
 ## arena reacts by spawning nodes and updating the pathfinding grid.
 ##
-## GRAY-BOX SCOPE: three hand-placed test trees, one Scrapper at a time (a new one
-## walks in a moment after the last one dies), no waves. The Scrapper's melee hit
-## costs a hit point; at zero the whole arena starts over.
+## SCOPE SO FAR: three hand-placed starter trees and five waves of Scrappers and
+## Sawbots, timed by the WaveDirector child node. A Scrapper's melee hit costs a
+## hit point; at zero the current wave starts again with the forest as it stood
+## when that wave began.
 
 ## Emitted when the player goes down. (Tests listen for this; the game itself
 ## reacts in _on_player_died.)
@@ -22,6 +23,7 @@ const CONFIG: GameConfig = preload("res://config/game_config.tres")
 const PLAYER_SCENE: PackedScene = preload("res://scenes/player.tscn")
 const TREE_SCENE: PackedScene = preload("res://scenes/forest_tree.tscn")
 const SCRAPPER_SCENE: PackedScene = preload("res://scenes/scrapper.tscn")
+const SAWBOT_SCENE: PackedScene = preload("res://scenes/sawbot.tscn")
 const SEED_POD_SCENE: PackedScene = preload("res://scenes/seed_pod.tscn")
 
 ## Level layout for the gray box (grid cells, not tunables).
@@ -41,8 +43,17 @@ var player: Player
 
 ## Which tree (sapling or grown) stands on which cell.
 var _trees_by_cell: Dictionary[Vector2i, ForestTree] = {}
-## Random numbers for picking where the next Scrapper walks in.
+## Random numbers for picking where the next machine walks in.
 var _rng := RandomNumberGenerator.new()
+## The forest as it stood when the current wave began: cell -> was it grown?
+## If the player goes down, the arena is put back to exactly this.
+var _forest_at_wave_start: Dictionary[Vector2i, bool] = {}
+## Seconds the banner stays up. 0 or less means "until replaced".
+var _banner_time_left: float = 0.0
+
+## Start wave 1 as soon as the arena loads. The headless tests switch this off
+## (before adding the arena to the scene) so no surprise enemy walks into a test.
+@export var autostart_waves: bool = true
 
 ## Child nodes that exist in arena.tscn. They are just folders that keep the
 ## scene tree tidy and control what draws on top of what.
@@ -53,6 +64,10 @@ var _rng := RandomNumberGenerator.new()
 ## Phone and tablet controls. Optional: the arena works without this node.
 @onready var _touch: TouchControls = get_node_or_null("Hud/TouchControls")
 @onready var _health_pips: HealthPips = $Hud/HealthPips
+@onready var _wave_label: Label = $Hud/WaveLabel
+@onready var _banner: Label = $Hud/Banner
+## The wave timetable. Public (no underscore) so tests can start a wave directly.
+@onready var waves: WaveDirector = $WaveDirector
 
 
 ## _ready runs once when the scene starts: build the grid and walls, then place
@@ -79,8 +94,23 @@ func _ready() -> void:
 	for cell: Vector2i in TEST_TREE_CELLS:
 		spawn_tree(cell, true)
 
-	# The first Scrapper walks in from the middle of the right-hand side.
-	spawn_scrapper_at(Vector2i(CONFIG.grid_cols - 2, CONFIG.grid_rows / 2))
+	# Listen to the wave director: it says when, the arena does the spawning.
+	waves.wave_started.connect(_on_wave_started)
+	waves.spawn_requested.connect(_on_spawn_requested)
+	waves.wave_cleared.connect(_on_wave_cleared)
+	waves.all_waves_cleared.connect(_on_all_waves_cleared)
+	_banner.visible = false
+	_wave_label.text = ""
+	if autostart_waves:
+		waves.start_wave(1)
+
+
+## _process runs every drawn frame: hide the banner when its time is up.
+func _process(delta: float) -> void:
+	if _banner_time_left > 0.0:
+		_banner_time_left -= delta
+		if _banner_time_left <= 0.0:
+			_banner.visible = false
 
 
 ## _draw paints the gray-box floor: backdrop, wall ring, floor, faint grid lines.
@@ -125,13 +155,33 @@ func tree_at(cell: Vector2i) -> ForestTree:
 func spawn_scrapper_at(cell: Vector2i) -> Scrapper:
 	var scrapper: Scrapper = SCRAPPER_SCENE.instantiate()
 	scrapper.position = grid.cell_to_world(cell)
-	scrapper.setup(grid, player)
-	scrapper.died.connect(_on_scrapper_died)
+	scrapper.setup(grid)
+	scrapper.chase(player)
+	scrapper.died.connect(_on_enemy_died)
 	# A landed swing goes straight to the player's take_damage. The Scrapper only
 	# announces the hit; it never reaches into the player itself.
 	scrapper.struck.connect(player.take_damage)
 	_enemies.add_child(scrapper)
 	return scrapper
+
+
+## Creates a Sawbot on a cell. It finds its own trees, so it needs only the grid.
+func spawn_sawbot_at(cell: Vector2i) -> Sawbot:
+	var sawbot: Sawbot = SAWBOT_SCENE.instantiate()
+	sawbot.position = grid.cell_to_world(cell)
+	sawbot.setup(grid)
+	sawbot.died.connect(_on_enemy_died)
+	_enemies.add_child(sawbot)
+	return sawbot
+
+
+## How many grown trees are standing right now (the "bloom" count on the HUD).
+func count_grown_trees() -> int:
+	var count: int = 0
+	for tree: ForestTree in _trees_by_cell.values():
+		if tree.stage == ForestTree.Stage.GROWN:
+			count += 1
+	return count
 
 
 ## Builds the four invisible wall blocks that match the grid's solid outer ring.
@@ -184,9 +234,9 @@ func _nearest_free_cell(cell: Vector2i) -> Vector2i:
 	return ArenaGrid.NO_CELL
 
 
-## Gray-box respawn: a new Scrapper walks in from a random spot on the edge of the
-## floor that is far from the player.
-func _spawn_replacement_scrapper() -> void:
+## Where the next machine walks in: a random open cell on the edge of the floor
+## that is far from the player. Returns ArenaGrid.NO_CELL if there is none.
+func _pick_spawn_cell() -> Vector2i:
 	var player_cell: Vector2i = grid.world_to_cell(player.global_position)
 	var candidates: Array[Vector2i] = []
 	for x: int in range(1, grid.cols - 1):
@@ -197,8 +247,76 @@ func _spawn_replacement_scrapper() -> void:
 			if is_edge and far_enough and not grid.is_solid(cell):
 				candidates.append(cell)
 	if candidates.is_empty():
+		return ArenaGrid.NO_CELL
+	return candidates[_rng.randi_range(0, candidates.size() - 1)]
+
+
+## Shows a line of big text in the middle of the screen. `seconds` is how long it
+## stays; 0 means "until the next banner replaces it".
+func _show_banner(text: String, seconds: float) -> void:
+	_banner.text = text
+	_banner.visible = true
+	_banner_time_left = seconds
+
+
+## Puts the arena back to how it was when the current wave began, revives the
+## player, and starts that wave again. (From the design: "Death restarts the
+## current wave with the forest as it stood at wave start.")
+func _restart_current_wave() -> void:
+	# Remove every machine, pod and tree. remove_child takes a node out of the
+	# scene right now (so it stops counting as "in the arena" this very frame);
+	# queue_free then deletes it at the end of the frame.
+	for folder: Node in [_enemies, _pods, _trees]:
+		for child: Node in folder.get_children():
+			folder.remove_child(child)
+			child.queue_free()
+	for cell: Vector2i in _trees_by_cell.keys():
+		grid.set_solid(cell, false)
+	_trees_by_cell.clear()
+
+	# Replant the forest from the snapshot taken at wave start.
+	for cell: Vector2i in _forest_at_wave_start.keys():
+		spawn_tree(cell, _forest_at_wave_start[cell])
+
+	var start_cell: Vector2i = _nearest_free_cell(PLAYER_START_CELL)
+	if start_cell == ArenaGrid.NO_CELL:
+		start_cell = PLAYER_START_CELL
+	player.revive(grid.cell_to_world(start_cell))
+	waves.restart_wave()
+
+
+## Signal handler: a wave began. Remember the forest, update the HUD.
+func _on_wave_started(number: int, total: int) -> void:
+	_forest_at_wave_start.clear()
+	for cell: Vector2i in _trees_by_cell.keys():
+		_forest_at_wave_start[cell] = _trees_by_cell[cell].stage == ForestTree.Stage.GROWN
+	_wave_label.text = "Wave %d / %d" % [number, total]
+	_show_banner("Wave %d" % number, 1.5)
+
+
+## Signal handler: the director wants one machine sent in.
+func _on_spawn_requested(kind: StringName, wave_number: int) -> void:
+	var cell: Vector2i = _pick_spawn_cell()
+	if cell == ArenaGrid.NO_CELL:
+		waves.enemy_gone()  # nowhere to put it: tell the director not to wait for it
 		return
-	spawn_scrapper_at(candidates[_rng.randi_range(0, candidates.size() - 1)])
+	if kind == WaveDirector.SAWBOT:
+		spawn_sawbot_at(cell)
+	else:
+		var scrapper: Scrapper = spawn_scrapper_at(cell)
+		# Faster every wave: wave 1 is 1.0, wave 2 is 1.12, wave 3 is 1.24, ...
+		scrapper.speed_scale = 1.0 + CONFIG.scrapper_speed_gain_per_wave * (wave_number - 1)
+
+
+## Signal handler: every machine of a wave is down.
+func _on_wave_cleared(number: int) -> void:
+	Sfx.play(&"wave_clear")
+	_show_banner("Wave %d cleared" % number, CONFIG.wave_break_time)
+
+
+## Signal handler: the last wave is cleared. Show the forest you ended with.
+func _on_all_waves_cleared() -> void:
+	_show_banner("Forest complete: %d trees" % count_grown_trees(), 0.0)
 
 
 ## Signal handler: the player fired. Spawn the pod where the signal says.
@@ -209,33 +327,31 @@ func _on_player_seed_fired(origin: Vector2, direction: Vector2) -> void:
 	_pods.add_child(pod)
 
 
-## Signal handler: the player went down. Wait a moment, then start the arena over.
-## (Gray-box stand-in: once waves exist, this restarts the current wave with the
-## forest as it stood when that wave began.)
+## Signal handler: the player went down. Wait a moment, then restart the wave.
 func _on_player_died() -> void:
 	player_defeated.emit()
+	if waves.wave == 0:
+		return  # no wave is running (the tests do this): nothing to restart
+	_show_banner("Down! Wave %d starts again" % waves.wave, CONFIG.death_restart_delay)
+	# `await` pauses this function here until the timer's `timeout` signal fires.
 	# The `false` means "this timer stops while the game is paused".
 	await get_tree().create_timer(CONFIG.death_restart_delay, false).timeout
 	# After an `await`, anything may have changed: this arena may already be gone.
 	if not is_inside_tree():
 		return
-	# Only reload when the arena IS the running scene. In the headless tests the
-	# arena is a child of the test scene, and reloading would restart the tests.
-	if get_tree().current_scene == self:
-		get_tree().reload_current_scene()
+	_restart_current_wave()
 
 
 ## Signal handler: a Scrapper died. Plant a sapling where it fell.
-func _on_scrapper_died(scrapper: Scrapper) -> void:
+func _on_enemy_died(enemy: Enemy) -> void:
 	Sfx.play(&"enemy_down")
-	var cell: Vector2i = _nearest_free_cell(grid.world_to_cell(scrapper.global_position))
+	var cell: Vector2i = _nearest_free_cell(grid.world_to_cell(enemy.global_position))
 	if cell != ArenaGrid.NO_CELL:
 		# This handler runs in the middle of a physics step (the pod's overlap
 		# callback caused the death), and Godot forbids adding physics bodies at
 		# that moment. call_deferred queues the call for the end of the frame.
 		spawn_tree.call_deferred(cell, false)
-	if CONFIG.debug_respawn_delay > 0.0:
-		get_tree().create_timer(CONFIG.debug_respawn_delay).timeout.connect(_spawn_replacement_scrapper)
+	waves.enemy_gone()  # the wave director keeps count of who is still standing
 
 
 ## Signal handler: a sapling's timer ran out and it asks to become solid.
