@@ -47,7 +47,10 @@ On a fresh clone run `.\tools\godot.ps1 import` once first.
 | `scripts/arena.gd` | The arena: owns the grid, spawns trees, pods and Scrappers. |
 | `scripts/arena_grid.gd` | Grid maths, pathfinding, and the seal guard. No nodes, so it is easy to test. |
 | `scripts/player.gd` | Move, aim, fire, vine. |
-| `scripts/forest_tree.gd`, `scrapper.gd`, `seed_pod.gd` | One script per thing in the arena. |
+| `scripts/forest_tree.gd`, `seed_pod.gd` | One script per thing in the arena. |
+| `scripts/enemy.gd` | What every machine shares: health, dying into a tree, walking a route. |
+| `scripts/scrapper.gd`, `sawbot.gd` | The two machines so far. Both extend `enemy.gd`. |
+| `scripts/wave_director.gd` | When each machine walks in and when a wave is over. Wave sizes are lists in the config. |
 | `scripts/touch_controls.gd` | Thumb-sticks and tap-to-vine. Drives the same verbs as mouse and keyboard. |
 | `scripts/sfx.gd` | Generated beeps and the browser audio unlock (autoload `Sfx`). |
 | `tests/check.gd` | The headless checks. |

@@ -8,6 +8,8 @@ Statuses: Made, Changed, Removed, Revisited, Parked, Archived, Proposed.
 
 | ID | Date | Status | Choice |
 |---|---|---|---|
+| D-016 | 2026-11-14 | Made | Sawbot: saws any tree in reach, takes 3 pods, never attacks |
+| D-015 | 2026-11-14 | Made | Five waves from two config lists; Scrappers 12% faster per wave; defeat restarts the wave |
 | D-014 | 2026-11-14 | Proposed | Something to protect: not yet, build waves, Sawbot and Spitter first |
 | D-013 | 2026-11-14 | Proposed | Movement: keep walk and zip until the Spitter exists, then ask again |
 | D-012 | 2026-11-14 | Made | Health at top centre, pause button, looser vine tap |
@@ -22,6 +24,24 @@ Statuses: Made, Changed, Removed, Revisited, Parked, Archived, Proposed.
 | D-003 | 2026-11-13 | Made | Seal guard keeps a sapling walk-through for good; an occupied sapling retries |
 | D-002 | 2026-11-13 | Made | The vine latches the first tree its ray meets |
 | D-001 | 2026-11-13 | Made | Every tunable in one config resource |
+
+## D-016: The Sawbot (Made, 2026-11-14)
+
+- **Behaviour:** walks to the nearest grown tree and saws it: 1 damage every 0.5 s, so 3 s for a 6 HP tree. It never attacks the player (DESIGN.md: "ignores you, cuts down trees").
+- **"Any tree in reach", not "my chosen tree":** if the tree it picked is buried behind others, it cuts its way in through the outer ones instead of getting stuck.
+- **Nothing to cut:** it waits by the nearest sapling, or drifts to the middle.
+- **3 hit points, speed 90:** tougher and slower than a Scrapper, so ignoring it costs trees and hunting it costs time.
+- **Trees show damage:** the canopy shrinks as HP drops.
+- **Shared base class:** Scrapper and Sawbot both extend `Enemy` (health, dying into a tree, path-walking). The Spitter will too.
+
+## D-015: Waves (Made, 2026-11-14)
+
+- **What is in a wave** is two lists in the config, one number per wave: `wave_scrappers = [1, 3, 4, 5, 6]` and `wave_sawbots = [0, 0, 1, 1, 2]`. The number of waves is the length of the lists.
+- **Differs from DESIGN.md:** the lock puts Spitters in waves 2 to 4 and Sawbots in 5 to 7. The Sawbot was built first because the phone playtest asked for it, so Sawbots start at wave 3. Reshuffle when the Spitter exists.
+- **Faster Scrappers** (asked for in the playtest): 12% per wave. A wave 5 Scrapper walks at about 178 against the player's 260.
+- **Defeat** restarts the current wave with the forest as it stood at wave start, as the lock asks. This replaces the whole-arena reload from D-009.
+- **The debug respawn (D-004) is removed.** Waves replace it.
+- **How it is wired:** `WaveDirector` only keeps time and count and emits signals; the arena does the spawning. Tests speed it up with `WaveDirector.time_scale`, because writes to the shared config from a test are ignored.
 
 ## D-014: Something to protect (Proposed, 2026-11-14)
 
