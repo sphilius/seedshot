@@ -8,6 +8,10 @@ Statuses: Made, Changed, Removed, Revisited, Parked, Archived, Proposed.
 
 | ID | Date | Status | Choice |
 |---|---|---|---|
+| D-014 | 2026-11-14 | Proposed | Something to protect: not yet, build waves, Sawbot and Spitter first |
+| D-013 | 2026-11-14 | Proposed | Movement: keep walk and zip until the Spitter exists, then ask again |
+| D-012 | 2026-11-14 | Made | Health at top centre, pause button, looser vine tap |
+| D-011 | 2026-11-14 | Changed | Split guard replaces the seal guard: no tree may cut the floor in two |
 | D-010 | 2026-11-13 | Made | One art spec for every tool: 64 px, top-down, 12 colours, red for enemies only |
 | D-009 | 2026-11-13 | Made | Scrapper melee is a telegraphed swing; 5 hit points; defeat restarts the arena |
 | D-008 | 2026-11-13 | Revisited | Final art source: three-way test first (SpriteCook, ChatGPT Images, Klad) |
@@ -18,6 +22,31 @@ Statuses: Made, Changed, Removed, Revisited, Parked, Archived, Proposed.
 | D-003 | 2026-11-13 | Made | Seal guard keeps a sapling walk-through for good; an occupied sapling retries |
 | D-002 | 2026-11-13 | Made | The vine latches the first tree its ray meets |
 | D-001 | 2026-11-13 | Made | Every tunable in one config resource |
+
+## D-014: Something to protect (Proposed, 2026-11-14)
+
+From the phone playtest: "some type of item or character to protect". Not in the design lock. The lock says to raise tree HP and Spitter count before adding anything else, and the gate it refers to has not been reached because waves, the Spitter and the Sawbot do not exist yet. Recommended: not yet. The cheapest version if wanted later is a Heart Tree in the middle that Sawbots head for. Guidebook decision `d4-something-to-protect`.
+
+## D-013: Walk and zip overlap (Proposed, 2026-11-14)
+
+From the phone playtest: the zip feels redundant next to the thumb-stick. True today, because the only enemy is slow and melee. The design's bet is that the zip becomes the dodge once Spitters shoot. Recommended: keep both, build the Spitter, ask again. The bold alternative is zip-only movement, where the forest becomes the board; it is also the nearest thing to the chess / Go idea from the same playtest. Guidebook decision `d3-movement`.
+
+## D-012: HUD and touch fixes from the phone playtest (Made, 2026-11-14)
+
+- **Health squares:** top centre, 26 px. They were in the top-right corner at 18 px and were marked not readable at a glance. Bottom centre was the other request, but thumbs cover the bottom on a phone.
+- **Pause:** two-bar button top-right, or P, or Esc. Any tap or click carries on. The tap that pauses or resumes is swallowed so it cannot fire or zip.
+- **Vine tap:** a tap may now wobble 30 px (was 20) and last 0.40 s (was 0.30). "Sometimes missed" on a real phone.
+- **Hint line:** moved to the bottom centre to make room.
+
+## D-011: Split guard replaces the seal guard (Changed, 2026-11-14)
+
+Was (D-003): a sapling stays walk-through if growing would cut the player off from the arena centre. That is what DESIGN.md asks for.
+
+The first phone playtest broke it: the player built a ring of trees around a pocket that contained the centre cell. "Can the player reach the centre?" stayed true, the last tree grew, and the Scrapper could never get in.
+
+Now: a sapling stays walk-through if growing would cut the open floor into two areas at all (`ArenaGrid.would_split`). Nobody can be walled in and no enemy can be walled out. Trees that touch only at corners count as a wall, the same way the pathfinder treats them.
+
+Still true: a long maze slows enemies down. That is the Sawbot's job to answer.
 
 ## D-010: One art spec for every tool (Made, 2026-11-13)
 
@@ -43,7 +72,7 @@ Was: SpriteCook Pixel Engine, proposed. Now: Sasha wants a three-way test first,
 
 ## D-007: itch draft (Made, 2026-11-13)
 
-Decided in chat: upload now. The first `butler push` to `kingriot/seedshot:html5` was refused because the game page does not exist yet; butler cannot create one. Blocked on Sasha creating the page.
+Decided in chat: upload now. The first `butler push` to `kingriot/seedshot:html5` was refused because the game page did not exist; butler cannot create one. Sasha created the page and build `07c75f4` went up on 2026-11-13. Each later push still needs a yes.
 
 ## D-006: Touch controls (Made, 2026-11-13)
 

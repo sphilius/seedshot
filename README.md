@@ -11,7 +11,9 @@ Jamference AI Game Jam Hack 4 entry. Godot 4.7, GDScript, Compatibility renderer
 | Left click (hold) | Fire seed pods |
 | Right click on a tree | Vine zip to it, stopping one cell short |
 
-The green squares in the top-right corner are your hit points. A Scrapper glows red just before it swings: get out of its reach and the swing misses.
+Pause with P or Esc, or the two-bar button in the top-right corner.
+
+The green squares at the top centre are your hit points. A Scrapper glows red just before it swings: get out of its reach and the swing misses.
 
 The itch page is `kingriot/seedshot` (channel `html5`).
 
