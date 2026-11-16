@@ -1,6 +1,6 @@
 # Seedshot: story spine ("Lights Out")
 
-Status: DRAFT 2 for Sasha to edit. No code follows this until Sasha approves it.
+Status: DRAFT 3 for Sasha to edit. No code follows this until Sasha approves it.
 Lines marked (placeholder) are there to be rewritten. The structure is the proposal.
 
 ## Hook (the first five seconds)
@@ -60,20 +60,19 @@ The machines are only machines: Helios hardware following orders.
 | Scrapper | Repossession unit. It comes for you, the stolen meter-reader. |
 | Spitter | Enforcement unit. It keeps its distance and fires. |
 | Sawbot | Disconnection crew. It ignores you and cuts power, which is why it goes for trees. |
-| Vine: yank and bind a machine | Live cable. You can short a machine with it. Seven has this from the start. |
-| CHANGED: vine zip to a tree | Locked at the start. Lucky sells Seven a cable spool: this is the first half of the cat's gift. |
-| CHANGED: the cat's gift | No longer paired pods. It is the zip, plus a spare fuse: the first time Seven would go down, it gets back up instead. The fuse is replaced each time a wave starts or restarts. |
+| Vine: zip to a tree | Live cable. Seven rides the grid it grows. Seven has this from the start. |
+| CHANGED: vine yank and bind a machine | Locked at the start. Lucky sells Seven a live clamp that shorts a machine: this is the first half of the cat's gift. |
+| CHANGED: the cat's gift | No longer paired pods. It is the yank-and-bind, plus a spare fuse: the first time Seven would go down, it gets back up instead. A used fuse is replaced only when Seven is really defeated and the wave restarts. Clearing a wave does not replace it. |
 | NEW: talking to Lucky | Stand by the open shop and press E (or tap the shop). Lucky says a line. It changes nothing in the game. |
 | "Trees" counter | Becomes **Homes powered**. One tree, one home. |
 | NEW: windows on the walls | One window per tree standing. They light and go dark as the forest changes. |
 | NEW: Canopy FM | The block's pirate station. One song, muffled at first, that opens up as more homes are powered and dulls when trees fall. |
 | NEW: graffiti | The Block's lines appear on the walls and stay. By wave 8 the walls are covered. |
-| NEW: tap points | A few marked cells per wave. A machine downed on one grows a tap tree: it powers three homes, heals one pip, and is slow to saw. Lure a machine there, or yank it there with the cable. |
+| NEW: tap points | A few marked cells per wave. A machine downed on one grows a tap tree: it powers three homes, heals one pip, and is slow to saw. Lure a machine there, or, once Lucky has sold you the clamp, yank it there. |
 
-**A risk to decide on:** the zip is now behind a hidden cat. A player who never finds Lucky never zips. The spine
-answers this with a graffiti arrow pointing at the shutter from wave 3 onward if the shop is still shut ("KNOCK x3").
-The cat stays hidden for the first two waves, so finding it early is still a discovery.
-
+**Finding Lucky:** the cat stays hidden for the first two waves, so finding it early is a discovery. From wave 3, if
+the shop is still shut, a graffiti arrow points at the shutter ("KNOCK x3"). Nothing a player needs to finish the game
+is behind the cat: the zip is theirs from the start.
 ## Lucky's lines (all placeholders)
 
 Lucky has two kinds of line. Neither changes the game.
@@ -82,9 +81,9 @@ Lucky has two kinds of line. Neither changes the game.
 
 | Found in | Lucky says |
 |---|---|
-| Waves 1 to 3 | "Early. I like early. Take the spool, kid. And a fuse, on the house." |
-| Waves 4 to 7 | "Thought you'd never knock. Spool. Fuse. Don't tell Helios." |
-| Waves 8 to 10 | "The whole block's lit and NOW you find me? Take the spool anyway." |
+| Waves 1 to 3 | "Early. I like early. Take the clamp, kid. And a fuse, on the house." |
+| Waves 4 to 7 | "Thought you'd never knock. Clamp. Fuse. Don't tell Helios." |
+| Waves 8 to 10 | "The whole block's lit and NOW you find me? Take the clamp anyway." |
 
 **Small talk**, each time you speak to it. It depends on the wave you are on, and cycles through the set:
 
@@ -123,7 +122,7 @@ Build in this order, so the game is shippable after every step:
 
 1. Words: Helios banner lines, graffiti on the walls, the end screen, "Homes powered", the name Seven.
 2. Light: the night look, windows that light and go dark, the wave 8 "block lit" moment, the wave 10 next block.
-3. Lucky: the zip and the spare fuse replace paired pods; the E key and tap to talk; the lines above; the KNOCK x3 arrow.
+3. Lucky: the yank-and-bind and the spare fuse replace paired pods; the E key and tap to talk; the lines above; the KNOCK x3 arrow.
 4. Canopy FM: one generated song on its own audio bus, with a filter that opens as homes are powered. The mute key
    already covers it. This is one track made to sound fuller or duller, not separate stacked recordings, because
    generated tracks will not line up in time.
