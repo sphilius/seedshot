@@ -2,7 +2,8 @@
 # An autoload is a script Godot loads once at startup and keeps alive for the whole
 # game, so any script can call Sfx.play(&"fire") without holding a reference to it.
 extends Node
-## Tiny beeps generated in code (no audio files yet), plus the browser audio unlock.
+## Tiny beeps generated in code, real sound files when they exist (see _ready),
+## plus the browser audio unlock.
 ##
 ## THE BROWSER AUTOPLAY RULE: a web page may not make sound until the player has
 ## clicked or pressed a key. So this script stays silent until the first input,
@@ -13,12 +14,17 @@ extends Node
 const MIX_RATE: int = 22050
 ## How many sounds can overlap before the oldest player is reused.
 const PLAYER_COUNT: int = 6
+## Where real sound files go, and the file types looked for (in this order).
+const SFX_FOLDER: String = "res://audio/sfx"
+const SFX_EXTENSIONS: Array[String] = ["mp3", "ogg", "wav"]
 
 ## False until the player's first click or key press.
 var is_unlocked: bool = false
 
-## Sound name -> generated audio clip. (A typed Dictionary: keys are StringNames.)
-var _streams: Dictionary[StringName, AudioStreamWAV] = {}
+## Sound name -> audio clip. (A typed Dictionary: keys are StringNames.)
+## AudioStream is the parent type of both the generated beeps (AudioStreamWAV)
+## and real sound files (.mp3, .ogg, .wav), so one dictionary can hold either.
+var _streams: Dictionary[StringName, AudioStream] = {}
 ## A small pool of players so several sounds can play at the same time.
 var _players: Array[AudioStreamPlayer] = []
 ## Which player in the pool gets the next sound (round-robin).
@@ -42,6 +48,17 @@ func _ready() -> void:
 	_streams[&"bind"] = _make_blip(900.0, 300.0, 0.16, 0.25)
 	_streams[&"spit"] = _make_blip(700.0, 250.0, 0.10, 0.25)
 	_streams[&"wave_clear"] = _make_blip(500.0, 1000.0, 0.35, 0.30)
+
+	# REAL SOUND FILES WIN: if audio/sfx/<name>.mp3 (or .ogg / .wav) exists, it
+	# replaces the beep of the same name. So a sound is swapped in by dropping one
+	# file into that folder; no code changes. Missing files keep their beep.
+	for sound_name: StringName in _streams.keys():
+		for extension: String in SFX_EXTENSIONS:
+			var path: String = "%s/%s.%s" % [SFX_FOLDER, sound_name, extension]
+			# ResourceLoader.exists is true only for files Godot has imported.
+			if ResourceLoader.exists(path):
+				_streams[sound_name] = load(path)
+				break  # stop at the first file type found for this name
 
 	for i: int in PLAYER_COUNT:
 		var player := AudioStreamPlayer.new()
