@@ -171,6 +171,70 @@ extends Resource
 ## still slower than the bot's 260. (Was 0.12 when there were only five waves.)
 @export var scrapper_speed_gain_per_wave: float = 0.08
 
+@export_group("Story")
+## The words of the story (see STORY.md). Edit them here or in the Inspector;
+## no script holds any story text.
+## The opening line, shown once under the first "Wave 1" banner.
+@export var story_hook: String = "Helios owns the sun. Your block stopped paying for it."
+## What Helios customer service says as each wave starts. Entry 0 is wave 1.
+@export var helios_lines: Array[String] = [
+	"Courtesy notice: your account is 90 days past due.",
+	"A technician is on the way to help you.",
+	"Unlicensed generation is theft of sunlight.",
+	"Disconnection crews dispatched. Thank you for your patience.",
+	"We'd hate to lose you. Ask about our amnesty plan.",
+	"Your neighbours are paying for your choices.",
+	"Unit MR-7 is stolen Helios property.",
+	"Final notice.",
+	"Service area reclassified. Recovering assets.",
+	"Please hold.",
+]
+## What the Block paints on the walls when each wave is cleared. Entry 0 is wave 1.
+@export var graffiti_lines: Array[String] = [
+	"LIGHTS ON",
+	"NOT YOURS",
+	"THE SUN IS FREE",
+	"GUARD THE TREES",
+	"NO DEAL",
+	"WE ARE THE NEIGHBOURS",
+	"SEVEN IS OURS",
+	"WE ARE THE GRID",
+	"STILL HERE",
+	"PASS IT ON",
+]
+## The end screen: the big headline, and Helios's last word under it.
+@export var end_headline: String = "PASS IT ON"
+@export var helios_end_line: String = "Account closed."
+## Seconds each small story line stays on screen under the banner.
+@export var story_line_seconds: float = 4.5
+
+@export_group("Night and windows")
+## The homes along the bottom wall: one entry per home, saying how many windows
+## it has. Ten homes and 24 windows in all.
+@export var home_window_counts: Array[int] = [2, 3, 2, 3, 2, 2, 3, 2, 3, 2]
+## Windows already lit before any wave is cleared: the block's first two lamps.
+@export var windows_lit_at_start: int = 2
+## How strongly a lit window shines before any wave is cleared (0 to 1). It
+## climbs evenly to 1.0 by the last wave.
+@export_range(0.0, 1.0) var window_strength_at_start: float = 0.4
+## The colour everything in the lot is tinted by, from a dark block (first) to a
+## fully lit one (second). Sprites, floor and walls all shift between the two as
+## windows come on, so the art always matches the light.
+@export var ambient_dark: Color = Color(0.50, 0.56, 0.80)
+@export var ambient_lit: Color = Color(1.0, 0.96, 0.88)
+## How quickly the tint follows a change in light. Higher is snappier.
+@export var ambient_change_speed: float = 1.5
+## The controls line at the bottom hides when this wave starts, leaving the
+## bottom wall to the windows.
+@export var hint_hide_wave: int = 3
+## How far a grown tree's glow reaches, in cells, and its colour. The alpha
+## (last number) is the strength of the light.
+@export var tree_glow_radius_cells: float = 1.7
+@export var tree_glow_color: Color = Color(0.35, 0.95, 0.60, 0.30)
+## Seven's lamp: reach in cells, and colour.
+@export var player_glow_radius_cells: float = 2.2
+@export var player_glow_color: Color = Color(1.0, 0.85, 0.60, 0.22)
+
 @export_group("Touch")
 ## A finger must slide this far (in game pixels) before its touch becomes a
 ## thumb-stick. Anything shorter is finger wobble, so a tap stays a tap.

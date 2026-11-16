@@ -89,6 +89,11 @@ func _ready() -> void:
 	await _test_staged_wave_one_teaches_cover_and_the_vine()
 	await _test_clearing_the_last_wave_ends_the_run()
 
+	# Layer 2i: the story words (STORY.md step 1).
+	await _test_story_words()
+	# Layer 2j: the night look and the windows (STORY.md step 2).
+	await _test_windows_and_night()
+
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
 
@@ -765,7 +770,8 @@ func _test_wave_three_sends_faster_scrappers_and_a_sawbot() -> void:
 	await get_tree().process_frame
 	var label: String = (_arena.get_node("Hud/WaveLabel") as Label).text
 	_check(label.begins_with("Wave %d / %d" % [wave, _arena.waves.total_waves()]), "the HUD shows the wave number")
-	_check(label.ends_with("Trees %d" % _arena.count_grown_trees()), "and the bloom meter: how many trees are standing")
+	_check(label.contains("Homes lit"), "and how many homes are lit")
+	_check(label.ends_with("Trees %d" % _arena.count_grown_trees()), "and how many trees are standing")
 
 
 ## Waves: going down restarts the same wave, with the forest put back to how it
@@ -1037,6 +1043,113 @@ func _test_staged_wave_one_teaches_cover_and_the_vine() -> void:
 	_check(not tree.show_vine_hint, "and the pulse stops")
 
 
+## Story step 1: Helios speaks as a wave starts, the Block paints an answer when
+## it is cleared, and the opening line shows once only.
+func _test_story_words() -> void:
+	var total: int = CONFIG.wave_scrappers.size()
+	_check(CONFIG.helios_lines.size() == total, "there is one Helios line per wave (%d)" % total)
+	_check(CONFIG.graffiti_lines.size() == total, "there is one graffiti line per wave (%d)" % total)
+
+	await _fresh_arena()
+	var story := _arena.get_node("Hud/StoryLine") as Label
+	_check(not story.visible, "no story line shows before a wave starts")
+	_check(_arena.graffiti.revealed_count == 0, "the walls start clean")
+	_check(_arena.helios_line_for(1).contains(CONFIG.helios_lines[0]), "wave 1 has Helios's first line")
+	_check(_arena.helios_line_for(99) == "", "a wave with no line gets none")
+
+	# Start wave 2 directly. The very first wave start of a run shows the hook.
+	_arena.waves.time_scale = 20.0
+	_arena.waves.start_wave(2)
+	_check(story.visible and story.text == CONFIG.story_hook, "the first wave start shows the opening line")
+	# Let the opening line run out; Helios's notice follows it.
+	var helios_showing: Callable = func() -> bool: return story.text == _arena.helios_line_for(2)
+	_check(await _wait_until(helios_showing, CONFIG.story_line_seconds + 1.0), "then Helios's line for that wave")
+
+	# Clear the wave: one painted line per wave cleared so far, and Helios goes quiet.
+	var all_sent: Callable = func() -> bool: return _arena.waves.state == WaveDirector.State.FIGHTING
+	await _wait_until(all_sent, 4.0)
+	for node: Node in get_tree().get_nodes_in_group(Enemy.GROUP):
+		(node as Enemy).take_damage(99)
+	_check(_arena.graffiti.revealed_count == 2, "clearing wave 2 puts two lines on the walls")
+	_check(_arena.graffiti.line_text(1) == CONFIG.graffiti_lines[1], "the second is wave 2's line")
+	_check(not story.visible, "Helios's line is cleared with the wave")
+
+	# Painted lines never come off, and the opening line never repeats.
+	_arena.graffiti.reveal_up_to(1)
+	_check(_arena.graffiti.revealed_count == 2, "revealing an earlier wave removes nothing")
+	_arena.waves.start_wave(1)
+	_check(story.text == _arena.helios_line_for(1), "a later wave start skips the opening line")
+
+
+## Story step 2: homes with several windows, lit by waves cleared and shining
+## stronger each wave; the whole lot's tint follows the light; trees glow.
+func _test_windows_and_night() -> void:
+	await _fresh_arena()
+	var windows: BlockWindows = _arena.windows
+	var total: int = windows.window_count()
+	var last: int = _arena.waves.total_waves()
+	_check(total >= 20 and total <= 25, "the block has a fixed 20 to 25 windows (%d)" % total)
+	_check(windows.home_count() < total, "homes have more than one window (%d homes)" % windows.home_count())
+
+	# Before any wave: the first lamps only, shining faintly.
+	_check(windows.lit_count == CONFIG.windows_lit_at_start, "the block starts with %d windows lit" % CONFIG.windows_lit_at_start)
+	_check(is_equal_approx(windows.strength, CONFIG.window_strength_at_start), "shining at the starting strength")
+	var dark_level: float = _arena.light_level()
+
+	# The schedule: more windows and more strength with every wave cleared.
+	var partly: int = _arena.lit_windows_after(last - 2)
+	_check(partly > total / 2 and partly < total, "two waves from the end the block is mostly but not fully lit (%d of %d)" % [partly, total])
+	_check(_arena.lit_windows_after(last) == total, "the last wave lights every window")
+	_check(is_equal_approx(_arena.window_strength_after(last), 1.0), "at full strength")
+	var climbing: bool = true
+	for cleared: int in range(1, last + 1):
+		if _arena.lit_windows_after(cleared) < _arena.lit_windows_after(cleared - 1):
+			climbing = false
+		if _arena.window_strength_after(cleared) <= _arena.window_strength_after(cleared - 1):
+			climbing = false
+	_check(climbing, "each wave cleared never dims the block and always strengthens the light")
+	_check(_arena.wave_cleared_text(last).contains("lit"), "the last wave's banner says the block is lit")
+	_check(not _arena.wave_cleared_text(last - 2).contains("lit"), "an earlier wave's banner does not")
+
+	# Clearing a wave (here: pretending wave 4 was cleared) updates the windows.
+	_arena.waves_cleared = 4
+	_arena._update_light()
+	_check(windows.lit_count == _arena.lit_windows_after(4), "clearing waves lights more windows")
+	_check(windows.homes_lit() >= 2 and windows.homes_lit() <= windows.home_count(), "spread over several homes (%d)" % windows.homes_lit())
+	_check(_arena.light_level() > dark_level, "and the lot's light level rises")
+
+	# The whole lot is tinted to match: it moves from the dark tint toward the lit one.
+	var ambient: CanvasModulate = _arena._ambient
+	_check(ambient.color.is_equal_approx(CONFIG.ambient_dark) or ambient.color.r >= CONFIG.ambient_dark.r, "the lot starts at the dark tint")
+	var tint_before: float = ambient.color.r
+	await _wait_frames(40)
+	_check(ambient.color.r > tint_before, "more light warms and brightens every sprite's tint")
+
+	# Trees glow; saplings do not; Seven carries a lamp.
+	var tree: ForestTree = _arena.spawn_tree(Vector2i(4, 3), true)
+	_check(tree.has_node(Glow.NODE_NAME), "a grown tree glows")
+	var sapling: ForestTree = _arena.spawn_tree(Vector2i(4, 11), false)
+	_check(not sapling.has_node(Glow.NODE_NAME), "a sapling does not glow yet")
+	_check(_arena.player.has_node(Glow.NODE_NAME), "Seven carries a lamp")
+
+	# Blackout: felling a tree makes one lit window flicker, without changing the count.
+	var lit_before: int = windows.lit_count
+	tree.take_damage(99)
+	var flickering: int = 0
+	for i: int in total:
+		if windows.is_flickering(i):
+			flickering += 1
+	_check(flickering == 1, "a felled tree makes one window flicker dark")
+	_check(windows.lit_count == lit_before, "but the number of lit windows is unchanged")
+	_check(not windows.next_block_lit, "the next block stays dark until the run is won")
+
+	# The controls line makes way for the windows.
+	var hint := _arena.get_node("Hud/Hint") as Label
+	_arena.waves.start_wave(CONFIG.hint_hide_wave - 1)
+	_check(hint.visible, "the controls line shows before wave %d" % CONFIG.hint_hide_wave)
+	_arena.waves.start_wave(CONFIG.hint_hide_wave)
+	_check(not hint.visible, "and hides from wave %d on" % CONFIG.hint_hide_wave)
+
 ## The end of a run: clearing the last wave leaves the arena as it is and says so.
 func _test_clearing_the_last_wave_ends_the_run() -> void:
 	await _fresh_arena()
@@ -1053,7 +1166,14 @@ func _test_clearing_the_last_wave_ends_the_run() -> void:
 	_check(_arena.is_run_finished, "and the arena marks the run finished")
 	await _wait_frames(int(CONFIG.sapling_time * 60.0) + 30)
 	var banner := _arena.get_node("Hud/Banner") as Label
-	_check(banner.visible and banner.text.begins_with("Forest complete"), "the end banner is up")
+	_check(banner.visible and banner.text.begins_with(CONFIG.end_headline), "the end banner is up with the end headline")
+	_check(banner.text.contains("Trees standing: %d" % _arena.count_grown_trees()), "it counts the trees left standing")
+	_check(_arena.windows.lit_count == _arena.windows.window_count(), "every window of the block is lit")
+	_check(is_equal_approx(_arena.windows.strength, 1.0), "at full strength")
+	var last_word := _arena.get_node("Hud/StoryLine") as Label
+	_check(last_word.visible and last_word.text.contains(CONFIG.helios_end_line), "Helios's last line stays under it")
+	_check(_arena.graffiti.revealed_count == CONFIG.graffiti_lines.size(), "every graffiti line is on the walls")
+	_check(_arena.windows.next_block_lit, "and the next block's windows start coming on")
 	_check(_arena.count_grown_trees() > Arena.TEST_TREE_CELLS.size(), "and the forest is left standing (%d trees)" % _arena.count_grown_trees())
 
 

@@ -37,7 +37,7 @@ text = "WASD move   |   Left click: seed pod   |   Right click: zip to a tree, o
 modulate = Color(1, 1, 1, 0.85)
 offset_left = 28.0
 offset_top = 11.0
-offset_right = 400.0
+offset_right = 520.0
 offset_bottom = 37.0
 text = "Wave 1 / 5"
 
@@ -51,6 +51,18 @@ theme_override_constants/outline_size = 8
 theme_override_font_sizes/font_size = 52
 horizontal_alignment = 1
 text = "Wave 1"
+
+[node name="StoryLine" type="Label" parent="Hud"]
+visible = false
+modulate = Color(1, 0.86, 0.55, 1)
+offset_top = 336.0
+offset_right = 1280.0
+offset_bottom = 372.0
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 24
+horizontal_alignment = 1
+text = "Helios: ..."
 
 [node name="HealthPips" type="Node2D" parent="Hud"]
 script = ExtResource("3_pips")

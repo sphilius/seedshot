@@ -25,9 +25,11 @@ const CONFIG: GameConfig = preload("res://config/game_config.tres")
 ## Group that every tree joins, so the player can ask the scene tree for "all trees".
 const GROUP: StringName = &"trees"
 
-const SAPLING_COLOR: Color = Color(0.55, 0.85, 0.40)
-const TRUNK_COLOR: Color = Color(0.16, 0.33, 0.20)
-const CANOPY_COLOR: Color = Color(0.25, 0.55, 0.30)
+## Night colours: a dark base and a bright canopy, so the tree looks lit from
+## inside. Sunroot stores the day's sun and glows with it at night.
+const SAPLING_COLOR: Color = Color(0.55, 0.95, 0.55)
+const TRUNK_COLOR: Color = Color(0.07, 0.17, 0.14)
+const CANOPY_COLOR: Color = Color(0.36, 0.88, 0.56)
 
 ## The grid cell this tree stands on. Set by the arena before the tree is added.
 var cell: Vector2i
@@ -53,6 +55,7 @@ func _ready() -> void:
 	(_collision.shape as RectangleShape2D).size = Vector2.ONE * float(CONFIG.cell_size)
 	if starts_grown:
 		stage = Stage.GROWN
+		_add_glow()
 	else:
 		_collision.disabled = true  # saplings can be walked and shot through
 		_start_timer(CONFIG.sapling_time)
@@ -64,7 +67,15 @@ func solidify() -> void:
 	# set_deferred changes the property at a safe moment, after the physics engine
 	# has finished its current step. Changing collision mid-step is an error.
 	_collision.set_deferred(&"disabled", false)
+	_add_glow()
 	queue_redraw()  # ask Godot to call _draw again with the new look
+
+
+## Gives a grown tree its pool of light (see glow.gd). Saplings have none.
+func _add_glow() -> void:
+	if has_node(Glow.NODE_NAME):
+		return  # already glowing
+	add_child(Glow.make_sprite(CONFIG.tree_glow_radius_cells * float(CONFIG.cell_size), CONFIG.tree_glow_color))
 
 
 ## Called by the arena when someone is standing on the sapling: ask again shortly.
