@@ -37,9 +37,10 @@ const CAT_SHOP_CELL: Vector2i = Vector2i(20, 0)
 ## Physics layers 2 + 3 ("player" + "enemies") as a bit mask: 2 + 4 = 6.
 const BODIES_MASK: int = 6
 
-const BACKDROP_COLOR: Color = Color(0.09, 0.09, 0.10)
-const WALL_COLOR: Color = Color(0.20, 0.19, 0.18)
-const FLOOR_COLOR: Color = Color(0.33, 0.30, 0.27)
+## Night colours: dark and cool, so the warm windows and glowing trees stand out.
+const BACKDROP_COLOR: Color = Color(0.03, 0.03, 0.05)
+const WALL_COLOR: Color = Color(0.10, 0.10, 0.14)
+const FLOOR_COLOR: Color = Color(0.15, 0.16, 0.21)
 const GRID_LINE_COLOR: Color = Color(0.0, 0.0, 0.0, 0.10)
 
 ## The pathfinding grid. Public so tests can inspect it.
@@ -66,6 +67,13 @@ var _last_planted_cell: Vector2i = ArenaGrid.NO_CELL
 ## True once the player has zipped (or the hint is otherwise no longer needed).
 var _vine_hint_done: bool = false
 
+## The block's windows along the bottom wall. Public so tests can reach it.
+var windows: BlockWindows
+## True once the whole block has been lit (clearing `block_lit_wave`).
+var is_block_lit: bool = false
+## How many standing trees light every window. Starts as the config's number;
+## lighting the block lowers it to the forest as it stood at that moment.
+var _homes_for_full_block: int = 1
 ## The Block's painted lines on the side walls. Public so tests can reach it.
 var graffiti: Graffiti
 ## The hidden lucky cat's shop, in the top wall. Public so tests can reach it.
@@ -92,6 +100,8 @@ var is_run_finished: bool = false
 @onready var _banner: Label = $Hud/Banner
 ## The smaller line under the banner: Helios's notices and the opening line.
 @onready var _story_line: Label = $Hud/StoryLine
+## The controls line along the bottom wall.
+@onready var _hint: Label = $Hud/Hint
 ## The wave timetable. Public (no underscore) so tests can start a wave directly.
 @onready var waves: WaveDirector = $WaveDirector
 
@@ -109,8 +119,14 @@ func _ready() -> void:
 	graffiti = Graffiti.new()
 	graffiti.setup(Rect2(origin, arena_px), float(CONFIG.cell_size))
 	add_child(graffiti)
+	windows = BlockWindows.new()
+	windows.setup(Rect2(origin, arena_px), float(CONFIG.cell_size))
+	add_child(windows)
+	_homes_for_full_block = CONFIG.homes_for_full_block
 
 	player = PLAYER_SCENE.instantiate()
+	# Seven's lamp: a warm pool of light that moves with the bot.
+	player.add_child(Glow.make_sprite(CONFIG.player_glow_radius_cells * float(CONFIG.cell_size), CONFIG.player_glow_color))
 	player.position = grid.cell_to_world(PLAYER_START_CELL)
 	player.seed_fired.connect(_on_player_seed_fired)
 	# The pips redraw themselves every time the player's health changes.
@@ -150,6 +166,7 @@ func _process(delta: float) -> void:
 	# The corner label doubles as the score: every standing tree powers one home.
 	if waves.wave > 0:
 		_wave_label.text = "Wave %d / %d     Homes powered %d" % [waves.wave, waves.total_waves(), count_grown_trees()]
+	windows.set_lit(lit_windows_for(count_grown_trees()))
 	# The last machines are still growing into trees when the end screen comes
 	# up, so keep its score current instead of freezing it at the first count.
 	if is_run_finished:
@@ -390,6 +407,22 @@ func _restart_current_wave() -> void:
 	waves.restart_wave()
 
 
+## How many windows `trees` standing trees light. Before the block is lit this
+## is one window per tree. After it, the forest that lit the block counts as
+## full, and fewer trees than that light a matching share of the windows.
+func lit_windows_for(trees: int) -> int:
+	var total: int = windows.window_count()
+	# roundi rounds to the nearest whole number and returns an int.
+	return clampi(roundi(float(total) * float(trees) / float(_homes_for_full_block)), 0, total)
+
+
+## The wave 8 moment: every window comes on at once. From here on, the forest
+## as it stands right now is what "fully lit" means.
+func light_the_block() -> void:
+	is_block_lit = true
+	_homes_for_full_block = clampi(count_grown_trees(), 1, windows.window_count())
+
+
 ## Queues small lines to show one after another under the banner, replacing
 ## whatever was there. Each stays for `story_line_seconds`.
 func _show_story_lines(lines: Array[String]) -> void:
@@ -422,6 +455,8 @@ func _on_wave_started(number: int, total: int) -> void:
 	for cell: Vector2i in _trees_by_cell.keys():
 		_forest_at_wave_start[cell] = _trees_by_cell[cell].stage == ForestTree.Stage.GROWN
 	_show_banner("Wave %d" % number, 1.5)
+	# By now the controls are learned; the bottom wall belongs to the windows.
+	_hint.visible = number < CONFIG.hint_hide_wave
 	# Under the banner: the opening line (once only), then Helios's notice.
 	var lines: Array[String] = []
 	if not _hook_shown:
@@ -457,6 +492,8 @@ func _on_spawn_requested(kind: StringName, wave_number: int) -> void:
 func _on_wave_cleared(number: int) -> void:
 	Sfx.play(&"wave_clear")
 	_show_banner(wave_cleared_text(number), CONFIG.wave_break_time)
+	if number == CONFIG.block_lit_wave:
+		light_the_block()
 	# The Block answers Helios: one more painted line on the walls.
 	graffiti.reveal_up_to(number)
 	_show_story_lines([])  # clear any Helios line still showing
@@ -468,6 +505,8 @@ func wave_cleared_text(number: int) -> String:
 	var text: String = "Wave %d cleared" % number
 	if number == CONFIG.rate_marker_wave:
 		text += "\nHalfway! Stop and rate here, or play on"
+	if number == CONFIG.block_lit_wave:
+		text += "\nThe whole block is lit"
 	return text
 
 
@@ -482,6 +521,7 @@ func _on_all_waves_cleared() -> void:
 	Sfx.play(&"cat")
 	# The arena is left exactly as it is: the end screen IS your forest.
 	_show_banner(end_banner_text(), 0.0)
+	windows.light_next_block()  # the light jumps the wall
 	# Helios gets the last word, and it stays up with the banner.
 	_story_queue.clear()
 	_story_line.text = "Helios: \"%s\"" % CONFIG.helios_end_line

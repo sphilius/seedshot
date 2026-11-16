@@ -91,6 +91,8 @@ func _ready() -> void:
 
 	# Layer 2i: the story words (STORY.md step 1).
 	await _test_story_words()
+	# Layer 2j: the night look and the windows (STORY.md step 2).
+	await _test_windows_and_night()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -1078,6 +1080,48 @@ func _test_story_words() -> void:
 	_check(story.text == _arena.helios_line_for(1), "a later wave start skips the opening line")
 
 
+## Story step 2: one lit window per standing tree, the whole block lit after
+## the block-lit wave, glowing trees, and the controls line stepping aside.
+func _test_windows_and_night() -> void:
+	await _fresh_arena()
+	var windows: BlockWindows = _arena.windows
+	var starters: int = Arena.TEST_TREE_CELLS.size()
+	await _wait_frames(3)  # the arena counts trees once per drawn frame, so give it a few
+	_check(windows.window_count() == CONFIG.homes_for_full_block, "the block has one window per home (%d)" % windows.window_count())
+	_check(windows.lit_count == starters, "the %d starter trees light %d windows" % [starters, starters])
+
+	# First light: one more tree, one more window. Blackout: fell it, one fewer.
+	var tree: ForestTree = _arena.spawn_tree(Vector2i(4, 3), true)
+	await _wait_frames(3)
+	_check(windows.lit_count == starters + 1, "a new tree lights one more window")
+	_check(tree.has_node(Glow.NODE_NAME), "a grown tree glows")
+	var sapling: ForestTree = _arena.spawn_tree(Vector2i(4, 11), false)
+	_check(not sapling.has_node(Glow.NODE_NAME), "a sapling does not glow yet")
+	_check(_arena.player.has_node(Glow.NODE_NAME), "Seven carries a lamp")
+	tree.take_damage(99)
+	await _wait_frames(3)
+	_check(windows.lit_count == starters, "a felled tree darkens its window")
+
+	# The block-lit moment: every window on, whatever the forest's size.
+	_check(_arena.wave_cleared_text(CONFIG.block_lit_wave).contains("lit"), "the block-lit wave's banner says so")
+	_check(not _arena.is_block_lit, "the block is not lit before that wave")
+	_arena.light_the_block()
+	await _wait_frames(3)
+	_check(_arena.is_block_lit and windows.lit_count == windows.window_count(), "lighting the block turns every window on")
+	# From here Helios can take it back: one tree lost dims part of the block.
+	_arena.tree_at(Arena.TEST_TREE_CELLS[0]).take_damage(99)
+	await _wait_frames(3)
+	_check(windows.lit_count < windows.window_count(), "after that, losing a tree darkens windows again")
+	_check(not windows.next_block_lit, "the next block stays dark until the run is won")
+
+	# The controls line makes way for the windows.
+	var hint := _arena.get_node("Hud/Hint") as Label
+	_arena.waves.start_wave(CONFIG.hint_hide_wave - 1)
+	_check(hint.visible, "the controls line shows before wave %d" % CONFIG.hint_hide_wave)
+	_arena.waves.start_wave(CONFIG.hint_hide_wave)
+	_check(not hint.visible, "and hides from wave %d on" % CONFIG.hint_hide_wave)
+
+
 ## The end of a run: clearing the last wave leaves the arena as it is and says so.
 func _test_clearing_the_last_wave_ends_the_run() -> void:
 	await _fresh_arena()
@@ -1099,6 +1143,7 @@ func _test_clearing_the_last_wave_ends_the_run() -> void:
 	var last_word := _arena.get_node("Hud/StoryLine") as Label
 	_check(last_word.visible and last_word.text.contains(CONFIG.helios_end_line), "Helios's last line stays under it")
 	_check(_arena.graffiti.revealed_count == CONFIG.graffiti_lines.size(), "every graffiti line is on the walls")
+	_check(_arena.windows.next_block_lit, "and the next block's windows start coming on")
 	_check(_arena.count_grown_trees() > Arena.TEST_TREE_CELLS.size(), "and the forest is left standing (%d trees)" % _arena.count_grown_trees())
 
 

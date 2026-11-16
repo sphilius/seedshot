@@ -208,6 +208,25 @@ extends Resource
 ## Seconds each small story line stays on screen under the banner.
 @export var story_line_seconds: float = 4.5
 
+@export_group("Night and windows")
+## How many windows the block has, and so how many standing trees light all of
+## them: one tree, one home, one window.
+@export var homes_for_full_block: int = 40
+## Clearing this wave lights the whole block at once, however many trees stand.
+## After that, the forest as it stood at that moment counts as "fully lit", so
+## every tree lost from then on darkens windows. 0 switches the moment off.
+@export var block_lit_wave: int = 8
+## The controls line at the bottom hides when this wave starts, leaving the
+## bottom wall to the windows.
+@export var hint_hide_wave: int = 3
+## How far a grown tree's glow reaches, in cells, and its colour. The alpha
+## (last number) is the strength of the light.
+@export var tree_glow_radius_cells: float = 1.7
+@export var tree_glow_color: Color = Color(0.35, 0.95, 0.60, 0.30)
+## Seven's lamp: reach in cells, and colour.
+@export var player_glow_radius_cells: float = 2.2
+@export var player_glow_color: Color = Color(1.0, 0.85, 0.60, 0.22)
+
 @export_group("Touch")
 ## A finger must slide this far (in game pixels) before its touch becomes a
 ## thumb-stick. Anything shorter is finger wobble, so a tap stays a tap.
