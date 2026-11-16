@@ -31,6 +31,16 @@ Statuses: Made, Changed, Removed, Revisited, Parked, Archived, Proposed.
 | D-002 | 2026-11-13 | Made | The vine latches the first tree its ray meets |
 | D-001 | 2026-11-13 | Made | Every tunable in one config resource |
 
+## D-025: ElevenLabs sound effects (Made, 2026-11-16)
+
+All 14 beeps are replaced by ElevenLabs Sound Effects (API, key in the `ELEVENLABS_API_KEY` user environment variable).
+
+- **Generate:** `.\tools\gen_sfx.ps1` reads the table in `audio/SOUNDS.md` (name, duration, prompt) and saves 2 takes per sound to `audio/sfx/candidates/` (git-tracked, hidden from Godot by a `.gdignore`, so they are not shipped in the build).
+- **Pick:** `.\tools\pick_sfx.ps1 fire=1 thunk=3 ...` copies a take into `audio/sfx/<name>.mp3` and evens out its loudness with ffmpeg: each sound gets a target average loudness (frequent sounds like `fire` and `saw` quieter, rare ones like `cat` louder) and a limiter stops clipping.
+- **Why loudness matters:** the raw takes ranged from silent to full blast. Three `thunk` takes and one `unlock` take were nearly silent; two more `thunk` takes were made and take 3 used.
+- **First picks** were made by measured loudness, not by ear. Sasha picks by ear on the listening page (https://claude.ai/artifact/1uBh35gAQ52gztxxJqBDBX).
+- **Gotcha:** after adding audio files run `.\tools\godot.ps1 import` on its own and let it finish; once, the checks ran before the import had written the `.import` files and every sound failed to load.
+
 ## D-024: Floor slab, checked with texkit (Made, 2026-11-16)
 
 The arena floor now repeats one 48 px slab (`art/sprites/floor_tile.png`, drawn with Klad on a canvas that wraps). `texkit check` scored it PASS (seam 0.65, limit 1.5; lighting 0.004, limit 0.08). texkit only works on textures that repeat, so it was used for the floor and not for the sprites. The slab is drawn at 35% strength (`floor_texture_strength`) so the floor stays quieter than the machines.
