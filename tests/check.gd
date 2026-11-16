@@ -89,6 +89,9 @@ func _ready() -> void:
 	await _test_staged_wave_one_teaches_cover_and_the_vine()
 	await _test_clearing_the_last_wave_ends_the_run()
 
+	# Layer 2i: the story words (STORY.md step 1).
+	await _test_story_words()
+
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
 
@@ -765,7 +768,7 @@ func _test_wave_three_sends_faster_scrappers_and_a_sawbot() -> void:
 	await get_tree().process_frame
 	var label: String = (_arena.get_node("Hud/WaveLabel") as Label).text
 	_check(label.begins_with("Wave %d / %d" % [wave, _arena.waves.total_waves()]), "the HUD shows the wave number")
-	_check(label.ends_with("Trees %d" % _arena.count_grown_trees()), "and the bloom meter: how many trees are standing")
+	_check(label.ends_with("Homes powered %d" % _arena.count_grown_trees()), "and the score: one home powered per standing tree")
 
 
 ## Waves: going down restarts the same wave, with the forest put back to how it
@@ -1037,6 +1040,44 @@ func _test_staged_wave_one_teaches_cover_and_the_vine() -> void:
 	_check(not tree.show_vine_hint, "and the pulse stops")
 
 
+## Story step 1: Helios speaks as a wave starts, the Block paints an answer when
+## it is cleared, and the opening line shows once only.
+func _test_story_words() -> void:
+	var total: int = CONFIG.wave_scrappers.size()
+	_check(CONFIG.helios_lines.size() == total, "there is one Helios line per wave (%d)" % total)
+	_check(CONFIG.graffiti_lines.size() == total, "there is one graffiti line per wave (%d)" % total)
+
+	await _fresh_arena()
+	var story := _arena.get_node("Hud/StoryLine") as Label
+	_check(not story.visible, "no story line shows before a wave starts")
+	_check(_arena.graffiti.revealed_count == 0, "the walls start clean")
+	_check(_arena.helios_line_for(1).contains(CONFIG.helios_lines[0]), "wave 1 has Helios's first line")
+	_check(_arena.helios_line_for(99) == "", "a wave with no line gets none")
+
+	# Start wave 2 directly. The very first wave start of a run shows the hook.
+	_arena.waves.time_scale = 20.0
+	_arena.waves.start_wave(2)
+	_check(story.visible and story.text == CONFIG.story_hook, "the first wave start shows the opening line")
+	# Let the opening line run out; Helios's notice follows it.
+	var helios_showing: Callable = func() -> bool: return story.text == _arena.helios_line_for(2)
+	_check(await _wait_until(helios_showing, CONFIG.story_line_seconds + 1.0), "then Helios's line for that wave")
+
+	# Clear the wave: one painted line per wave cleared so far, and Helios goes quiet.
+	var all_sent: Callable = func() -> bool: return _arena.waves.state == WaveDirector.State.FIGHTING
+	await _wait_until(all_sent, 4.0)
+	for node: Node in get_tree().get_nodes_in_group(Enemy.GROUP):
+		(node as Enemy).take_damage(99)
+	_check(_arena.graffiti.revealed_count == 2, "clearing wave 2 puts two lines on the walls")
+	_check(_arena.graffiti.line_text(1) == CONFIG.graffiti_lines[1], "the second is wave 2's line")
+	_check(not story.visible, "Helios's line is cleared with the wave")
+
+	# Painted lines never come off, and the opening line never repeats.
+	_arena.graffiti.reveal_up_to(1)
+	_check(_arena.graffiti.revealed_count == 2, "revealing an earlier wave removes nothing")
+	_arena.waves.start_wave(1)
+	_check(story.text == _arena.helios_line_for(1), "a later wave start skips the opening line")
+
+
 ## The end of a run: clearing the last wave leaves the arena as it is and says so.
 func _test_clearing_the_last_wave_ends_the_run() -> void:
 	await _fresh_arena()
@@ -1053,7 +1094,11 @@ func _test_clearing_the_last_wave_ends_the_run() -> void:
 	_check(_arena.is_run_finished, "and the arena marks the run finished")
 	await _wait_frames(int(CONFIG.sapling_time * 60.0) + 30)
 	var banner := _arena.get_node("Hud/Banner") as Label
-	_check(banner.visible and banner.text.begins_with("Forest complete"), "the end banner is up")
+	_check(banner.visible and banner.text.begins_with(CONFIG.end_headline), "the end banner is up with the end headline")
+	_check(banner.text.contains("Homes powered: %d" % _arena.count_grown_trees()), "it counts the homes powered")
+	var last_word := _arena.get_node("Hud/StoryLine") as Label
+	_check(last_word.visible and last_word.text.contains(CONFIG.helios_end_line), "Helios's last line stays under it")
+	_check(_arena.graffiti.revealed_count == CONFIG.graffiti_lines.size(), "every graffiti line is on the walls")
 	_check(_arena.count_grown_trees() > Arena.TEST_TREE_CELLS.size(), "and the forest is left standing (%d trees)" % _arena.count_grown_trees())
 
 

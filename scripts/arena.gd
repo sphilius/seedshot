@@ -55,11 +55,19 @@ var _rng := RandomNumberGenerator.new()
 var _forest_at_wave_start: Dictionary[Vector2i, bool] = {}
 ## Seconds the banner stays up. 0 or less means "until replaced".
 var _banner_time_left: float = 0.0
+## Small story lines still waiting to be shown under the banner, in order.
+var _story_queue: Array[String] = []
+## Seconds the story line on screen has left. 0 or less means "until replaced".
+var _story_time_left: float = 0.0
+## True once the opening line has been shown, so a restarted wave 1 skips it.
+var _hook_shown: bool = false
 ## The cell of the most recent sapling planted by a downed machine.
 var _last_planted_cell: Vector2i = ArenaGrid.NO_CELL
 ## True once the player has zipped (or the hint is otherwise no longer needed).
 var _vine_hint_done: bool = false
 
+## The Block's painted lines on the side walls. Public so tests can reach it.
+var graffiti: Graffiti
 ## The hidden lucky cat's shop, in the top wall. Public so tests can reach it.
 var cat_shop: CatShop
 ## True after the last wave is cleared. Public so tests can read it.
@@ -82,6 +90,8 @@ var is_run_finished: bool = false
 @onready var _health_pips: HealthPips = $Hud/HealthPips
 @onready var _wave_label: Label = $Hud/WaveLabel
 @onready var _banner: Label = $Hud/Banner
+## The smaller line under the banner: Helios's notices and the opening line.
+@onready var _story_line: Label = $Hud/StoryLine
 ## The wave timetable. Public (no underscore) so tests can start a wave directly.
 @onready var waves: WaveDirector = $WaveDirector
 
@@ -94,6 +104,11 @@ func _ready() -> void:
 	var origin: Vector2 = ((get_viewport_rect().size - arena_px) / 2.0).floor()
 	grid = ArenaGrid.new(CONFIG.grid_cols, CONFIG.grid_rows, CONFIG.cell_size, origin)
 	_build_walls()
+
+	# The Block's graffiti. Added first, so everything else draws on top of it.
+	graffiti = Graffiti.new()
+	graffiti.setup(Rect2(origin, arena_px), float(CONFIG.cell_size))
+	add_child(graffiti)
 
 	player = PLAYER_SCENE.instantiate()
 	player.position = grid.cell_to_world(PLAYER_START_CELL)
@@ -124,6 +139,7 @@ func _ready() -> void:
 	waves.wave_cleared.connect(_on_wave_cleared)
 	waves.all_waves_cleared.connect(_on_all_waves_cleared)
 	_banner.visible = false
+	_story_line.visible = false
 	_wave_label.text = ""
 	if autostart_waves:
 		waves.start_wave(1)
@@ -131,9 +147,18 @@ func _ready() -> void:
 
 ## _process runs every drawn frame: hide the banner when its time is up.
 func _process(delta: float) -> void:
-	# The corner label doubles as the "bloom meter": how many trees are standing.
+	# The corner label doubles as the score: every standing tree powers one home.
 	if waves.wave > 0:
-		_wave_label.text = "Wave %d / %d     Trees %d" % [waves.wave, waves.total_waves(), count_grown_trees()]
+		_wave_label.text = "Wave %d / %d     Homes powered %d" % [waves.wave, waves.total_waves(), count_grown_trees()]
+	# The last machines are still growing into trees when the end screen comes
+	# up, so keep its score current instead of freezing it at the first count.
+	if is_run_finished:
+		_banner.text = end_banner_text()
+	# The small story line: when its time is up, show the next one or hide.
+	if _story_time_left > 0.0:
+		_story_time_left -= delta
+		if _story_time_left <= 0.0:
+			_show_next_story_line()
 	if _banner_time_left > 0.0:
 		_banner_time_left -= delta
 		if _banner_time_left <= 0.0:
@@ -365,12 +390,46 @@ func _restart_current_wave() -> void:
 	waves.restart_wave()
 
 
+## Queues small lines to show one after another under the banner, replacing
+## whatever was there. Each stays for `story_line_seconds`.
+func _show_story_lines(lines: Array[String]) -> void:
+	_story_queue = lines.duplicate()
+	_show_next_story_line()
+
+
+## Shows the next queued story line, or hides the label when none are left.
+func _show_next_story_line() -> void:
+	if _story_queue.is_empty():
+		_story_line.visible = false
+		_story_time_left = 0.0
+		return
+	_story_line.text = _story_queue.pop_front()  # pop_front removes and returns the first entry
+	_story_line.visible = true
+	_story_time_left = CONFIG.story_line_seconds
+
+
+## What Helios says as wave `number` starts, ready to show. Empty if the config
+## has no line for that wave. Public so the tests can read it.
+func helios_line_for(number: int) -> String:
+	if number < 1 or number > CONFIG.helios_lines.size():
+		return ""
+	return "Helios: \"%s\"" % CONFIG.helios_lines[number - 1]
+
+
 ## Signal handler: a wave began. Remember the forest, update the HUD.
 func _on_wave_started(number: int, total: int) -> void:
 	_forest_at_wave_start.clear()
 	for cell: Vector2i in _trees_by_cell.keys():
 		_forest_at_wave_start[cell] = _trees_by_cell[cell].stage == ForestTree.Stage.GROWN
 	_show_banner("Wave %d" % number, 1.5)
+	# Under the banner: the opening line (once only), then Helios's notice.
+	var lines: Array[String] = []
+	if not _hook_shown:
+		_hook_shown = true
+		lines.append(CONFIG.story_hook)
+	if helios_line_for(number) != "":
+		lines.append(helios_line_for(number))
+	_show_story_lines(lines)
 
 
 ## Signal handler: the director wants one machine sent in.
@@ -398,6 +457,9 @@ func _on_spawn_requested(kind: StringName, wave_number: int) -> void:
 func _on_wave_cleared(number: int) -> void:
 	Sfx.play(&"wave_clear")
 	_show_banner(wave_cleared_text(number), CONFIG.wave_break_time)
+	# The Block answers Helios: one more painted line on the walls.
+	graffiti.reveal_up_to(number)
+	_show_story_lines([])  # clear any Helios line still showing
 
 
 ## The banner text for clearing wave `number`. The marker wave (halfway) adds
@@ -409,12 +471,22 @@ func wave_cleared_text(number: int) -> String:
 	return text
 
 
-## Signal handler: the last wave is cleared. Show the forest you ended with.
+## The end screen's banner text: the headline and the final score.
+func end_banner_text() -> String:
+	return "%s\nHomes powered: %d    Press R or tap here to go again" % [CONFIG.end_headline, count_grown_trees()]
+
+
+## Signal handler: the last wave is cleared. Show the end screen over the forest.
 func _on_all_waves_cleared() -> void:
 	is_run_finished = true
 	Sfx.play(&"cat")
 	# The arena is left exactly as it is: the end screen IS your forest.
-	_show_banner("Forest complete: %d trees standing\nPress R or tap here to plant again" % count_grown_trees(), 0.0)
+	_show_banner(end_banner_text(), 0.0)
+	# Helios gets the last word, and it stays up with the banner.
+	_story_queue.clear()
+	_story_line.text = "Helios: \"%s\"" % CONFIG.helios_end_line
+	_story_line.visible = true
+	_story_time_left = 0.0
 
 
 ## Signal handler: the third pod landed on the hidden shop and the cat is out.

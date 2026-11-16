@@ -31,6 +31,9 @@ Statuses: Made, Changed, Removed, Revisited, Parked, Archived, Proposed.
 | D-002 | 2026-11-13 | Made | The vine latches the first tree its ray meets |
 | D-001 | 2026-11-13 | Made | Every tunable in one config resource |
 
+## D-027: Story redesign, "Lights Out" (Made, 2026-11-16)
+
+Sasha found the game thin on fun, solarpunk and story, and designs from story first. `STORY.md` is now the spine: Helios owns the sun, the block grows pirate solar, the bot is Seven (a jailbroken meter-reader). Step 1 (words) is built: Helios says one line under the banner as each wave starts, the Block paints one line on the side walls as each is cleared (`scripts/graffiti.gd`), the opening line shows once, the corner score reads "Homes powered", and the end screen is the config's headline with Helios's last word. All story text lives in the config's Story group. Fixed on the way: the end banner's count was frozen at the moment the last wave cleared, before the last machines grew into trees; it now stays current. Still to build, in order: night look and windows, Lucky's new gift and lines, Canopy FM, tap points.
 ## D-026: Mute, a halfway marker, and one fragile test order (Made, 2026-11-16)
 
 From the Jamference feedback threads: players ask to turn sound off, and judges play many entries. So: M (or the speaker button left of pause) mutes the Master bus; clearing wave 5 (`rate_marker_wave`) adds "Halfway! Stop and rate here, or play on" to the banner; the hint line now lists M. The on-screen controls line already existed, so nothing else was added there. Gotcha: the new check failed 8 unrelated Sawbot and cat checks when it ran before the first arena test, and passes after the pause test. Some scene tests depend on run order; put new scene tests after the existing ones.

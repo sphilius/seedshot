@@ -171,6 +171,43 @@ extends Resource
 ## still slower than the bot's 260. (Was 0.12 when there were only five waves.)
 @export var scrapper_speed_gain_per_wave: float = 0.08
 
+@export_group("Story")
+## The words of the story (see STORY.md). Edit them here or in the Inspector;
+## no script holds any story text.
+## The opening line, shown once under the first "Wave 1" banner.
+@export var story_hook: String = "Helios owns the sun. Your block stopped paying for it."
+## What Helios customer service says as each wave starts. Entry 0 is wave 1.
+@export var helios_lines: Array[String] = [
+	"Courtesy notice: your account is 90 days past due.",
+	"A technician is on the way to help you.",
+	"Unlicensed generation is theft of sunlight.",
+	"Disconnection crews dispatched. Thank you for your patience.",
+	"We'd hate to lose you. Ask about our amnesty plan.",
+	"Your neighbours are paying for your choices.",
+	"Unit MR-7 is stolen Helios property.",
+	"Final notice.",
+	"Service area reclassified. Recovering assets.",
+	"Please hold.",
+]
+## What the Block paints on the walls when each wave is cleared. Entry 0 is wave 1.
+@export var graffiti_lines: Array[String] = [
+	"LIGHTS ON",
+	"NOT YOURS",
+	"THE SUN IS FREE",
+	"GUARD THE TREES",
+	"NO DEAL",
+	"WE ARE THE NEIGHBOURS",
+	"SEVEN IS OURS",
+	"WE ARE THE GRID",
+	"STILL HERE",
+	"PASS IT ON",
+]
+## The end screen: the big headline, and Helios's last word under it.
+@export var end_headline: String = "PASS IT ON"
+@export var helios_end_line: String = "Account closed."
+## Seconds each small story line stays on screen under the banner.
+@export var story_line_seconds: float = 4.5
+
 @export_group("Touch")
 ## A finger must slide this far (in game pixels) before its touch becomes a
 ## thumb-stick. Anything shorter is finger wobble, so a tap stays a tap.
