@@ -397,7 +397,16 @@ func _on_spawn_requested(kind: StringName, wave_number: int) -> void:
 ## Signal handler: every machine of a wave is down.
 func _on_wave_cleared(number: int) -> void:
 	Sfx.play(&"wave_clear")
-	_show_banner("Wave %d cleared" % number, CONFIG.wave_break_time)
+	_show_banner(wave_cleared_text(number), CONFIG.wave_break_time)
+
+
+## The banner text for clearing wave `number`. The marker wave (halfway) adds
+## a second line telling the player they can stop and rate now.
+func wave_cleared_text(number: int) -> String:
+	var text: String = "Wave %d cleared" % number
+	if number == CONFIG.rate_marker_wave:
+		text += "\nHalfway! Stop and rate here, or play on"
+	return text
 
 
 ## Signal handler: the last wave is cleared. Show the forest you ended with.

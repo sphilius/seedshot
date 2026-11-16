@@ -20,3 +20,4 @@ One line per asset or system: tool, date, what it did. This feeds the itch page'
 | 2026-11-14 | Claude Code | Playtest fixes (`scripts/arena_grid.gd`, `pause_overlay.gd`, `health_pips.gd`) | Read the phone playtest answers and screenshots; wrote the split guard that stops trees walling anyone in, the pause screen and the HUD move, with 17 more checks. |
 | 2026-11-13 | Claude Code | `art/PROMPTS.md` | Wrote the shared art spec and the generation prompts for the SpriteCook / ChatGPT Images / Klad comparison. |
 | 2026-11-13 | Claude Code | `scripts/touch_controls.gd` | Wrote the touch layer (two floating thumb-sticks, tap a tree for the vine) and 21 more checks for it. |
+| 2026-11-16 | Claude Code | Mute and halfway marker (`scripts/sfx.gd`, `pause_overlay.gd`, `arena.gd`) | Wrote the M-key and speaker-button mute and the wave 5 "stop and rate" banner line, with 10 more checks. |

@@ -8,6 +8,7 @@ extends Node2D
 ##
 ##   Pause    press P or Esc, or tap/click the two-bar button (top-right corner)
 ##   Resume   press P or Esc again, or tap/click anywhere
+##   Mute     press M, or tap/click the speaker button (left of the pause button)
 ##
 ## HOW PAUSING WORKS IN GODOT: `get_tree().paused = true` freezes every node's
 ## _process, _physics_process and input, except nodes whose process_mode says
@@ -23,6 +24,9 @@ const PAUSED_TEXT: String = "Paused"
 const RESUME_TEXT: String = "Tap, click or press P to carry on"
 ## Vector2.INF is used as "this event was not a press" (no real press is at infinity).
 const NO_PRESS: Vector2 = Vector2.INF
+
+## The mute state the speaker icon was last drawn with (see _process).
+var _drawn_muted: bool = false
 
 
 ## _ready runs once when the node enters the scene.
@@ -48,6 +52,9 @@ func _input(event: InputEvent) -> void:
 		return
 	if get_tree().paused:
 		set_paused(false)  # while paused, a press anywhere carries on
+	elif mute_button_rect().has_point(press):
+		Sfx.set_muted(not Sfx.is_muted)  # Sfx is the sound autoload (scripts/sfx.gd)
+		queue_redraw()  # redraw the speaker with or without its cross
 	elif _button_rect().has_point(press):
 		set_paused(true)
 	else:
@@ -66,6 +73,7 @@ func _draw() -> void:
 		var centre: Vector2 = _button_rect().get_center()
 		draw_rect(Rect2(centre.x - 10.0, centre.y - 11.0, 7.0, 22.0), ICON_COLOR)
 		draw_rect(Rect2(centre.x + 3.0, centre.y - 11.0, 7.0, 22.0), ICON_COLOR)
+		_draw_speaker(mute_button_rect().get_center())
 		return
 	draw_rect(Rect2(Vector2.ZERO, screen), DIM_COLOR)
 	_draw_centred(font, PAUSED_TEXT, screen.y / 2.0 - 10.0, 72)
@@ -97,6 +105,38 @@ func _press_position(event: InputEvent) -> Vector2:
 func _button_rect() -> Rect2:
 	var screen: Vector2 = get_viewport_rect().size
 	return Rect2(screen.x - BUTTON_SIZE.x, 0.0, BUTTON_SIZE.x, BUTTON_SIZE.y)
+
+
+## The mute button's area: the same size as the pause button, just left of it.
+func mute_button_rect() -> Rect2:
+	var pause_rect: Rect2 = _button_rect()
+	return Rect2(pause_rect.position.x - BUTTON_SIZE.x, 0.0, BUTTON_SIZE.x, BUTTON_SIZE.y)
+
+
+## Draws a small speaker: a box with a cone. When muted, a cross sits beside it;
+## when sound is on, two short "sound wave" bars do.
+func _draw_speaker(centre: Vector2) -> void:
+	# The speaker body (a small square) and its cone (a four-cornered shape).
+	draw_rect(Rect2(centre.x - 14.0, centre.y - 5.0, 7.0, 10.0), ICON_COLOR)
+	var cone := PackedVector2Array([
+		Vector2(centre.x - 7.0, centre.y - 5.0), Vector2(centre.x + 1.0, centre.y - 11.0),
+		Vector2(centre.x + 1.0, centre.y + 11.0), Vector2(centre.x - 7.0, centre.y + 5.0),
+	])
+	draw_colored_polygon(cone, ICON_COLOR)
+	if Sfx.is_muted:
+		draw_line(Vector2(centre.x + 6.0, centre.y - 6.0), Vector2(centre.x + 16.0, centre.y + 6.0), ICON_COLOR, 3.0)
+		draw_line(Vector2(centre.x + 6.0, centre.y + 6.0), Vector2(centre.x + 16.0, centre.y - 6.0), ICON_COLOR, 3.0)
+	else:
+		draw_rect(Rect2(centre.x + 6.0, centre.y - 4.0, 3.0, 8.0), ICON_COLOR)
+		draw_rect(Rect2(centre.x + 12.0, centre.y - 8.0, 3.0, 16.0), ICON_COLOR)
+
+
+## _process runs every frame: redraw if the M key changed the mute state, so the
+## speaker icon always matches what the player hears.
+func _process(_delta: float) -> void:
+	if Sfx.is_muted != _drawn_muted:
+		_drawn_muted = Sfx.is_muted
+		queue_redraw()
 
 
 ## Draws one line of text centred left-to-right, with its baseline at `y`.
