@@ -64,6 +64,7 @@ func _ready() -> void:
 	# Layer 2d: fixes from the first phone playtest (2026-11-14).
 	await _test_sapling_never_walls_the_floor_in_two()
 	await _test_pause_freezes_the_game()
+	await _test_mute_and_rate_marker()
 
 	# Layer 2e: the Sawbot and the waves.
 	await _test_sawbot_fells_a_tree_and_ignores_the_player()
@@ -157,6 +158,45 @@ func _test_every_sound_is_a_real_file() -> void:
 		&"windup", &"hurt", &"player_down", &"saw", &"cat", &"bind", &"spit", &"wave_clear"]
 	for sound_name: StringName in names:
 		_check(Sfx.stream_for(sound_name) is AudioStreamMP3, "the '%s' sound is a real file" % sound_name)
+
+
+## s11: the mute switch (M key and the speaker button) and the halfway
+## "stop and rate" line on the wave-cleared banner.
+func _test_mute_and_rate_marker() -> void:
+	_check(InputMap.has_action(&"mute"), "the 'mute' action exists")
+
+	# The switch itself: bus 0 is the Master bus every sound goes through.
+	Sfx.set_muted(true)
+	_check(AudioServer.is_bus_mute(0), "set_muted(true) silences the Master bus")
+	Sfx.set_muted(false)
+	_check(not AudioServer.is_bus_mute(0), "set_muted(false) brings the sound back")
+
+	# The M key: send a pretend key press through the game's normal input path.
+	var press := InputEventAction.new()
+	press.action = &"mute"
+	press.pressed = true
+	Sfx._unhandled_key_input(press)
+	_check(Sfx.is_muted, "pressing the mute key switches sound off")
+	Sfx._unhandled_key_input(press)
+	_check(not Sfx.is_muted, "pressing it again switches sound back on")
+
+	# The speaker button: a click inside its area mutes; it does not pause.
+	await _fresh_arena()
+	var pause: PauseOverlay = _arena.get_node("Hud/PauseOverlay") as PauseOverlay
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	click.position = pause.mute_button_rect().get_center()
+	pause._input(click)
+	_check(Sfx.is_muted, "clicking the speaker button mutes")
+	_check(not get_tree().paused, "clicking the speaker button does not pause")
+	pause._input(click)
+	_check(not Sfx.is_muted, "clicking it again un-mutes")
+
+	# The halfway marker: only the marker wave gets the extra line.
+	var marker: int = CONFIG.rate_marker_wave
+	_check(_arena.wave_cleared_text(marker).contains("rate"), "the marker wave's banner says to stop and rate")
+	_check(not _arena.wave_cleared_text(marker - 1).contains("rate"), "other waves' banners do not")
 
 
 ## Every action name the scripts rely on must exist in Project Settings > Input Map.

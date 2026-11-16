@@ -21,6 +21,9 @@ const SFX_EXTENSIONS: Array[String] = ["mp3", "ogg", "wav"]
 ## False until the player's first click or key press.
 var is_unlocked: bool = false
 
+## True while the player has sound switched off (M key, or the speaker button).
+var is_muted: bool = false
+
 ## Sound name -> audio clip. (A typed Dictionary: keys are StringNames.)
 ## AudioStream is the parent type of both the generated beeps (AudioStreamWAV)
 ## and real sound files (.mp3, .ogg, .wav), so one dictionary can hold either.
@@ -77,6 +80,19 @@ func _input(event: InputEvent) -> void:
 		is_unlocked = true
 		set_process_input(false)  # stop listening: the job is done
 		play(&"unlock")
+
+
+## _unhandled_key_input receives key presses nothing else used: M flips mute.
+func _unhandled_key_input(event: InputEvent) -> void:
+	if event.is_action_pressed(&"mute"):
+		set_muted(not is_muted)
+
+
+## Switches all game sound off or on. Bus 0 is the "Master" bus: every sound in
+## the game passes through it, so muting it silences everything at once.
+func set_muted(muted: bool) -> void:
+	is_muted = muted
+	AudioServer.set_bus_mute(0, muted)
 
 
 ## Plays a named sound. Silently does nothing before the first input (the browser

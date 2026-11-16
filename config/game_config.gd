@@ -162,6 +162,10 @@ extends Resource
 @export var wave_spawn_interval: float = 1.4
 ## Rest time between clearing a wave and the next one starting.
 @export var wave_break_time: float = 3.0
+## After clearing this wave, the banner tells the player it is a fine place to
+## stop and rate the game. Jam judges play many entries; this tells them they
+## have seen the core of it. 0 switches the marker off.
+@export var rate_marker_wave: int = 5
 ## Each wave's Scrappers are this much faster than the wave before
 ## (0.08 = 8%). Wave 10 Scrappers therefore walk at 172% speed: about 206,
 ## still slower than the bot's 260. (Was 0.12 when there were only five waves.)

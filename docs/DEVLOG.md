@@ -31,6 +31,9 @@ Statuses: Made, Changed, Removed, Revisited, Parked, Archived, Proposed.
 | D-002 | 2026-11-13 | Made | The vine latches the first tree its ray meets |
 | D-001 | 2026-11-13 | Made | Every tunable in one config resource |
 
+## D-026: Mute, a halfway marker, and one fragile test order (Made, 2026-11-16)
+
+From the Jamference feedback threads: players ask to turn sound off, and judges play many entries. So: M (or the speaker button left of pause) mutes the Master bus; clearing wave 5 (`rate_marker_wave`) adds "Halfway! Stop and rate here, or play on" to the banner; the hint line now lists M. The on-screen controls line already existed, so nothing else was added there. Gotcha: the new check failed 8 unrelated Sawbot and cat checks when it ran before the first arena test, and passes after the pause test. Some scene tests depend on run order; put new scene tests after the existing ones.
 ## D-025: ElevenLabs sound effects (Made, 2026-11-16)
 
 All 14 beeps are replaced by ElevenLabs Sound Effects (API, key in the `ELEVENLABS_API_KEY` user environment variable).
