@@ -1,0 +1,21 @@
+{"op": "pixel", "layer": "l1", "color": "steel-dark", "line": [25, 33, 14, 25], "size": 2, "mirrorX": 32}
+{"op": "pixel", "layer": "l1", "color": "steel-dark", "line": [24, 40, 11, 40], "size": 2, "mirrorX": 32}
+{"op": "pixel", "layer": "l1", "color": "steel-dark", "line": [25, 47, 14, 55], "size": 2, "mirrorX": 32}
+{"op": "pixel", "layer": "l1", "color": "steel-light", "rect": [12, 23, 3, 3], "filled": true, "mirrorX": 32}
+{"op": "pixel", "layer": "l1", "color": "steel-light", "rect": [9, 39, 3, 3], "filled": true, "mirrorX": 32}
+{"op": "pixel", "layer": "l1", "color": "steel-light", "rect": [12, 54, 3, 3], "filled": true, "mirrorX": 32}
+{"op": "pixel", "layer": "l1", "color": "rust-dark", "ellipse": [22, 26, 20, 30], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "rust-mid", "ellipse": [22, 26, 18, 27], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "rust-light", "ellipse": [24, 29, 6, 8], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "outline", "ellipse": [25, 38, 14, 16], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "enemy-red", "ellipse": [26, 39, 12, 14], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "gold", "rect": [28, 42, 3, 3], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "rust-light", "cells": [[29, 41], [28, 43]]}
+{"op": "pixel", "layer": "l1", "color": "steel-dark", "rect": [28, 7, 8, 24], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "steel-light", "rect": [29, 7, 2, 24], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "outline", "rect": [28, 18, 8, 1], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "outline", "rect": [28, 26, 8, 1], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "steel-dark", "rect": [26, 3, 12, 5], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "steel-light", "rect": [26, 3, 3, 5], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "enemy-red", "rect": [30, 3, 4, 3], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "outline", "outline": true}

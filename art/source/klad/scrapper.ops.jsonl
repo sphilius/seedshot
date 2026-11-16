@@ -1,0 +1,21 @@
+{"op": "pixel", "layer": "l1", "color": "steel-dark", "rect": [16, 32, 6, 20], "filled": true, "mirrorX": 32}
+{"op": "pixel", "layer": "l1", "color": "steel-light", "cells": [[16, 34], [17, 34], [18, 34], [19, 34], [16, 38], [17, 38], [18, 38], [19, 38], [16, 42], [17, 42], [18, 42], [19, 42], [16, 46], [17, 46], [18, 46], [19, 46]], "mirrorX": 32}
+{"op": "pixel", "layer": "l1", "color": "rust-dark", "rect": [27, 48, 10, 5], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "rust-dark", "ellipse": [21, 22, 22, 28], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "rust-mid", "ellipse": [21, 22, 20, 25], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "rust-light", "ellipse": [24, 26, 9, 7], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "steel-dark", "rect": [14, 16, 6, 18], "filled": true, "mirrorX": 32}
+{"op": "pixel", "layer": "l1", "color": "steel-light", "rect": [14, 16, 2, 18], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "steel-light", "rect": [44, 16, 2, 18], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "steel-dark", "rect": [20, 27, 3, 5], "filled": true, "mirrorX": 32}
+{"op": "pixel", "layer": "l1", "color": "enemy-red", "rect": [12, 5, 4, 12], "filled": true, "mirrorX": 32}
+{"op": "pixel", "layer": "l1", "color": "enemy-red", "rect": [18, 5, 4, 12], "filled": true, "mirrorX": 32}
+{"op": "pixel", "layer": "l1", "color": "enemy-red", "rect": [12, 13, 10, 4], "filled": true, "mirrorX": 32}
+{"op": "pixel", "layer": "l1", "color": "rust-light", "rect": [12, 5, 1, 9], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "rust-light", "rect": [42, 5, 1, 9], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "outline", "rect": [26, 25, 12, 7], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "enemy-red", "rect": [27, 26, 10, 5], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "gold", "rect": [28, 27, 3, 2], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "rust-dark", "rect": [26, 38, 12, 1], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "rust-dark", "rect": [26, 42, 12, 1], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "outline", "outline": true}

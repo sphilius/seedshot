@@ -186,12 +186,21 @@ extends Resource
 ## front of the bot, along the aim direction.
 @export var touch_reticle_distance_cells: float = 2.5
 
-@export_group("Placeholder art")
+@export_group("Art")
+## The sprites are 64 x 64 pixel art drawn with Klad (recipes in art/source/klad).
 ## Leave a texture empty to fall back to a plain coloured rectangle.
 @export var player_texture: Texture2D
 @export var scrapper_texture: Texture2D
 @export var sawbot_texture: Texture2D
 @export var spitter_texture: Texture2D
 @export var cat_texture: Texture2D
+## One floor slab, 48 x 48 (exactly one cell), repeated across the arena floor.
+## Leave empty for the plain floor colour.
+@export var floor_texture: Texture2D
+## How strongly the floor slab shows over the plain floor colour (0 = hidden,
+## 1 = full strength). Kept low so the floor stays quieter than the sprites.
+@export_range(0.0, 1.0) var floor_texture_strength: float = 0.35
 ## Drawn size of a sprite relative to one cell (1.0 = exactly one cell wide).
-@export var sprite_size_cells: float = 1.3
+## 64 / 48 = 1.3333 draws a 64 px sprite at its real size, so no pixel is
+## stretched or squeezed.
+@export var sprite_size_cells: float = 1.3333

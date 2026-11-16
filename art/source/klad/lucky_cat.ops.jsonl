@@ -1,0 +1,32 @@
+{"op": "pixel", "layer": "l1", "color": "cream", "rect": [16, 8, 10, 6], "filled": true, "mirrorX": 32}
+{"op": "pixel", "layer": "l1", "color": "cream", "rect": [17, 5, 7, 3], "filled": true, "mirrorX": 32}
+{"op": "pixel", "layer": "l1", "color": "cream", "rect": [18, 3, 4, 2], "filled": true, "mirrorX": 32}
+{"op": "pixel", "layer": "l1", "color": "rust-light", "rect": [19, 6, 4, 6], "filled": true, "mirrorX": 32}
+{"op": "pixel", "layer": "l1", "color": "steel-light", "ellipse": [19, 31, 28, 30], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "cream", "ellipse": [18, 30, 27, 29], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "cream", "ellipse": [17, 55, 12, 7], "filled": true, "mirrorX": 32}
+{"op": "pixel", "layer": "l1", "color": "steel-light", "ellipse": [14, 9, 36, 27], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "cream", "ellipse": [14, 8, 35, 26], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "teal", "rect": [21, 33, 22, 3], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "outline", "rect": [21, 36, 22, 1], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "outline", "ellipse": [25, 38, 14, 18], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "gold", "ellipse": [26, 39, 12, 16], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "rust-light", "rect": [31, 42, 2, 10], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "cream", "rect": [28, 40, 2, 3], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "gold", "ellipse": [30, 33, 5, 5], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "outline", "ellipse": [16, 44, 10, 9]}
+{"op": "pixel", "layer": "l1", "color": "cream", "ellipse": [17, 45, 8, 7], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "outline", "cells": [[22, 20], [23, 19], [24, 18], [25, 18], [26, 19], [27, 20]], "mirrorX": 32}
+{"op": "pixel", "layer": "l1", "color": "rust-light", "rect": [19, 24, 4, 2], "filled": true, "mirrorX": 32}
+{"op": "pixel", "layer": "l1", "color": "rust-mid", "cells": [[31, 23], [32, 23]]}
+{"op": "pixel", "layer": "l1", "color": "outline", "cells": [[31, 24], [32, 24], [29, 26], [30, 27], [31, 26], [32, 26], [33, 27], [34, 26]]}
+{"op": "pixel", "layer": "l1", "color": "steel-dark", "line": [15, 21, 19, 22], "mirrorX": 32}
+{"op": "pixel", "layer": "l1", "color": "steel-dark", "line": [15, 25, 19, 24], "mirrorX": 32}
+{"op": "pixel", "layer": "l1", "color": "outline", "rect": [45, 12, 1, 23], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "cream", "rect": [46, 15, 10, 20], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "outline", "ellipse": [44, 6, 14, 14], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "cream", "ellipse": [45, 7, 12, 12], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "steel-light", "rect": [54, 16, 2, 19], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "outline", "cells": [[49, 8], [49, 9], [49, 10], [52, 8], [52, 9], [52, 10]]}
+{"op": "pixel", "layer": "l1", "color": "rust-light", "ellipse": [48, 13, 6, 4], "filled": true}
+{"op": "pixel", "layer": "l1", "color": "outline", "outline": true}

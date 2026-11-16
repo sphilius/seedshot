@@ -31,6 +31,21 @@ Statuses: Made, Changed, Removed, Revisited, Parked, Archived, Proposed.
 | D-002 | 2026-11-13 | Made | The vine latches the first tree its ray meets |
 | D-001 | 2026-11-13 | Made | Every tunable in one config resource |
 
+## D-024: Floor slab, checked with texkit (Made, 2026-11-16)
+
+The arena floor now repeats one 48 px slab (`art/sprites/floor_tile.png`, drawn with Klad on a canvas that wraps). `texkit check` scored it PASS (seam 0.65, limit 1.5; lighting 0.004, limit 0.08). texkit only works on textures that repeat, so it was used for the floor and not for the sprites. The slab is drawn at 35% strength (`floor_texture_strength`) so the floor stays quieter than the machines.
+
+## D-023: Final art comes from Klad (Made, 2026-11-15, built 2026-11-16)
+
+Sasha chose Klad over SpriteCook, ChatGPT Images and the cleaned placeholders. Closes guidebook decision `d2-final-art-source`.
+
+- **Sprites:** gardener-bot (Sasha's test run, used as is), Scrapper, Sawbot, Spitter and the lucky cat. All 64 x 64, the 12 colours from `art/PROMPTS.md`, top-down with the front at the top (the cat is a front view).
+- **Recipes, not just pictures:** each sprite is a list of drawing steps in `art/source/klad/<name>.ops.jsonl`. `.\tools\klad_art.ps1` replays them into `art/sprites/`. Change a line, run the script, the sprite changes.
+- **No recipe for the gardener-bot here:** its steps live in Sasha's untracked `art/source/compare/klad-claude/` folder; only the finished PNG was copied.
+- **Sharp pixels:** the project's default texture filter is now Nearest, and `sprite_size_cells` is 1.3333 so a 64 px sprite is drawn at exactly 64 px. The cat is the exception: it is drawn smaller than its art, so it uses smooth scaling.
+- **Not done:** no animation frames. Every machine is still one still image that turns.
+- The Nano Banana placeholders stay in `art/placeholder/` for the before/after picture on the itch page.
+
 ## D-022: The end of a run (Made, 2026-11-15)
 
 - Clearing wave 10 leaves the arena exactly as it is, with a banner: how many trees are standing, and "Press R or tap here to plant again". DESIGN.md: "The final screen shows the arena as you left it."

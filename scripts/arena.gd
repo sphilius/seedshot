@@ -146,7 +146,14 @@ func _draw() -> void:
 	var arena_rect := Rect2(grid.origin, Vector2(grid.cols, grid.rows) * cell_px)
 	draw_rect(Rect2(Vector2.ZERO, get_viewport_rect().size), BACKDROP_COLOR)
 	draw_rect(arena_rect, WALL_COLOR)
-	draw_rect(arena_rect.grow(-cell_px), FLOOR_COLOR)  # grow(-n) shrinks each side by n
+	var floor_rect: Rect2 = arena_rect.grow(-cell_px)  # grow(-n) shrinks each side by n
+	draw_rect(floor_rect, FLOOR_COLOR)
+	if CONFIG.floor_texture != null:
+		# The slab is one cell big, so repeating it lines up with the grid. The
+		# third argument (true) means "repeat the texture", not "stretch it".
+		# The last argument is a tint: white with low alpha = a faint overlay.
+		texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+		draw_texture_rect(CONFIG.floor_texture, floor_rect, true, Color(1.0, 1.0, 1.0, CONFIG.floor_texture_strength))
 	for x: int in range(1, grid.cols):
 		var line_x: float = grid.origin.x + x * cell_px
 		draw_line(Vector2(line_x, arena_rect.position.y), Vector2(line_x, arena_rect.end.y), GRID_LINE_COLOR)

@@ -1,0 +1,12 @@
+{"op": "palette", "add": "#1b1f1d", "name": "outline"}
+{"op": "palette", "add": "#2f8f8a", "name": "teal"}
+{"op": "palette", "add": "#efe6c8", "name": "cream"}
+{"op": "palette", "add": "#2f6b3a", "name": "leaf-dark"}
+{"op": "palette", "add": "#7fc45a", "name": "leaf-light"}
+{"op": "palette", "add": "#e8b93a", "name": "gold"}
+{"op": "palette", "add": "#6b3a24", "name": "rust-dark"}
+{"op": "palette", "add": "#a65a2e", "name": "rust-mid"}
+{"op": "palette", "add": "#d08a4a", "name": "rust-light"}
+{"op": "palette", "add": "#4a5257", "name": "steel-dark"}
+{"op": "palette", "add": "#9aa5a8", "name": "steel-light"}
+{"op": "palette", "add": "#e0412f", "name": "enemy-red"}

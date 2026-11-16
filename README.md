@@ -63,5 +63,7 @@ On a fresh clone run `.\tools\godot.ps1 import` once first.
 | `scripts/health_pips.gd` | The hit-point squares on the HUD. |
 | `art/PROMPTS.md` | The art spec and the paste-ready prompts for the generator comparison. |
 | `art/source/` | Raw generated images (ignored by Godot). |
-| `art/placeholder/` | Cleaned transparent PNGs the game can load. |
+| `art/placeholder/` | The first placeholder sprites. No longer loaded; kept for the before/after picture. |
+| `art/sprites/` | The sprites the game loads. Rebuild them with `.\tools\klad_art.ps1`. |
+| `art/source/klad/` | The drawing recipe for each sprite (one step per line). |
 | `AI_LOG.md` | AI-use log for the itch page. |

@@ -26,6 +26,7 @@ func _ready() -> void:
 	_test_seal_guard()
 	_test_split_guard()
 	_test_input_actions_exist()
+	_test_art_is_the_right_size()
 
 	# Layer 2: the real arena scene, driven through its public methods. (Headless
 	# Godot drops simulated mouse/keyboard input, so we call fire() and try_vine()
@@ -124,6 +125,27 @@ func _wait_until(condition: Callable, max_seconds: float) -> bool:
 		await get_tree().physics_frame
 		frames_left -= 1
 	return condition.call()
+
+
+## Layer 3a: the Klad art. Every sprite must be 64 x 64 and the floor slab one
+## cell big, or the game would stretch pixels and the slab would not line up
+## with the grid. Reading the config here is fine; only WRITING to it is ignored.
+func _test_art_is_the_right_size() -> void:
+	var sprites: Dictionary[String, Texture2D] = {
+		"player": CONFIG.player_texture,
+		"scrapper": CONFIG.scrapper_texture,
+		"sawbot": CONFIG.sawbot_texture,
+		"spitter": CONFIG.spitter_texture,
+		"cat": CONFIG.cat_texture,
+	}
+	for sprite_name: String in sprites:
+		var texture: Texture2D = sprites[sprite_name]
+		_check(texture != null and texture.get_size() == Vector2(64.0, 64.0), "the %s sprite is 64 x 64" % sprite_name)
+	var slab: Texture2D = CONFIG.floor_texture
+	_check(slab != null and slab.get_size() == Vector2.ONE * CONFIG.cell_size, "the floor slab is exactly one cell big")
+	# 1.3333 x 48 is 63.998, not exactly 64, so allow a tenth of a pixel of slack.
+	# absf() gives the size of a number without its sign.
+	_check(absf(CONFIG.sprite_size_cells * CONFIG.cell_size - 64.0) < 0.1, "sprites are drawn at their real size")
 
 
 ## Every action name the scripts rely on must exist in Project Settings > Input Map.

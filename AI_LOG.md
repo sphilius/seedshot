@@ -10,6 +10,8 @@ One line per asset or system: tool, date, what it did. This feeds the itch page'
 | 2026-11-13 | Claude Code | Gray-box build (`scripts/`, `scenes/`, `config/`) | Wrote the arena, grid pathfinding (AStarGrid2D), player (move, aim, seed pod, vine zip), Scrapper, kill-to-tree, seal guard, generated beep sounds. |
 | 2026-11-13 | Claude Code | `tests/check.gd` | Wrote 60 headless checks covering each kickoff step. |
 | 2026-11-13 | Claude Code | Health and melee (`scripts/player.gd`, `scrapper.gd`, `health_pips.gd`) | Wrote player hit points, the Scrapper's telegraphed swing, the HUD pips and restart on defeat, with 24 more checks. |
+| 2026-11-16 | Klad (driven by Claude Code) | `art/sprites/*.png` (gardener-bot, Scrapper, Sawbot, Spitter, lucky cat, floor slab) | Drew the final 64 px pixel sprites and the 48 px floor slab from step-by-step recipes in `art/source/klad/`. Before/after: `art/placeholder/<name>.png` vs `art/sprites/<name>.png`. |
+| 2026-11-16 | texkit | `art/sprites/floor_tile.png` | Checked that the floor slab repeats without a visible seam (PASS, seam 0.65). |
 | 2026-11-15 | Claude Code | Hidden lucky cat, staged wave 1, end screen (`scripts/cat_shop.gd`, `arena.gd`) | Wrote the shuttered shop and its paired-pod reward, the one-at-a-time first wave, the bloom meter and the end-of-run banner, with 34 more checks. |
 | 2026-11-15 | Claude Code | Vine bind and waves 6 to 10 (`scripts/enemy.gd`, `player.gd`, `config/game_config.gd`) | Wrote the vine's yank-and-bind on machines and extended the wave lists to ten, with 18 more checks. |
 | 2026-11-15 | Claude Code | The Spitter (`scripts/spitter.gd`, `spit_shot.gd`) | Wrote the ranged enemy, its shot and the wave reshuffle, with 19 more checks. |

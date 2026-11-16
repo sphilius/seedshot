@@ -13,3 +13,6 @@ __pycache__/
 
 # The art cleaner's check sheet (regenerated on every run).
 art/source/_cleaned_preview.png
+
+# Klad's working folders: rebuilt from the .ops.jsonl recipes by tools\klad_art.ps1.
+art/source/klad/*.klad/
