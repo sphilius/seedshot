@@ -38,9 +38,12 @@ const CAT_SHOP_CELL: Vector2i = Vector2i(20, 0)
 const BODIES_MASK: int = 6
 
 ## Night colours: dark and cool, so the warm windows and glowing trees stand out.
-const BACKDROP_COLOR: Color = Color(0.03, 0.03, 0.05)
-const WALL_COLOR: Color = Color(0.10, 0.10, 0.14)
-const FLOOR_COLOR: Color = Color(0.15, 0.16, 0.21)
+const BACKDROP_COLOR: Color = Color(0.05, 0.05, 0.07)
+## These are the colours under FULL light. A CanvasModulate node (see _ready)
+## tints them, and everything else in the lot, darker and cooler while the block
+## is still mostly dark.
+const WALL_COLOR: Color = Color(0.19, 0.19, 0.22)
+const FLOOR_COLOR: Color = Color(0.29, 0.29, 0.31)
 const GRID_LINE_COLOR: Color = Color(0.0, 0.0, 0.0, 0.10)
 
 ## The pathfinding grid. Public so tests can inspect it.
@@ -69,11 +72,11 @@ var _vine_hint_done: bool = false
 
 ## The block's windows along the bottom wall. Public so tests can reach it.
 var windows: BlockWindows
-## True once the whole block has been lit (clearing `block_lit_wave`).
-var is_block_lit: bool = false
-## How many standing trees light every window. Starts as the config's number;
-## lighting the block lowers it to the forest as it stood at that moment.
-var _homes_for_full_block: int = 1
+## The highest wave cleared so far this run. It drives the windows and the
+## light: a restarted wave never takes light away. Public so tests can read it.
+var waves_cleared: int = 0
+## The node that tints the whole lot to match the light (see _ready).
+var _ambient: CanvasModulate
 ## The Block's painted lines on the side walls. Public so tests can reach it.
 var graffiti: Graffiti
 ## The hidden lucky cat's shop, in the top wall. Public so tests can reach it.
@@ -122,7 +125,14 @@ func _ready() -> void:
 	windows = BlockWindows.new()
 	windows.setup(Rect2(origin, arena_px), float(CONFIG.cell_size))
 	add_child(windows)
-	_homes_for_full_block = CONFIG.homes_for_full_block
+	# CanvasModulate multiplies the colour of everything drawn in this scene
+	# (floor, walls, sprites, trees) by one colour. The HUD is on its own
+	# CanvasLayer, so it is not tinted and stays readable. This is how the
+	# sprites are "recoloured" to match the light: one tint, updated in _process.
+	_ambient = CanvasModulate.new()
+	_ambient.color = CONFIG.ambient_dark
+	add_child(_ambient)
+	_update_light()
 
 	player = PLAYER_SCENE.instantiate()
 	# Seven's lamp: a warm pool of light that moves with the bot.
@@ -165,8 +175,11 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	# The corner label doubles as the score: every standing tree powers one home.
 	if waves.wave > 0:
-		_wave_label.text = "Wave %d / %d     Homes powered %d" % [waves.wave, waves.total_waves(), count_grown_trees()]
-	windows.set_lit(lit_windows_for(count_grown_trees()))
+		_wave_label.text = "Wave %d / %d    Homes lit %d / %d    Trees %d" % [
+			waves.wave, waves.total_waves(), windows.homes_lit(), windows.home_count(), count_grown_trees()]
+	# Glide the lot's tint toward what the current light calls for.
+	var wanted_tint: Color = CONFIG.ambient_dark.lerp(CONFIG.ambient_lit, light_level())
+	_ambient.color = _ambient.color.lerp(wanted_tint, minf(1.0, CONFIG.ambient_change_speed * delta))
 	# The last machines are still growing into trees when the end screen comes
 	# up, so keep its score current instead of freezing it at the first count.
 	if is_run_finished:
@@ -407,20 +420,31 @@ func _restart_current_wave() -> void:
 	waves.restart_wave()
 
 
-## How many windows `trees` standing trees light. Before the block is lit this
-## is one window per tree. After it, the forest that lit the block counts as
-## full, and fewer trees than that light a matching share of the windows.
-func lit_windows_for(trees: int) -> int:
+## How many windows are lit once `cleared` waves have been cleared. It climbs
+## evenly from `windows_lit_at_start` to every window after the last wave, so
+## after wave 8 of 10 the block is most of the way there, and wave 10 finishes it.
+func lit_windows_after(cleared: int) -> int:
 	var total: int = windows.window_count()
+	var share: float = float(cleared) / float(maxi(1, waves.total_waves()))  # 0.0 to 1.0
 	# roundi rounds to the nearest whole number and returns an int.
-	return clampi(roundi(float(total) * float(trees) / float(_homes_for_full_block)), 0, total)
+	return clampi(CONFIG.windows_lit_at_start + roundi(float(total - CONFIG.windows_lit_at_start) * share), 0, total)
 
 
-## The wave 8 moment: every window comes on at once. From here on, the forest
-## as it stands right now is what "fully lit" means.
-func light_the_block() -> void:
-	is_block_lit = true
-	_homes_for_full_block = clampi(count_grown_trees(), 1, windows.window_count())
+## How strongly lit windows shine once `cleared` waves have been cleared.
+func window_strength_after(cleared: int) -> float:
+	var share: float = float(cleared) / float(maxi(1, waves.total_waves()))
+	return lerpf(CONFIG.window_strength_at_start, 1.0, clampf(share, 0.0, 1.0))
+
+
+## How bright the lot is overall, 0.0 (dark block) to 1.0 (every window on at
+## full strength): the share of windows lit, times how strongly they shine.
+func light_level() -> float:
+	return float(windows.lit_count) / float(maxi(1, windows.window_count())) * windows.strength
+
+
+## Tells the windows what the waves cleared so far have earned.
+func _update_light() -> void:
+	windows.set_light(lit_windows_after(waves_cleared), window_strength_after(waves_cleared))
 
 
 ## Queues small lines to show one after another under the banner, replacing
@@ -492,8 +516,9 @@ func _on_spawn_requested(kind: StringName, wave_number: int) -> void:
 func _on_wave_cleared(number: int) -> void:
 	Sfx.play(&"wave_clear")
 	_show_banner(wave_cleared_text(number), CONFIG.wave_break_time)
-	if number == CONFIG.block_lit_wave:
-		light_the_block()
+	# More of the block comes on, and every lit window shines a little stronger.
+	waves_cleared = maxi(waves_cleared, number)
+	_update_light()
 	# The Block answers Helios: one more painted line on the walls.
 	graffiti.reveal_up_to(number)
 	_show_story_lines([])  # clear any Helios line still showing
@@ -505,14 +530,14 @@ func wave_cleared_text(number: int) -> String:
 	var text: String = "Wave %d cleared" % number
 	if number == CONFIG.rate_marker_wave:
 		text += "\nHalfway! Stop and rate here, or play on"
-	if number == CONFIG.block_lit_wave:
+	if number == waves.total_waves():
 		text += "\nThe whole block is lit"
 	return text
 
 
 ## The end screen's banner text: the headline and the final score.
 func end_banner_text() -> String:
-	return "%s\nHomes powered: %d    Press R or tap here to go again" % [CONFIG.end_headline, count_grown_trees()]
+	return "%s\nTrees standing: %d    Press R or tap here to go again" % [CONFIG.end_headline, count_grown_trees()]
 
 
 ## Signal handler: the last wave is cleared. Show the end screen over the forest.
@@ -620,3 +645,4 @@ func _on_tree_ready_to_solidify(tree: ForestTree) -> void:
 func _on_tree_felled(tree: ForestTree) -> void:
 	grid.set_solid(tree.cell, false)
 	_trees_by_cell.erase(tree.cell)
+	windows.flicker()  # the block feels it: one lit window drops dark for a moment

@@ -209,13 +209,21 @@ extends Resource
 @export var story_line_seconds: float = 4.5
 
 @export_group("Night and windows")
-## How many windows the block has, and so how many standing trees light all of
-## them: one tree, one home, one window.
-@export var homes_for_full_block: int = 40
-## Clearing this wave lights the whole block at once, however many trees stand.
-## After that, the forest as it stood at that moment counts as "fully lit", so
-## every tree lost from then on darkens windows. 0 switches the moment off.
-@export var block_lit_wave: int = 8
+## The homes along the bottom wall: one entry per home, saying how many windows
+## it has. Ten homes and 24 windows in all.
+@export var home_window_counts: Array[int] = [2, 3, 2, 3, 2, 2, 3, 2, 3, 2]
+## Windows already lit before any wave is cleared: the block's first two lamps.
+@export var windows_lit_at_start: int = 2
+## How strongly a lit window shines before any wave is cleared (0 to 1). It
+## climbs evenly to 1.0 by the last wave.
+@export_range(0.0, 1.0) var window_strength_at_start: float = 0.4
+## The colour everything in the lot is tinted by, from a dark block (first) to a
+## fully lit one (second). Sprites, floor and walls all shift between the two as
+## windows come on, so the art always matches the light.
+@export var ambient_dark: Color = Color(0.50, 0.56, 0.80)
+@export var ambient_lit: Color = Color(1.0, 0.96, 0.88)
+## How quickly the tint follows a change in light. Higher is snappier.
+@export var ambient_change_speed: float = 1.5
 ## The controls line at the bottom hides when this wave starts, leaving the
 ## bottom wall to the windows.
 @export var hint_hide_wave: int = 3

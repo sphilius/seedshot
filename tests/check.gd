@@ -770,7 +770,8 @@ func _test_wave_three_sends_faster_scrappers_and_a_sawbot() -> void:
 	await get_tree().process_frame
 	var label: String = (_arena.get_node("Hud/WaveLabel") as Label).text
 	_check(label.begins_with("Wave %d / %d" % [wave, _arena.waves.total_waves()]), "the HUD shows the wave number")
-	_check(label.ends_with("Homes powered %d" % _arena.count_grown_trees()), "and the score: one home powered per standing tree")
+	_check(label.contains("Homes lit"), "and how many homes are lit")
+	_check(label.ends_with("Trees %d" % _arena.count_grown_trees()), "and how many trees are standing")
 
 
 ## Waves: going down restarts the same wave, with the forest put back to how it
@@ -1080,38 +1081,66 @@ func _test_story_words() -> void:
 	_check(story.text == _arena.helios_line_for(1), "a later wave start skips the opening line")
 
 
-## Story step 2: one lit window per standing tree, the whole block lit after
-## the block-lit wave, glowing trees, and the controls line stepping aside.
+## Story step 2: homes with several windows, lit by waves cleared and shining
+## stronger each wave; the whole lot's tint follows the light; trees glow.
 func _test_windows_and_night() -> void:
 	await _fresh_arena()
 	var windows: BlockWindows = _arena.windows
-	var starters: int = Arena.TEST_TREE_CELLS.size()
-	await _wait_frames(3)  # the arena counts trees once per drawn frame, so give it a few
-	_check(windows.window_count() == CONFIG.homes_for_full_block, "the block has one window per home (%d)" % windows.window_count())
-	_check(windows.lit_count == starters, "the %d starter trees light %d windows" % [starters, starters])
+	var total: int = windows.window_count()
+	var last: int = _arena.waves.total_waves()
+	_check(total >= 20 and total <= 25, "the block has a fixed 20 to 25 windows (%d)" % total)
+	_check(windows.home_count() < total, "homes have more than one window (%d homes)" % windows.home_count())
 
-	# First light: one more tree, one more window. Blackout: fell it, one fewer.
+	# Before any wave: the first lamps only, shining faintly.
+	_check(windows.lit_count == CONFIG.windows_lit_at_start, "the block starts with %d windows lit" % CONFIG.windows_lit_at_start)
+	_check(is_equal_approx(windows.strength, CONFIG.window_strength_at_start), "shining at the starting strength")
+	var dark_level: float = _arena.light_level()
+
+	# The schedule: more windows and more strength with every wave cleared.
+	var partly: int = _arena.lit_windows_after(last - 2)
+	_check(partly > total / 2 and partly < total, "two waves from the end the block is mostly but not fully lit (%d of %d)" % [partly, total])
+	_check(_arena.lit_windows_after(last) == total, "the last wave lights every window")
+	_check(is_equal_approx(_arena.window_strength_after(last), 1.0), "at full strength")
+	var climbing: bool = true
+	for cleared: int in range(1, last + 1):
+		if _arena.lit_windows_after(cleared) < _arena.lit_windows_after(cleared - 1):
+			climbing = false
+		if _arena.window_strength_after(cleared) <= _arena.window_strength_after(cleared - 1):
+			climbing = false
+	_check(climbing, "each wave cleared never dims the block and always strengthens the light")
+	_check(_arena.wave_cleared_text(last).contains("lit"), "the last wave's banner says the block is lit")
+	_check(not _arena.wave_cleared_text(last - 2).contains("lit"), "an earlier wave's banner does not")
+
+	# Clearing a wave (here: pretending wave 4 was cleared) updates the windows.
+	_arena.waves_cleared = 4
+	_arena._update_light()
+	_check(windows.lit_count == _arena.lit_windows_after(4), "clearing waves lights more windows")
+	_check(windows.homes_lit() >= 2 and windows.homes_lit() <= windows.home_count(), "spread over several homes (%d)" % windows.homes_lit())
+	_check(_arena.light_level() > dark_level, "and the lot's light level rises")
+
+	# The whole lot is tinted to match: it moves from the dark tint toward the lit one.
+	var ambient: CanvasModulate = _arena._ambient
+	_check(ambient.color.is_equal_approx(CONFIG.ambient_dark) or ambient.color.r >= CONFIG.ambient_dark.r, "the lot starts at the dark tint")
+	var tint_before: float = ambient.color.r
+	await _wait_frames(40)
+	_check(ambient.color.r > tint_before, "more light warms and brightens every sprite's tint")
+
+	# Trees glow; saplings do not; Seven carries a lamp.
 	var tree: ForestTree = _arena.spawn_tree(Vector2i(4, 3), true)
-	await _wait_frames(3)
-	_check(windows.lit_count == starters + 1, "a new tree lights one more window")
 	_check(tree.has_node(Glow.NODE_NAME), "a grown tree glows")
 	var sapling: ForestTree = _arena.spawn_tree(Vector2i(4, 11), false)
 	_check(not sapling.has_node(Glow.NODE_NAME), "a sapling does not glow yet")
 	_check(_arena.player.has_node(Glow.NODE_NAME), "Seven carries a lamp")
-	tree.take_damage(99)
-	await _wait_frames(3)
-	_check(windows.lit_count == starters, "a felled tree darkens its window")
 
-	# The block-lit moment: every window on, whatever the forest's size.
-	_check(_arena.wave_cleared_text(CONFIG.block_lit_wave).contains("lit"), "the block-lit wave's banner says so")
-	_check(not _arena.is_block_lit, "the block is not lit before that wave")
-	_arena.light_the_block()
-	await _wait_frames(3)
-	_check(_arena.is_block_lit and windows.lit_count == windows.window_count(), "lighting the block turns every window on")
-	# From here Helios can take it back: one tree lost dims part of the block.
-	_arena.tree_at(Arena.TEST_TREE_CELLS[0]).take_damage(99)
-	await _wait_frames(3)
-	_check(windows.lit_count < windows.window_count(), "after that, losing a tree darkens windows again")
+	# Blackout: felling a tree makes one lit window flicker, without changing the count.
+	var lit_before: int = windows.lit_count
+	tree.take_damage(99)
+	var flickering: int = 0
+	for i: int in total:
+		if windows.is_flickering(i):
+			flickering += 1
+	_check(flickering == 1, "a felled tree makes one window flicker dark")
+	_check(windows.lit_count == lit_before, "but the number of lit windows is unchanged")
 	_check(not windows.next_block_lit, "the next block stays dark until the run is won")
 
 	# The controls line makes way for the windows.
@@ -1120,7 +1149,6 @@ func _test_windows_and_night() -> void:
 	_check(hint.visible, "the controls line shows before wave %d" % CONFIG.hint_hide_wave)
 	_arena.waves.start_wave(CONFIG.hint_hide_wave)
 	_check(not hint.visible, "and hides from wave %d on" % CONFIG.hint_hide_wave)
-
 
 ## The end of a run: clearing the last wave leaves the arena as it is and says so.
 func _test_clearing_the_last_wave_ends_the_run() -> void:
@@ -1139,7 +1167,9 @@ func _test_clearing_the_last_wave_ends_the_run() -> void:
 	await _wait_frames(int(CONFIG.sapling_time * 60.0) + 30)
 	var banner := _arena.get_node("Hud/Banner") as Label
 	_check(banner.visible and banner.text.begins_with(CONFIG.end_headline), "the end banner is up with the end headline")
-	_check(banner.text.contains("Homes powered: %d" % _arena.count_grown_trees()), "it counts the homes powered")
+	_check(banner.text.contains("Trees standing: %d" % _arena.count_grown_trees()), "it counts the trees left standing")
+	_check(_arena.windows.lit_count == _arena.windows.window_count(), "every window of the block is lit")
+	_check(is_equal_approx(_arena.windows.strength, 1.0), "at full strength")
 	var last_word := _arena.get_node("Hud/StoryLine") as Label
 	_check(last_word.visible and last_word.text.contains(CONFIG.helios_end_line), "Helios's last line stays under it")
 	_check(_arena.graffiti.revealed_count == CONFIG.graffiti_lines.size(), "every graffiti line is on the walls")

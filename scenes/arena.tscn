@@ -37,7 +37,7 @@ text = "WASD move   |   Left click: seed pod   |   Right click: zip to a tree, o
 modulate = Color(1, 1, 1, 0.85)
 offset_left = 28.0
 offset_top = 11.0
-offset_right = 400.0
+offset_right = 520.0
 offset_bottom = 37.0
 text = "Wave 1 / 5"
 
