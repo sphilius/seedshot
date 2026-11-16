@@ -27,6 +27,7 @@ func _ready() -> void:
 	_test_split_guard()
 	_test_input_actions_exist()
 	_test_art_is_the_right_size()
+	_test_every_sound_is_a_real_file()
 
 	# Layer 2: the real arena scene, driven through its public methods. (Headless
 	# Godot drops simulated mouse/keyboard input, so we call fire() and try_vine()
@@ -146,6 +147,16 @@ func _test_art_is_the_right_size() -> void:
 	# 1.3333 x 48 is 63.998, not exactly 64, so allow a tenth of a pixel of slack.
 	# absf() gives the size of a number without its sign.
 	_check(absf(CONFIG.sprite_size_cells * CONFIG.cell_size - 64.0) < 0.1, "sprites are drawn at their real size")
+
+
+## Layer 3b: the ElevenLabs sounds. Every sound name the game plays must come
+## from a real file in audio/sfx, not from a generated beep. AudioStreamMP3 is
+## the type Godot gives an imported .mp3; the beeps are AudioStreamWAV.
+func _test_every_sound_is_a_real_file() -> void:
+	var names: Array[StringName] = [&"unlock", &"fire", &"thunk", &"enemy_down", &"zip", &"grow",
+		&"windup", &"hurt", &"player_down", &"saw", &"cat", &"bind", &"spit", &"wave_clear"]
+	for sound_name: StringName in names:
+		_check(Sfx.stream_for(sound_name) is AudioStreamMP3, "the '%s' sound is a real file" % sound_name)
 
 
 ## Every action name the scripts rely on must exist in Project Settings > Input Map.

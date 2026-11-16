@@ -90,6 +90,12 @@ func play(sound_name: StringName) -> void:
 	player.play()
 
 
+## Returns the clip a sound name will play (a beep or a real file), or null if
+## the name is unknown. Used by the tests to prove the real files were picked up.
+func stream_for(sound_name: StringName) -> AudioStream:
+	return _streams.get(sound_name)
+
+
 ## Builds a short sine-wave beep that slides from one pitch to another and fades out.
 ## Returns it as an AudioStreamWAV: raw 16-bit mono samples held in memory.
 func _make_blip(start_hz: float, end_hz: float, seconds: float, volume: float) -> AudioStreamWAV:
