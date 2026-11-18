@@ -233,3 +233,16 @@ From the kickoff. `config/game_config.tres` holds every speed, cooldown and size
   on its own. Spread-out homes (the first try) left more bare wall than homes.
 - The concept's dark and lit strips do not line up (the lit one is 7 px taller), so the lit strip is not used.
 - PowerShell gotcha: variable names ignore case, so `$TILE` and `$tile` are the same variable.
+
+## D-031 (s14): sunroot sprites, and light from sources
+
+- **Trees** are sprites now (`tools/tree_sprites.py`, from `04_sunroot_f`): sapling, grown, and a "cut" picture a
+  grown tree shows once a Sawbot has bitten it (it replaces the shrinking circle). Klad's `pixelize` kept the
+  painted leaves as speckle, so the script does its own shrink: keep the big patches, fill holes, mode filter,
+  snap to the palette without teal, 1-pixel outline. A "big" tree is built too but not used yet.
+- **Lighting follows `06_light_progression_h`:** the night tint now follows `light_level ^ ambient_curve` (2.5), so
+  it barely moves until the last waves; the middle of the run is lit by pools: bigger window spills, the trees, and
+  **lantern strings** (`scripts/lanterns.gd`) that go up after waves 5, 8 and 10.
+- **Light boost:** the night tint dims lights too, so pools are drawn with colour values above 1. The boost fades
+  to 1.0 as the lot reaches full light; without that, the last wave turned the bottom of the screen into glare.
+- Graffiti line 1 is "KEEP THE LIGHTS ON!" (Sasha), matching the chosen key art `07_key_art_g`.
