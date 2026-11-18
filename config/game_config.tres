@@ -6,7 +6,7 @@
 [ext_resource type="Texture2D" path="res://art/sprites/sawbot.png" id="4_sawbot"]
 [ext_resource type="Texture2D" path="res://art/sprites/spitter.png" id="5_spitter"]
 [ext_resource type="Texture2D" path="res://art/sprites/lucky_cat.png" id="6_cat"]
-[ext_resource type="Texture2D" path="res://art/sprites/floor_tile.png" id="7_floor"]
+[ext_resource type="Texture2D" path="res://art/sprites/floor_tiles.png" id="7_floor"]
 
 [resource]
 script = ExtResource("1_config")
@@ -15,4 +15,4 @@ scrapper_texture = ExtResource("3_scrapper")
 sawbot_texture = ExtResource("4_sawbot")
 spitter_texture = ExtResource("5_spitter")
 cat_texture = ExtResource("6_cat")
-floor_texture = ExtResource("7_floor")
+floor_tiles = ExtResource("7_floor")

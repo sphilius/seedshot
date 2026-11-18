@@ -262,12 +262,19 @@ extends Resource
 @export var sawbot_texture: Texture2D
 @export var spitter_texture: Texture2D
 @export var cat_texture: Texture2D
-## One floor slab, 48 x 48 (exactly one cell), repeated across the arena floor.
-## Leave empty for the plain floor colour.
-@export var floor_texture: Texture2D
-## How strongly the floor slab shows over the plain floor colour (0 = hidden,
-## 1 = full strength). Kept low so the floor stays quieter than the sprites.
-@export_range(0.0, 1.0) var floor_texture_strength: float = 0.35
+## The floor slabs: one row of 48 x 48 tiles (one grid cell each), built from
+## the concept floor sheet by tools/floor_tiles.ps1. Leave empty for the plain
+## floor colour.
+@export var floor_tiles: Texture2D
+## How many tiles at the START of that row are plain slabs. Most cells get one
+## of these; the tiles after them (crater, moss, puddle, oil, grate, hatch)
+## are rarer.
+@export var floor_plain_count: int = 3
+## Share of cells that get a detail tile instead of a plain slab (0.07 = about 1 in 14).
+@export_range(0.0, 1.0) var floor_detail_chance: float = 0.07
+## Colour the floor tiles are multiplied by. White = as drawn; darker = a
+## quieter floor, so the sprites stand out more.
+@export var floor_tint: Color = Color(0.85, 0.85, 0.88)
 ## Drawn size of a sprite relative to one cell (1.0 = exactly one cell wide).
 ## 64 / 48 = 1.3333 draws a 64 px sprite at its real size, so no pixel is
 ## stretched or squeezed.
