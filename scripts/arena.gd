@@ -186,6 +186,11 @@ func _process(delta: float) -> void:
 			waves.wave, waves.total_waves(), windows.homes_lit(), windows.home_count(), count_grown_trees()]
 	# Glide the lot's tint toward what the current light calls for.
 	var wanted_tint: Color = ambient_tint_for(light_level())
+	# Lights shine brighter than white while the lot is dark, and normally once
+	# it is fully lit; otherwise the end of the run turns into a yellow glare.
+	var boost: float = light_boost_for(light_level())
+	windows.light_boost = boost
+	lanterns.light_boost = boost
 	_ambient.color = _ambient.color.lerp(wanted_tint, minf(1.0, CONFIG.ambient_change_speed * delta))
 	# The last machines are still growing into trees when the end screen comes
 	# up, so keep its score current instead of freezing it at the first count.
@@ -484,6 +489,13 @@ func light_level() -> float:
 ## brightening everything at once.
 func ambient_tint_for(level: float) -> Color:
 	return CONFIG.ambient_dark.lerp(CONFIG.ambient_lit, pow(clampf(level, 0.0, 1.0), CONFIG.ambient_curve))
+
+
+## How much the lights are boosted at light level `level`: the config's
+## light_boost while the lot is dark, falling to 1.0 as the tint reaches lit.
+func light_boost_for(level: float) -> float:
+	var lit_share: float = pow(clampf(level, 0.0, 1.0), CONFIG.ambient_curve)
+	return lerpf(CONFIG.light_boost, 1.0, lit_share)
 
 
 ## Tells the windows and lanterns what the waves cleared so far have earned.

@@ -1164,6 +1164,8 @@ func _test_windows_and_night() -> void:
 	_check(middle.r - CONFIG.ambient_dark.r < (CONFIG.ambient_lit.r - CONFIG.ambient_dark.r) * 0.3,
 		"halfway, the lot is still mostly dark (light comes from separate pools)")
 	_check(_arena.ambient_tint_for(1.0).is_equal_approx(CONFIG.ambient_lit), "the fully lit block gets the full warm tint")
+	_check(_arena.light_boost_for(0.0) > 1.0 and is_equal_approx(_arena.light_boost_for(1.0), 1.0),
+		"lights shine through the dark, and are not boosted once the lot is lit")
 	# Lantern strings go up after the listed waves, one at a time, and never come down.
 	_check(Lanterns.strings_after(0) == 0, "no lantern strings at the start")
 	var first_string_wave: int = CONFIG.lantern_string_waves[0]

@@ -19,15 +19,21 @@ extends Node2D
 
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
 
-## Wire colour (dark, so it reads as a thin line against the floor).
-const WIRE_COLOR: Color = Color(0.10, 0.10, 0.10, 0.8)
-## Lantern body colour when fully lit.
-const LANTERN_COLOR: Color = Color(1.0, 0.80, 0.45)
+## Wire colour: a pale line, so it shows against the dark floor.
+const WIRE_COLOR: Color = Color(0.55, 0.50, 0.42, 0.9)
+## Lantern body colour when fully lit. Above 1 on purpose: it is a light, so it
+## must stay bright under the night tint (see light_boost in the config).
+const LANTERN_COLOR: Color = Color(2.2, 1.7, 0.9)
+## Colour of the thin frame around each lantern.
+const FRAME_COLOR: Color = Color(0.10, 0.08, 0.06)
 ## Lantern size, in pixels.
-const LANTERN_SIZE: Vector2 = Vector2(6.0, 8.0)
+const LANTERN_SIZE: Vector2 = Vector2(8.0, 10.0)
 ## How much a string's brightness rises per second while it fades in (2 = half a second).
 const FADE_SPEED: float = 2.0
 
+## How much brighter than normal the lanterns' light is drawn. The arena sets it
+## every frame: high while the lot is dark, 1.0 once the lot is fully lit.
+var light_boost: float = 1.0
 ## How many strings are up right now. Public so the tests can read it.
 var strings_up: int = 0
 
@@ -98,9 +104,10 @@ func _process(delta: float) -> void:
 		var target: float = 1.0 if s < strings_up else 0.0
 		if _brightness[s] != target:
 			_brightness[s] = move_toward(_brightness[s], target, FADE_SPEED * delta)
-			for glow: Sprite2D in _glows[s]:
-				glow.modulate.a = _brightness[s] * CONFIG.lantern_glow_color.a
 			changed = true
+		# Each pool of light follows its string's fade, times the light boost.
+		for glow: Sprite2D in _glows[s]:
+			glow.modulate = Color(CONFIG.lantern_glow_color * light_boost, _brightness[s] * CONFIG.lantern_glow_color.a)
 	if changed:
 		queue_redraw()
 
@@ -115,9 +122,9 @@ func _draw() -> void:
 		var wire := PackedVector2Array()
 		for i: int in 25:
 			wire.append(point_on_string(s, float(i) / 24.0))
-		draw_polyline(wire, Color(WIRE_COLOR, WIRE_COLOR.a * shown), 1.0)
+		draw_polyline(wire, Color(WIRE_COLOR, WIRE_COLOR.a * shown), 2.0)
 		# The lanterns hang just under the wire, centred on their points.
 		for point: Vector2 in _lantern_points[s]:
 			var body := Rect2(point - Vector2(LANTERN_SIZE.x / 2.0, 1.0), LANTERN_SIZE)
-			draw_rect(body.grow(1.0), Color(WIRE_COLOR, shown))
+			draw_rect(body.grow(1.0), Color(FRAME_COLOR, shown))
 			draw_rect(body, Color(LANTERN_COLOR, shown))

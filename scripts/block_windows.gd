@@ -72,6 +72,9 @@ const FAR_LIT_COLOR: Color = Color(1.00, 0.84, 0.50)
 var lit_count: int = 0
 ## How strongly a lit window shines, 0.0 to 1.0. Public so tests can read it.
 var strength: float = 0.0
+## How much brighter than normal the pools of light are drawn. The arena sets it
+## every frame: high while the lot is dark, 1.0 once the lot is fully lit.
+var light_boost: float = 1.0
 ## True once the next block has been told to light. Public so tests can read it.
 var next_block_lit: bool = false
 
@@ -216,8 +219,11 @@ func _process(delta: float) -> void:
 		if _brightness[i] != target:
 			_brightness[i] = move_toward(_brightness[i], target, step)
 			# The pool of light in front of the window follows its brightness.
-			_spills[i].modulate.a = _brightness[i] * CONFIG.window_spill_strength
 			changed = true
+	# Every pool of light follows its window's brightness, times the light boost
+	# (colour values above 1 let it shine through the night tint).
+	for i: int in _spills.size():
+		_spills[i].modulate = Color(LIT_COLOR * light_boost, _brightness[i] * CONFIG.window_spill_strength)
 	if next_block_lit:
 		_next_block_time += delta
 		# How many distant windows have been switched on by now.

@@ -236,6 +236,10 @@ extends Resource
 ## strength at full brightness (0 to 1).
 @export var window_spill_radius_cells: float = 2.4
 @export_range(0.0, 1.0) var window_spill_strength: float = 0.45
+## How much brighter than its window the pool of light is. The whole lot is
+## darkened by the night tint, lights included; values above 1 make a light
+## shine through that darkness instead of being dimmed with everything else.
+@export var light_boost: float = 2.2
 ## Lantern strings strung across the lot. One string goes up after each wave in
 ## this list is cleared (so three strings by the end). The first hangs nearest
 ## the homes, the next ones further up the lot.
@@ -250,7 +254,7 @@ extends Resource
 ## Each lantern's little pool of light: reach in cells, and colour (alpha =
 ## strength).
 @export var lantern_glow_radius_cells: float = 1.1
-@export var lantern_glow_color: Color = Color(1.0, 0.72, 0.35, 0.35)
+@export var lantern_glow_color: Color = Color(1.0, 0.72, 0.35, 0.40)
 ## How quickly the tint follows a change in light. Higher is snappier.
 @export var ambient_change_speed: float = 1.5
 ## The controls line at the bottom hides when this wave starts, leaving the
