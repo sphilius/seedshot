@@ -105,6 +105,14 @@ func _process(_delta: float) -> void:
 ## so (0, 0) is the centre of the cell.
 func _draw() -> void:
 	var cell_px: float = float(CONFIG.cell_size)
+	var picture: Texture2D = current_texture()
+	if picture != null:
+		# Drawn at the same size as every other sprite (64 px), centred on the cell.
+		var size: float = CONFIG.sprite_size_cells * cell_px
+		draw_texture_rect(picture, Rect2(-size / 2.0, -size / 2.0, size, size), false)
+		_draw_vine_hint(cell_px)
+		return
+	# No pictures in the config: the old shapes (a sprout, or a circle on a square).
 	if stage == Stage.SAPLING:
 		draw_line(Vector2(0.0, cell_px * 0.2), Vector2(0.0, -cell_px * 0.05), SAPLING_COLOR, 3.0)
 		draw_circle(Vector2(-cell_px * 0.08, -cell_px * 0.1), cell_px * 0.09, SAPLING_COLOR)
@@ -116,12 +124,28 @@ func _draw() -> void:
 		# HP falls, so you can see at a glance which trees a Sawbot has bitten.
 		var health: float = clampf(float(hp) / float(CONFIG.tree_hp), 0.0, 1.0)
 		draw_circle(Vector2.ZERO, cell_px * 0.36 * lerpf(0.45, 1.0, health), CANOPY_COLOR)
-		if show_vine_hint:
-			# A ring that grows and fades once a second. fmod(x, 1.0) is the part
-			# of x after the decimal point, so `beat` runs 0 -> 1 over and over.
-			var beat: float = fmod(Time.get_ticks_msec() / 1000.0, 1.0)
-			var ring := Color(SAPLING_COLOR, 1.0 - beat)  # same colour, fading out
-			draw_arc(Vector2.ZERO, cell_px * lerpf(0.45, 0.95, beat), 0.0, TAU, 40, ring, 3.0)
+		_draw_vine_hint(cell_px)
+
+
+## The picture this tree shows right now: sapling, grown, or cut (a grown tree
+## that has lost any HP, so you can see at a glance which trees a Sawbot has
+## bitten). Null when the config has no tree pictures. Public for the tests.
+func current_texture() -> Texture2D:
+	if stage == Stage.SAPLING:
+		return CONFIG.tree_sapling_texture
+	if hp < CONFIG.tree_hp:
+		return CONFIG.tree_cut_texture
+	return CONFIG.tree_grown_texture
+
+
+## While show_vine_hint is on, a ring that grows and fades once a second.
+func _draw_vine_hint(cell_px: float) -> void:
+	if not show_vine_hint:
+		return
+	# fmod(x, 1.0) is the part of x after the decimal point, so `beat` runs 0 -> 1 over and over.
+	var beat: float = fmod(Time.get_ticks_msec() / 1000.0, 1.0)
+	var ring := Color(SAPLING_COLOR, 1.0 - beat)  # same colour, fading out
+	draw_arc(Vector2.ZERO, cell_px * lerpf(0.45, 0.95, beat), 0.0, TAU, 40, ring, 3.0)
 
 
 ## Waits `seconds`, then asks the arena whether this sapling may turn solid.

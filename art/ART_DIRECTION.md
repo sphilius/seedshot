@@ -18,6 +18,10 @@ view; their designs don't.
 | Homes and side wall | `03_wall_and_homes_b` | Dark strip, lit strip and the side wall. |
 | Seven (the gardener bot) | the robot in `07_key_art_b` | Cream dome head with a teal stripe and two small dark rectangular eyes; teal barrel body with a cream chest patch and a cream band at the waist; round teal shoulder joints; short arms; **small stumpy legs** (no tracks, no wheels). Holds a glowing green seedling. |
 | Helios on the key art | the far-off tower with a cold white sign | Far away, but looming over the block. |
+| Trees | `04_sunroot_f` | Built into the game by `tools/tree_sprites.py` (sapling, grown, cut, big). |
+| Light stages | `06_light_progression_h` | The middle stage is darker because fewer lights are on, not because of a tint. |
+| Key art (itch banner) | `07_key_art_g` | Sasha's pick; `07_key_art_k` is the close-up alternative. |
+| Graffiti line 1 | "KEEP THE LIGHTS ON!" | Replaces "LIGHTS ON" in the game and on the key art. |
 
 ## Open (round 2 prompts)
 

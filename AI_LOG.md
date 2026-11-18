@@ -25,3 +25,4 @@ One line per asset or system: tool, date, what it did. This feeds the itch page'
 | 2026-11-16 | Claude Code | Night look and windows (`scripts/glow.gd`, `block_windows.gd`, `arena.gd`, `forest_tree.gd`) | Wrote the dark palette, tree and lamp glows, the block's windows, the wave 8 block-lit moment and the next-block ending, with 15 more checks. |
 - Floor tiles (s14): 9 slabs pixelized by Klad from Sasha's Gemini concept sheet 02_floor_sheet_final (tools/floor_tiles.ps1), snapped to the game palette plus two floor-only steel steps.
 - Home roofs (s14): six roofs pixelized by Klad from Sasha's Gemini concept 03_wall_and_homes_b (tools/home_roofs.ps1), in narrow and wide versions; the game draws the front walls and windows.
+- Tree sprites (s14): sapling, grown, cut and big, cut out of Sasha's Gemini concept 04_sunroot_f and shrunk to 64 px by tools/tree_sprites.py (palette snap, speckle filter, outline).

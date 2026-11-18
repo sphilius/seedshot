@@ -191,7 +191,7 @@ extends Resource
 ]
 ## What the Block paints on the walls when each wave is cleared. Entry 0 is wave 1.
 @export var graffiti_lines: Array[String] = [
-	"LIGHTS ON",
+	"KEEP THE LIGHTS ON!",
 	"NOT YOURS",
 	"THE SUN IS FREE",
 	"GUARD THE TREES",
@@ -266,6 +266,12 @@ extends Resource
 @export var sawbot_texture: Texture2D
 @export var spitter_texture: Texture2D
 @export var cat_texture: Texture2D
+## The sunroot tree, built from the concept art by tools/tree_sprites.py. A
+## sapling, a grown tree, and the "cut" look a grown tree takes once a Sawbot
+## has bitten it. Leave empty for the old circle drawing.
+@export var tree_sapling_texture: Texture2D
+@export var tree_grown_texture: Texture2D
+@export var tree_cut_texture: Texture2D
 ## The floor slabs: one row of 48 x 48 tiles (one grid cell each), built from
 ## the concept floor sheet by tools/floor_tiles.ps1. Leave empty for the plain
 ## floor colour.

@@ -93,6 +93,7 @@ func _ready() -> void:
 	await _test_story_words()
 	# Layer 2j: the night look and the windows (STORY.md step 2).
 	await _test_windows_and_night()
+	await _test_tree_pictures()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -1283,3 +1284,23 @@ func _test_seal_guard() -> void:
 	_check(not grid.would_seal(Vector2i(6, 5), left, right), "an unrelated cell would not seal")
 	_check(not grid.is_solid(Vector2i(4, 3)), "would_seal leaves the grid unchanged")
 	_check(grid.has_path(left, right), "still connected after asking")
+
+
+## The sunroot pictures: all 64 x 64, and a tree shows the right one for its
+## state (sapling, grown, then cut once it has been damaged).
+func _test_tree_pictures() -> void:
+	var pictures: Array[Texture2D] = [CONFIG.tree_sapling_texture, CONFIG.tree_grown_texture, CONFIG.tree_cut_texture]
+	var all_sized: bool = true
+	for picture: Texture2D in pictures:
+		all_sized = all_sized and picture != null and picture.get_size() == Vector2(64.0, 64.0)
+	_check(all_sized, "the three tree pictures are 64 x 64")
+	await _fresh_arena()
+	var tree: ForestTree = _arena.spawn_tree(Vector2i(5, 5), false)
+	_check(tree != null and tree.current_texture() == CONFIG.tree_sapling_texture, "a new tree shows the sapling picture")
+	if tree == null:
+		return
+	tree.solidify()
+	_check(tree.current_texture() == CONFIG.tree_grown_texture, "a grown tree shows the grown picture")
+	tree.take_damage(1)
+	if is_instance_valid(tree) and tree.hp > 0:
+		_check(tree.current_texture() == CONFIG.tree_cut_texture, "a bitten tree shows the cut picture")
