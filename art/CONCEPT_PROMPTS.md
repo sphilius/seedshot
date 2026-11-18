@@ -174,3 +174,74 @@ lanterns, a little pink neon sign. On a wall in pink spray paint: "LIGHTS ON".
 **Taking from it:** the itch page banner and cover.
 **Watch for:** misspelled sign text; a robot that does not match the game's (teal body, cream trim, seen in the game
 from above).
+
+---
+
+# Round 2 (after Sasha's picks, see `ART_DIRECTION.md`)
+
+Same routine: paste the **Style block** above, then the prompt, and attach the pictures named under "Attach". Save
+results to the same folders with the next free letter.
+
+## 4R. Sunroot trees, high top-down  →  `04_sunroot/04R_sunroot_a.png`
+
+Aspect ratio 16:9. **Attach:** `04_sunroot_d.png` (design), `04_sunroot_a.png` (glow), `04_sunroot_b.png` (view).
+
+```
+Aspect ratio 16:9. A reference sheet on a plain dark blue-grey background: four growth stages of the same tree in a
+row, evenly spaced, all at the same scale.
+View: high top-down game view, like the third attached picture. The camera is almost straight overhead. You see
+mostly the top of each tree's round crown, with only a sliver of the trunk and roots showing at the bottom edge.
+Design: like the first attached picture. Glow: soft and gentle, like the second attached picture, a faint green halo
+on the ground, never a hard bright ring.
+1. Sapling: a small scrapped robot lying on its side, its shell split open, a bright green two-leaf shoot growing out
+of the crack in its back.
+2. Grown tree: a round crown of luminous green leaves with thin glowing gold veins, the robot wreck still caught in
+its roots at the base.
+3. Cut tree: the same tree, almost sawn in half. The canopy has lost half its leaves on one side, and through that
+gap you can see a deep saw cut going most of the way through the trunk. The tree still stands in one piece, leaning
+slightly away from the cut. Nothing floats, and no stump sits in front of the tree. Its glow is weak and patchy.
+4. Big tree: larger and brighter, gold tips on the leaves, a thick black power cable running out from its roots.
+```
+
+**Watch for:** side views (the most likely failure); the cut stage drawn as a floating top or a separate stump.
+
+## 6R. The lot coming to light  →  `06_light_progression/06R_light_progression_a.png`
+
+Aspect ratio 21:9, or 16:9. **Attach:** `06_light_progression_c.png` (layout), `06_light_progression_d.png` (first
+and last stage), `06_light_progression_a.png` (last stage).
+
+```
+Aspect ratio 21:9. Three panels side by side of the same back lot at three moments, seen in high top-down view. The
+layout is exactly the first attached picture's in all three panels: a concrete lot, homes along the bottom edge.
+Change only the lights between panels, never the layout and never a colour filter over the whole picture.
+Panel 1: like the first panel of the second attached picture. Nearly black, deep charcoal blue. Every window is dark
+except two faint ones in one home. Three small trees glow very dimly. Most of the lot is in shadow.
+Panel 2: half the homes have warm amber windows; the other half stay fully dark. Light pools only in front of the
+lit homes; the rest of the lot is still in shadow. About twelve glowing trees, one short lantern string.
+Panel 3: like the last panels of the second and third attached pictures. Every window lit at full strength, lantern
+strings across the lot, warm amber light everywhere mixing with green tree glow, lights on in the buildings beyond
+the far wall.
+```
+
+**Watch for:** panel 2 that is just panel 3 darkened (the shadows must come from missing lights, not a tint).
+
+## 7R. Key art  →  `07_key_art/07R_key_art_a.png`
+
+Aspect ratio 16:9. Perspective allowed. **Attach:** `07_key_art_c.png` (camera and composition), `07_key_art_b.png`
+(scale, depth and the robot), `01_screen_mockup_c.png` (pixel style).
+
+```
+Aspect ratio 16:9. Pixel art illustration. Camera and composition like the first attached picture: looking along a
+back lot between stacked, patched apartment blocks, with a huge corporate tower far away at the end of the view,
+its cold white rooftop sign reading "HELIOS". The tower is distant but looms over everything.
+Scale, depth and spacing of the lot like the second attached picture: homes with lit amber windows, balconies,
+washing lines and lantern strings stepping back in layers.
+In the middle of the lot stands the small robot from the second attached picture: cream dome head with a teal stripe
+and two small dark rectangular eyes, teal barrel body with a cream chest patch, short arms, small stumpy legs. It
+holds up a glowing green seedling.
+Around it, young trees with luminous green leaves grow out of wrecked robots (not cars). On a wall in pink spray
+paint: "LIGHTS ON".
+Pixel style like the third attached picture: clean, readable shapes and brighter colours, with some grime and wear.
+```
+
+**Watch for:** the robot changing design (tracks, wheels, a different head); trees in cars; misspelled signs.
