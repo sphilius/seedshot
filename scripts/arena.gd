@@ -77,6 +77,8 @@ var windows: BlockWindows
 var waves_cleared: int = 0
 ## The node that tints the whole lot to match the light (see _ready).
 var _ambient: CanvasModulate
+## The lantern strings (see lanterns.gd). Public so tests can read it.
+var lanterns: Lanterns
 ## The Block's painted lines on the side walls. Public so tests can reach it.
 var graffiti: Graffiti
 ## The hidden lucky cat's shop, in the top wall. Public so tests can reach it.
@@ -125,6 +127,11 @@ func _ready() -> void:
 	windows = BlockWindows.new()
 	windows.setup(Rect2(origin, arena_px), float(CONFIG.cell_size))
 	add_child(windows)
+	# Lantern strings across the lot. Added before the trees and machines, so
+	# they hang underneath them and never hide the action.
+	lanterns = Lanterns.new()
+	lanterns.setup(Rect2(origin, arena_px).grow(-float(CONFIG.cell_size)))
+	add_child(lanterns)
 	# CanvasModulate multiplies the colour of everything drawn in this scene
 	# (floor, walls, sprites, trees) by one colour. The HUD is on its own
 	# CanvasLayer, so it is not tinted and stays readable. This is how the
@@ -178,7 +185,7 @@ func _process(delta: float) -> void:
 		_wave_label.text = "Wave %d / %d    Homes lit %d / %d    Trees %d" % [
 			waves.wave, waves.total_waves(), windows.homes_lit(), windows.home_count(), count_grown_trees()]
 	# Glide the lot's tint toward what the current light calls for.
-	var wanted_tint: Color = CONFIG.ambient_dark.lerp(CONFIG.ambient_lit, light_level())
+	var wanted_tint: Color = ambient_tint_for(light_level())
 	_ambient.color = _ambient.color.lerp(wanted_tint, minf(1.0, CONFIG.ambient_change_speed * delta))
 	# The last machines are still growing into trees when the end screen comes
 	# up, so keep its score current instead of freezing it at the first count.
@@ -471,9 +478,18 @@ func light_level() -> float:
 	return float(windows.lit_count) / float(maxi(1, windows.window_count())) * windows.strength
 
 
-## Tells the windows what the waves cleared so far have earned.
+## The tint the whole lot should have at light level `level` (0 to 1). The
+## curve keeps it near the dark tint until late in the run, so the middle
+## waves are lit by separate pools (windows, lanterns, trees), not by
+## brightening everything at once.
+func ambient_tint_for(level: float) -> Color:
+	return CONFIG.ambient_dark.lerp(CONFIG.ambient_lit, pow(clampf(level, 0.0, 1.0), CONFIG.ambient_curve))
+
+
+## Tells the windows and lanterns what the waves cleared so far have earned.
 func _update_light() -> void:
 	windows.set_light(lit_windows_after(waves_cleared), window_strength_after(waves_cleared))
+	lanterns.set_strings(Lanterns.strings_after(waves_cleared))
 
 
 ## Queues small lines to show one after another under the banner, replacing

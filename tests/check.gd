@@ -1158,6 +1158,24 @@ func _test_windows_and_night() -> void:
 	var tint_before: float = ambient.color.r
 	await _wait_frames(40)
 	_check(ambient.color.r > tint_before, "more light warms and brightens every sprite's tint")
+	# Fewer lights, not a darker tint: halfway through the run the overall tint
+	# is still much closer to dark than to lit; only the full block is fully lit.
+	var middle: Color = _arena.ambient_tint_for(0.5)
+	_check(middle.r - CONFIG.ambient_dark.r < (CONFIG.ambient_lit.r - CONFIG.ambient_dark.r) * 0.3,
+		"halfway, the lot is still mostly dark (light comes from separate pools)")
+	_check(_arena.ambient_tint_for(1.0).is_equal_approx(CONFIG.ambient_lit), "the fully lit block gets the full warm tint")
+	# Lantern strings go up after the listed waves, one at a time, and never come down.
+	_check(Lanterns.strings_after(0) == 0, "no lantern strings at the start")
+	var first_string_wave: int = CONFIG.lantern_string_waves[0]
+	_check(Lanterns.strings_after(first_string_wave - 1) == 0 and Lanterns.strings_after(first_string_wave) == 1,
+		"the first lantern string goes up after wave %d" % first_string_wave)
+	_check(Lanterns.strings_after(last) == CONFIG.lantern_string_waves.size(), "every string is up at the end")
+	_arena.waves_cleared = first_string_wave
+	_arena._update_light()
+	_check(_arena.lanterns.strings_up == 1, "clearing that wave hangs the string in the lot")
+	_arena.waves_cleared = 0
+	_arena._update_light()
+	_check(_arena.lanterns.strings_up == 1, "and a restarted wave never takes it down")
 
 	# Trees glow; saplings do not; Seven carries a lamp.
 	var tree: ForestTree = _arena.spawn_tree(Vector2i(4, 3), true)

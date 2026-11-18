@@ -224,8 +224,33 @@ extends Resource
 ## The colour everything in the lot is tinted by, from a dark block (first) to a
 ## fully lit one (second). Sprites, floor and walls all shift between the two as
 ## windows come on, so the art always matches the light.
-@export var ambient_dark: Color = Color(0.50, 0.56, 0.80)
+@export var ambient_dark: Color = Color(0.38, 0.42, 0.64)
 @export var ambient_lit: Color = Color(1.0, 0.96, 0.88)
+## How long the lot stays dark. The tint follows light_level raised to this
+## power: 1 = it brightens evenly with every wave; 2.5 = it hardly moves until
+## the last few waves. Before then, the light comes from the windows, lanterns
+## and trees as separate pools, and the rest of the lot stays dark (Sasha's pick,
+## concept 06_light_progression_h: "fewer lights on", not "a darker tint").
+@export var ambient_curve: float = 2.5
+## The pool of light each lit window throws onto the lot: reach in cells, and
+## strength at full brightness (0 to 1).
+@export var window_spill_radius_cells: float = 2.4
+@export_range(0.0, 1.0) var window_spill_strength: float = 0.45
+## Lantern strings strung across the lot. One string goes up after each wave in
+## this list is cleared (so three strings by the end). The first hangs nearest
+## the homes, the next ones further up the lot.
+@export var lantern_string_waves: Array[int] = [5, 8, 10]
+## Where each string hangs: its share of the way UP the floor from the homes
+## (0 = just above the homes, 1 = just under the top wall).
+@export var lantern_string_heights: Array[float] = [0.22, 0.55, 0.85]
+## Space between two lanterns on a string, in pixels.
+@export var lantern_spacing_px: float = 78.0
+## How far the middle of a string droops below its ends, in pixels.
+@export var lantern_sag_px: float = 22.0
+## Each lantern's little pool of light: reach in cells, and colour (alpha =
+## strength).
+@export var lantern_glow_radius_cells: float = 1.1
+@export var lantern_glow_color: Color = Color(1.0, 0.72, 0.35, 0.35)
 ## How quickly the tint follows a change in light. Higher is snappier.
 @export var ambient_change_speed: float = 1.5
 ## The controls line at the bottom hides when this wave starts, leaving the

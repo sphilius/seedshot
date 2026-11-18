@@ -62,10 +62,7 @@ const FADE_SPEED: float = 3.0
 const FLICKER_SECONDS: float = 1.2
 ## Seconds for the whole next block to come on, first window to last.
 const NEXT_BLOCK_SECONDS: float = 3.0
-## How far a lit window's pool of light reaches onto the floor, in pixels.
-const SPILL_RADIUS: float = 46.0
-## Strength of that pool of light when the window is at full brightness.
-const SPILL_STRENGTH: float = 0.30
+
 const HOME_COLOR: Color = Color(0.13, 0.13, 0.16)
 const DARK_COLOR: Color = Color(0.06, 0.06, 0.09)
 const LIT_COLOR: Color = Color(1.00, 0.74, 0.32)
@@ -148,7 +145,7 @@ func setup(arena_rect: Rect2, wall_px: float) -> void:
 	# One pool of light per window, sitting at the window's top edge so it falls
 	# on the floor just inside the wall. It starts invisible.
 	for rect: Rect2 in _window_rects:
-		var spill: Sprite2D = Glow.make_sprite(SPILL_RADIUS, Color(LIT_COLOR, 0.0))
+		var spill: Sprite2D = Glow.make_sprite(CONFIG.window_spill_radius_cells * wall_px, Color(LIT_COLOR, 0.0))
 		spill.position = Vector2(rect.get_center().x, top)
 		add_child(spill)
 		_spills.append(spill)
@@ -219,7 +216,7 @@ func _process(delta: float) -> void:
 		if _brightness[i] != target:
 			_brightness[i] = move_toward(_brightness[i], target, step)
 			# The pool of light in front of the window follows its brightness.
-			_spills[i].modulate.a = _brightness[i] * SPILL_STRENGTH
+			_spills[i].modulate.a = _brightness[i] * CONFIG.window_spill_strength
 			changed = true
 	if next_block_lit:
 		_next_block_time += delta
