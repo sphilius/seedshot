@@ -148,6 +148,33 @@ extends Resource
 @export var fuse_revive_hp: int = 3
 ## Seconds Seven cannot be hurt after the fuse saves it (it blinks meanwhile).
 @export var fuse_invulnerable_time: float = 2.0
+## Talking to Lucky: Seven must be within this many cells of the open shop for
+## the E key to work. (A tap on the shop works from anywhere.)
+@export var lucky_talk_range_cells: float = 3.5
+## Lucky's greeting when the shutter opens, by the wave the cat was found in.
+## Words only: nothing Lucky says changes the game. (Placeholders, STORY.md.)
+@export_multiline var lucky_greeting_early: String = "Early. I like early. Take the clamp, kid. And a fuse, on the house."
+@export_multiline var lucky_greeting_middle: String = "Thought you'd never knock. Clamp. Fuse. Don't tell Helios."
+@export_multiline var lucky_greeting_late: String = "The whole block's lit and NOW you find me? Take the clamp anyway."
+## Lucky's small talk, by the wave being played. Each talk gives the next line.
+@export var lucky_talk_waves_1_to_3: Array[String] = [
+	"They used to queue down the alley for me.",
+	"That saw-thing's coming. They always send the saw-thing.",
+	"Seven's a lucky number. I'd know.",
+]
+@export var lucky_talk_waves_4_to_7: Array[String] = [
+	"Watch the trees, not yourself. You, I can fix.",
+	"Hear that? Somebody's got the radio going.",
+	"I've sold fuses to worse causes.",
+]
+@export var lucky_talk_wave_8: Array[String] = [
+	"Look at that. Haven't seen my own sign lit in years.",
+	"Don't get soft. They'll want it back.",
+]
+@export var lucky_talk_waves_9_to_10: Array[String] = [
+	"They're not sending notices any more.",
+	"Hold it one more night. Next block's watching.",
+]
 
 @export_group("Waves")
 ## The first this-many waves are "staged": the next machine only walks in once

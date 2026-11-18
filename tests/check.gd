@@ -95,6 +95,7 @@ func _ready() -> void:
 	await _test_windows_and_night()
 	await _test_tree_pictures()
 	await _test_spare_fuse()
+	await _test_talking_to_lucky()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -1358,3 +1359,30 @@ func _test_spare_fuse() -> void:
 	# A real defeat restarts the wave and refits it.
 	player.revive(player.global_position)
 	_check(player.has_fuse, "a real defeat (the wave restart) refits the fuse")
+
+
+## Talking to Lucky: words only. The greeting depends on the wave the cat was
+## found in; small talk depends on the wave being played and cycles.
+func _test_talking_to_lucky() -> void:
+	_check(LuckyLines.greeting_for(2) == CONFIG.lucky_greeting_early, "found in wave 2: the early greeting")
+	_check(LuckyLines.greeting_for(5) == CONFIG.lucky_greeting_middle, "found in wave 5: the middle greeting")
+	_check(LuckyLines.greeting_for(9) == CONFIG.lucky_greeting_late, "found in wave 9: the late greeting")
+	_check(LuckyLines.small_talk_for(8, 0) == CONFIG.lucky_talk_wave_8[0], "wave 8 has its own small talk")
+	var set_size: int = CONFIG.lucky_talk_waves_1_to_3.size()
+	_check(LuckyLines.small_talk_for(1, set_size) == LuckyLines.small_talk_for(1, 0), "small talk cycles round its set")
+
+	await _fresh_arena()
+	_check(_arena.talk_to_lucky() == "", "Lucky says nothing while the shop is shut")
+	var shop: CatShop = _arena.cat_shop
+	for i: int in CONFIG.cat_hits_needed:
+		shop.hit_by_seed()
+	_check(_arena.lucky_found_wave >= 1, "the arena remembers the wave Lucky was found in")
+	var first: String = _arena.talk_to_lucky()
+	var second: String = _arena.talk_to_lucky()
+	_check(first != "" and second != "" and first != second, "talking again gives the next line")
+	var hp_before: int = _arena.player.hp
+	_check(_arena.player.hp == hp_before and _arena.player.can_bind, "talking changes nothing in the game")
+	_arena.player.global_position = shop.global_position + Vector2(0.0, 2.0 * CONFIG.cell_size)
+	_check(_arena.is_near_lucky(), "standing just below the shop is close enough to talk")
+	_arena.player.global_position = _arena.grid.cell_to_world(Vector2i(3, 12))
+	_check(not _arena.is_near_lucky(), "across the lot is too far")

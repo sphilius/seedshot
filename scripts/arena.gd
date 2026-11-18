@@ -77,6 +77,10 @@ var windows: BlockWindows
 var waves_cleared: int = 0
 ## The node that tints the whole lot to match the light (see _ready).
 var _ambient: CanvasModulate
+## The wave the lucky cat was found in (0 = not found yet). Picks Lucky's greeting.
+var lucky_found_wave: int = 0
+## How many times Seven has talked to Lucky: picks the next small-talk line.
+var _lucky_talks: int = 0
 ## The lantern strings (see lanterns.gd). Public so tests can read it.
 var lanterns: Lanterns
 ## The Block's painted lines on the side walls. Public so tests can reach it.
@@ -187,6 +191,8 @@ func _process(delta: float) -> void:
 			waves.wave, waves.total_waves(), windows.homes_lit(), windows.home_count(), count_grown_trees()]
 	# Glide the lot's tint toward what the current light calls for.
 	var wanted_tint: Color = ambient_tint_for(light_level())
+	if cat_shop != null:
+		cat_shop.show_talk_hint = is_near_lucky()
 	# Lights shine brighter than white while the lot is dark, and normally once
 	# it is fully lit; otherwise the end of the run turns into a yellow glare.
 	var boost: float = light_boost_for(light_level())
@@ -615,7 +621,33 @@ func _on_all_waves_cleared() -> void:
 ## Signal handler: the third pod landed on the hidden shop and the cat is out.
 func _on_cat_shop_opened() -> void:
 	player.receive_cat_gift()
+	lucky_found_wave = maxi(waves.wave, 1)
 	_show_banner("Lucky's gift: right-click a machine to bind it. Spare fuse fitted.", 4.0)
+	_show_story_lines([_lucky_says(LuckyLines.greeting_for(lucky_found_wave))])
+
+
+## Seven talks to Lucky: the next small-talk line for the wave being played.
+## Returns the line shown, or "" if the shop is still shut. Words only.
+func talk_to_lucky() -> String:
+	if cat_shop == null or not cat_shop.is_open:
+		return ""
+	var line: String = LuckyLines.small_talk_for(maxi(waves.wave, 1), _lucky_talks)
+	_lucky_talks += 1
+	_show_story_lines([_lucky_says(line)])
+	Sfx.play(&"cat")
+	return line
+
+
+## True while Seven stands close enough to the open shop to talk with the E key.
+func is_near_lucky() -> bool:
+	if cat_shop == null or not cat_shop.is_open:
+		return false
+	return player.global_position.distance_to(cat_shop.global_position) <= CONFIG.lucky_talk_range_cells * CONFIG.cell_size
+
+
+## How a line of Lucky's is shown under the banner.
+func _lucky_says(line: String) -> String:
+	return "Lucky: \"%s\"" % line
 
 
 ## Signal handler: the spare fuse saved Seven from going down.
@@ -634,6 +666,15 @@ func _on_player_zip_finished() -> void:
 ## _unhandled_input receives input that nothing else used. After the last wave,
 ## R / Enter, or a tap or click on the banner, starts a fresh run.
 func _unhandled_input(event: InputEvent) -> void:
+	# Talking to Lucky: the E key near the open shop, or a tap / click on it.
+	if not is_run_finished and cat_shop != null and cat_shop.is_open:
+		var wants_talk: bool = event.is_action_pressed(&"talk") and is_near_lucky()
+		if event is InputEventScreenTouch and event.pressed:
+			wants_talk = wants_talk or _is_on_shop((event as InputEventScreenTouch).position)
+		if wants_talk:
+			talk_to_lucky()
+			get_viewport().set_input_as_handled()  # this press is used up
+			return
 	if not is_run_finished:
 		return
 	var wants_restart: bool = event.is_action_pressed(&"restart")
@@ -709,3 +750,12 @@ func _on_tree_felled(tree: ForestTree) -> void:
 	grid.set_solid(tree.cell, false)
 	_trees_by_cell.erase(tree.cell)
 	windows.flicker()  # the block feels it: one lit window drops dark for a moment
+
+
+## True if screen point `screen_point` (as a touch reports it) lands on the cat
+## shop. get_global_transform_with_canvas turns the shop's position into screen
+## pixels, the same space touches use.
+func _is_on_shop(screen_point: Vector2) -> bool:
+	var centre: Vector2 = cat_shop.get_global_transform_with_canvas().origin
+	var half := Vector2(CatShop.WIDTH_CELLS, 1.5) * float(CONFIG.cell_size) / 2.0
+	return Rect2(centre - half, half * 2.0).has_point(screen_point)

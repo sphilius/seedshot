@@ -8,8 +8,9 @@ extends StaticBody2D
 ## from the middle of the fight. Its window glints every few seconds and a paw
 ## print is painted beside it. Hit the shop with three seed pods: vines grow over
 ## the front with each hit, then the shutter lifts and a lucky cat waves.
-## REWARD: seed pods fire as a pair for the rest of the run (the arena does that
-## when it hears the `opened` signal).
+## REWARD: Lucky's clamp (the vine can bind machines) and a spare fuse. The arena
+## hands them over when it hears the `opened` signal. Once open, Seven can talk
+## to Lucky (E key nearby, or a tap on the shop); see lucky_lines.gd.
 ##
 ## The arena creates this node in code (CatShop.new()), so it builds its own
 ## collision shape and cat sprite in _ready instead of having a scene file.
@@ -41,6 +42,8 @@ const GLINT_COLOR: Color = Color(1.0, 1.0, 1.0, 0.9)
 ## Public (no underscore) so the tests can read them.
 var hits: int = 0
 var is_open: bool = false
+## Set by the arena while Seven stands close enough to talk: shows "E: talk".
+var show_talk_hint: bool = false
 
 ## Seconds until the next glint starts / left of the current glint.
 var _glint_wait: float = 0.0
@@ -136,6 +139,11 @@ func _draw() -> void:
 		draw_line(Vector2(vine_x, half.y + STICK_OUT), Vector2(vine_x + 5.0, -half.y + 4.0), VINE_COLOR, 3.0)
 		draw_circle(Vector2(vine_x + 6.0, -half.y + 8.0), 4.0, VINE_COLOR)
 		draw_circle(Vector2(vine_x - 2.0, 2.0), 3.5, VINE_COLOR)
+
+	# "E: talk", just under the ledge, while Seven is close to the open shop.
+	if is_open and show_talk_hint:
+		var font: Font = ThemeDB.fallback_font
+		draw_string(font, Vector2(-half.x, half.y + STICK_OUT + 16.0), "E: talk", HORIZONTAL_ALIGNMENT_CENTER, half.x * 2.0, 14, GLINT_COLOR)
 
 	# The other hint: a paw print painted on the wall just right of the shop.
 	var paw := Vector2(half.x + 16.0, 4.0)
