@@ -191,7 +191,7 @@ extends Resource
 ]
 ## What the Block paints on the walls when each wave is cleared. Entry 0 is wave 1.
 @export var graffiti_lines: Array[String] = [
-	"LIGHTS ON",
+	"KEEP THE LIGHTS ON!",
 	"NOT YOURS",
 	"THE SUN IS FREE",
 	"GUARD THE TREES",
@@ -212,6 +212,10 @@ extends Resource
 ## The homes along the bottom wall: one entry per home, saying how many windows
 ## it has. Ten homes and 24 windows in all.
 @export var home_window_counts: Array[int] = [2, 3, 2, 3, 2, 2, 3, 2, 3, 2]
+## Roofs for the homes, built from the concept by tools/home_roofs.ps1: six
+## roof units side by side, each 52 x 32 (one unit sits over each window).
+## Leave empty for plain grey roofs.
+@export var home_roofs: Texture2D
 ## Windows already lit before any wave is cleared: the block's first two lamps.
 @export var windows_lit_at_start: int = 2
 ## How strongly a lit window shines before any wave is cleared (0 to 1). It
@@ -220,8 +224,37 @@ extends Resource
 ## The colour everything in the lot is tinted by, from a dark block (first) to a
 ## fully lit one (second). Sprites, floor and walls all shift between the two as
 ## windows come on, so the art always matches the light.
-@export var ambient_dark: Color = Color(0.50, 0.56, 0.80)
+@export var ambient_dark: Color = Color(0.38, 0.42, 0.64)
 @export var ambient_lit: Color = Color(1.0, 0.96, 0.88)
+## How long the lot stays dark. The tint follows light_level raised to this
+## power: 1 = it brightens evenly with every wave; 2.5 = it hardly moves until
+## the last few waves. Before then, the light comes from the windows, lanterns
+## and trees as separate pools, and the rest of the lot stays dark (Sasha's pick,
+## concept 06_light_progression_h: "fewer lights on", not "a darker tint").
+@export var ambient_curve: float = 2.5
+## The pool of light each lit window throws onto the lot: reach in cells, and
+## strength at full brightness (0 to 1).
+@export var window_spill_radius_cells: float = 2.4
+@export_range(0.0, 1.0) var window_spill_strength: float = 0.45
+## How much brighter than its window the pool of light is. The whole lot is
+## darkened by the night tint, lights included; values above 1 make a light
+## shine through that darkness instead of being dimmed with everything else.
+@export var light_boost: float = 2.2
+## Lantern strings strung across the lot. One string goes up after each wave in
+## this list is cleared (so three strings by the end). The first hangs nearest
+## the homes, the next ones further up the lot.
+@export var lantern_string_waves: Array[int] = [5, 8, 10]
+## Where each string hangs: its share of the way UP the floor from the homes
+## (0 = just above the homes, 1 = just under the top wall).
+@export var lantern_string_heights: Array[float] = [0.22, 0.55, 0.85]
+## Space between two lanterns on a string, in pixels.
+@export var lantern_spacing_px: float = 78.0
+## How far the middle of a string droops below its ends, in pixels.
+@export var lantern_sag_px: float = 22.0
+## Each lantern's little pool of light: reach in cells, and colour (alpha =
+## strength).
+@export var lantern_glow_radius_cells: float = 1.1
+@export var lantern_glow_color: Color = Color(1.0, 0.72, 0.35, 0.40)
 ## How quickly the tint follows a change in light. Higher is snappier.
 @export var ambient_change_speed: float = 1.5
 ## The controls line at the bottom hides when this wave starts, leaving the
@@ -262,12 +295,25 @@ extends Resource
 @export var sawbot_texture: Texture2D
 @export var spitter_texture: Texture2D
 @export var cat_texture: Texture2D
-## One floor slab, 48 x 48 (exactly one cell), repeated across the arena floor.
-## Leave empty for the plain floor colour.
-@export var floor_texture: Texture2D
-## How strongly the floor slab shows over the plain floor colour (0 = hidden,
-## 1 = full strength). Kept low so the floor stays quieter than the sprites.
-@export_range(0.0, 1.0) var floor_texture_strength: float = 0.35
+## The sunroot tree, built from the concept art by tools/tree_sprites.py. A
+## sapling, a grown tree, and the "cut" look a grown tree takes once a Sawbot
+## has bitten it. Leave empty for the old circle drawing.
+@export var tree_sapling_texture: Texture2D
+@export var tree_grown_texture: Texture2D
+@export var tree_cut_texture: Texture2D
+## The floor slabs: one row of 48 x 48 tiles (one grid cell each), built from
+## the concept floor sheet by tools/floor_tiles.ps1. Leave empty for the plain
+## floor colour.
+@export var floor_tiles: Texture2D
+## How many tiles at the START of that row are plain slabs. Most cells get one
+## of these; the tiles after them (crater, moss, puddle, oil, grate, hatch)
+## are rarer.
+@export var floor_plain_count: int = 3
+## Share of cells that get a detail tile instead of a plain slab (0.07 = about 1 in 14).
+@export_range(0.0, 1.0) var floor_detail_chance: float = 0.07
+## Colour the floor tiles are multiplied by. White = as drawn; darker = a
+## quieter floor, so the sprites stand out more.
+@export var floor_tint: Color = Color(0.85, 0.85, 0.88)
 ## Drawn size of a sprite relative to one cell (1.0 = exactly one cell wide).
 ## 64 / 48 = 1.3333 draws a 64 px sprite at its real size, so no pixel is
 ## stretched or squeezed.

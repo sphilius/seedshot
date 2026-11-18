@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="GameConfig" load_steps=8 format=3]
+[gd_resource type="Resource" script_class="GameConfig" load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://config/game_config.gd" id="1_config"]
 [ext_resource type="Texture2D" path="res://art/sprites/gardener_bot.png" id="2_player"]
@@ -6,7 +6,11 @@
 [ext_resource type="Texture2D" path="res://art/sprites/sawbot.png" id="4_sawbot"]
 [ext_resource type="Texture2D" path="res://art/sprites/spitter.png" id="5_spitter"]
 [ext_resource type="Texture2D" path="res://art/sprites/lucky_cat.png" id="6_cat"]
-[ext_resource type="Texture2D" path="res://art/sprites/floor_tile.png" id="7_floor"]
+[ext_resource type="Texture2D" path="res://art/sprites/floor_tiles.png" id="7_floor"]
+[ext_resource type="Texture2D" path="res://art/sprites/home_roofs.png" id="8_roofs"]
+[ext_resource type="Texture2D" path="res://art/sprites/tree_sapling.png" id="9_tree_sapling"]
+[ext_resource type="Texture2D" path="res://art/sprites/tree_grown.png" id="10_tree_grown"]
+[ext_resource type="Texture2D" path="res://art/sprites/tree_cut.png" id="11_tree_cut"]
 
 [resource]
 script = ExtResource("1_config")
@@ -15,4 +19,8 @@ scrapper_texture = ExtResource("3_scrapper")
 sawbot_texture = ExtResource("4_sawbot")
 spitter_texture = ExtResource("5_spitter")
 cat_texture = ExtResource("6_cat")
-floor_texture = ExtResource("7_floor")
+tree_sapling_texture = ExtResource("9_tree_sapling")
+tree_grown_texture = ExtResource("10_tree_grown")
+tree_cut_texture = ExtResource("11_tree_cut")
+floor_tiles = ExtResource("7_floor")
+home_roofs = ExtResource("8_roofs")

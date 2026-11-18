@@ -77,6 +77,8 @@ var windows: BlockWindows
 var waves_cleared: int = 0
 ## The node that tints the whole lot to match the light (see _ready).
 var _ambient: CanvasModulate
+## The lantern strings (see lanterns.gd). Public so tests can read it.
+var lanterns: Lanterns
 ## The Block's painted lines on the side walls. Public so tests can reach it.
 var graffiti: Graffiti
 ## The hidden lucky cat's shop, in the top wall. Public so tests can reach it.
@@ -125,6 +127,11 @@ func _ready() -> void:
 	windows = BlockWindows.new()
 	windows.setup(Rect2(origin, arena_px), float(CONFIG.cell_size))
 	add_child(windows)
+	# Lantern strings across the lot. Added before the trees and machines, so
+	# they hang underneath them and never hide the action.
+	lanterns = Lanterns.new()
+	lanterns.setup(Rect2(origin, arena_px).grow(-float(CONFIG.cell_size)))
+	add_child(lanterns)
 	# CanvasModulate multiplies the colour of everything drawn in this scene
 	# (floor, walls, sprites, trees) by one colour. The HUD is on its own
 	# CanvasLayer, so it is not tinted and stays readable. This is how the
@@ -178,7 +185,12 @@ func _process(delta: float) -> void:
 		_wave_label.text = "Wave %d / %d    Homes lit %d / %d    Trees %d" % [
 			waves.wave, waves.total_waves(), windows.homes_lit(), windows.home_count(), count_grown_trees()]
 	# Glide the lot's tint toward what the current light calls for.
-	var wanted_tint: Color = CONFIG.ambient_dark.lerp(CONFIG.ambient_lit, light_level())
+	var wanted_tint: Color = ambient_tint_for(light_level())
+	# Lights shine brighter than white while the lot is dark, and normally once
+	# it is fully lit; otherwise the end of the run turns into a yellow glare.
+	var boost: float = light_boost_for(light_level())
+	windows.light_boost = boost
+	lanterns.light_boost = boost
 	_ambient.color = _ambient.color.lerp(wanted_tint, minf(1.0, CONFIG.ambient_change_speed * delta))
 	# The last machines are still growing into trees when the end screen comes
 	# up, so keep its score current instead of freezing it at the first count.
@@ -203,18 +215,47 @@ func _draw() -> void:
 	draw_rect(arena_rect, WALL_COLOR)
 	var floor_rect: Rect2 = arena_rect.grow(-cell_px)  # grow(-n) shrinks each side by n
 	draw_rect(floor_rect, FLOOR_COLOR)
-	if CONFIG.floor_texture != null:
-		# The slab is one cell big, so repeating it lines up with the grid. The
-		# third argument (true) means "repeat the texture", not "stretch it".
-		# The last argument is a tint: white with low alpha = a faint overlay.
-		texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
-		draw_texture_rect(CONFIG.floor_texture, floor_rect, true, Color(1.0, 1.0, 1.0, CONFIG.floor_texture_strength))
+	if CONFIG.floor_tiles != null:
+		# One slab per floor cell. The tiles sit side by side in one picture, so
+		# tile number n is the 48 x 48 square starting n cells from its left edge.
+		var tile_count: int = CONFIG.floor_tiles.get_width() / CONFIG.cell_size
+		for y: int in range(1, grid.rows - 1):        # skip row 0 and the last row: they are wall
+			for x: int in range(1, grid.cols - 1):
+				var pick: int = floor_tile_for(Vector2i(x, y), tile_count, CONFIG.floor_plain_count, CONFIG.floor_detail_chance)
+				var source := Rect2(pick * cell_px, 0.0, cell_px, cell_px)
+				var target := Rect2(grid.origin + Vector2(x, y) * cell_px, Vector2.ONE * cell_px)
+				# draw_texture_rect_region copies one square of a picture onto the screen.
+				draw_texture_rect_region(CONFIG.floor_tiles, target, source, CONFIG.floor_tint)
+		# Each slab already has its own dark edge, so the grid lines below would
+		# only double them up.
+		return
 	for x: int in range(1, grid.cols):
 		var line_x: float = grid.origin.x + x * cell_px
 		draw_line(Vector2(line_x, arena_rect.position.y), Vector2(line_x, arena_rect.end.y), GRID_LINE_COLOR)
 	for y: int in range(1, grid.rows):
 		var line_y: float = grid.origin.y + y * cell_px
 		draw_line(Vector2(arena_rect.position.x, line_y), Vector2(arena_rect.end.x, line_y), GRID_LINE_COLOR)
+
+
+## Which floor tile cell `cell` shows: a number from 0 to tile_count - 1.
+## Most cells get one of the first `plain_count` tiles (plain slabs); about
+## `detail_chance` of them get one of the rest (moss, puddle, grate...).
+##
+## WHY NOT randi(): the floor is redrawn whenever Godot asks, and a random pick
+## would reshuffle it every time. Instead the cell's own x and y are mixed into
+## a big scrambled number (a "hash"), so the same cell always gets the same
+## tile, but neighbouring cells look unrelated. `static` means it needs no
+## arena to run, so the tests can call it directly.
+static func floor_tile_for(cell: Vector2i, tile_count: int, plain_count: int, detail_chance: float) -> int:
+	# Multiplying by large odd numbers and XOR-ing (^) scrambles the bits well.
+	# `& 0x7fffffff` keeps the result positive.
+	var h: int = ((cell.x * 73856093) ^ (cell.y * 19349663) ^ 0x5bd1e995) & 0x7fffffff
+	var detail_count: int = tile_count - plain_count
+	# The lowest three digits of h decide "detail or plain"...
+	if detail_count > 0 and float(h % 1000) / 1000.0 < detail_chance:
+		# ...and the digits above them decide which one.
+		return plain_count + (h / 1000) % detail_count
+	return (h / 1000) % maxi(plain_count, 1)
 
 
 ## Plants a tree on a cell. `grown` = true skips the sapling stage.
@@ -442,9 +483,25 @@ func light_level() -> float:
 	return float(windows.lit_count) / float(maxi(1, windows.window_count())) * windows.strength
 
 
-## Tells the windows what the waves cleared so far have earned.
+## The tint the whole lot should have at light level `level` (0 to 1). The
+## curve keeps it near the dark tint until late in the run, so the middle
+## waves are lit by separate pools (windows, lanterns, trees), not by
+## brightening everything at once.
+func ambient_tint_for(level: float) -> Color:
+	return CONFIG.ambient_dark.lerp(CONFIG.ambient_lit, pow(clampf(level, 0.0, 1.0), CONFIG.ambient_curve))
+
+
+## How much the lights are boosted at light level `level`: the config's
+## light_boost while the lot is dark, falling to 1.0 as the tint reaches lit.
+func light_boost_for(level: float) -> float:
+	var lit_share: float = pow(clampf(level, 0.0, 1.0), CONFIG.ambient_curve)
+	return lerpf(CONFIG.light_boost, 1.0, lit_share)
+
+
+## Tells the windows and lanterns what the waves cleared so far have earned.
 func _update_light() -> void:
 	windows.set_light(lit_windows_after(waves_cleared), window_strength_after(waves_cleared))
+	lanterns.set_strings(Lanterns.strings_after(waves_cleared))
 
 
 ## Queues small lines to show one after another under the banner, replacing

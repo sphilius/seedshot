@@ -93,6 +93,7 @@ func _ready() -> void:
 	await _test_story_words()
 	# Layer 2j: the night look and the windows (STORY.md step 2).
 	await _test_windows_and_night()
+	await _test_tree_pictures()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -148,8 +149,34 @@ func _test_art_is_the_right_size() -> void:
 	for sprite_name: String in sprites:
 		var texture: Texture2D = sprites[sprite_name]
 		_check(texture != null and texture.get_size() == Vector2(64.0, 64.0), "the %s sprite is 64 x 64" % sprite_name)
-	var slab: Texture2D = CONFIG.floor_texture
-	_check(slab != null and slab.get_size() == Vector2.ONE * CONFIG.cell_size, "the floor slab is exactly one cell big")
+	# The floor tiles are one row of cell-sized squares: one cell tall, a whole
+	# number of cells wide, with at least one detail tile after the plain ones.
+	var tiles: Texture2D = CONFIG.floor_tiles
+	_check(tiles != null and tiles.get_height() == CONFIG.cell_size, "the floor tiles are one cell tall")
+	if tiles != null:
+		var tile_count: int = tiles.get_width() / CONFIG.cell_size
+		_check(tiles.get_width() % CONFIG.cell_size == 0, "the floor row is a whole number of tiles")
+		_check(CONFIG.floor_plain_count > 0 and CONFIG.floor_plain_count < tile_count, "there are plain and detail floor tiles")
+		# Every cell of the arena picks a tile that exists, and the same cell
+		# always picks the same tile (so the floor does not shuffle each frame).
+		var all_in_range: bool = true
+		var details: int = 0
+		var cells: int = 0
+		for y: int in 15:
+			for x: int in 26:
+				var pick: int = Arena.floor_tile_for(Vector2i(x, y), tile_count, CONFIG.floor_plain_count, CONFIG.floor_detail_chance)
+				all_in_range = all_in_range and pick >= 0 and pick < tile_count
+				if pick >= CONFIG.floor_plain_count:
+					details += 1
+				cells += 1
+		_check(all_in_range, "every floor cell picks a real tile")
+		_check(Arena.floor_tile_for(Vector2i(5, 7), tile_count, 4, 0.1) == Arena.floor_tile_for(Vector2i(5, 7), tile_count, 4, 0.1),
+			"a cell always picks the same floor tile")
+		# The floor has 24 x 13 = 312 open cells; at about 1 in 14, roughly 22 details.
+		# Allow a wide margin: this only catches "none" or "nearly all".
+		var share: float = float(details) / float(cells)
+		_check(share > CONFIG.floor_detail_chance * 0.4 and share < CONFIG.floor_detail_chance * 2.0,
+			"detail tiles are rare but present (%d of %d cells)" % [details, cells])
 	# 1.3333 x 48 is 63.998, not exactly 64, so allow a tenth of a pixel of slack.
 	# absf() gives the size of a number without its sign.
 	_check(absf(CONFIG.sprite_size_cells * CONFIG.cell_size - 64.0) < 0.1, "sprites are drawn at their real size")
@@ -1090,6 +1117,13 @@ func _test_windows_and_night() -> void:
 	var last: int = _arena.waves.total_waves()
 	_check(total >= 20 and total <= 25, "the block has a fixed 20 to 25 windows (%d)" % total)
 	_check(windows.home_count() < total, "homes have more than one window (%d homes)" % windows.home_count())
+	# The roof picture holds six units side by side, each exactly one unit wide,
+	# and the units packed edge to edge exactly fill the bottom wall.
+	var roofs: Texture2D = CONFIG.home_roofs
+	_check(roofs != null and is_equal_approx(roofs.get_width(), BlockWindows.UNIT_WIDTH * BlockWindows.ROOF_DESIGNS)
+		and is_equal_approx(roofs.get_height(), BlockWindows.ROOF_HEIGHT), "the roof picture holds six whole roof units")
+	_check(is_equal_approx(BlockWindows.UNIT_WIDTH * total, CONFIG.grid_cols * CONFIG.cell_size),
+		"one roof unit per window exactly fills the bottom wall")
 
 	# Before any wave: the first lamps only, shining faintly.
 	_check(windows.lit_count == CONFIG.windows_lit_at_start, "the block starts with %d windows lit" % CONFIG.windows_lit_at_start)
@@ -1124,6 +1158,26 @@ func _test_windows_and_night() -> void:
 	var tint_before: float = ambient.color.r
 	await _wait_frames(40)
 	_check(ambient.color.r > tint_before, "more light warms and brightens every sprite's tint")
+	# Fewer lights, not a darker tint: halfway through the run the overall tint
+	# is still much closer to dark than to lit; only the full block is fully lit.
+	var middle: Color = _arena.ambient_tint_for(0.5)
+	_check(middle.r - CONFIG.ambient_dark.r < (CONFIG.ambient_lit.r - CONFIG.ambient_dark.r) * 0.3,
+		"halfway, the lot is still mostly dark (light comes from separate pools)")
+	_check(_arena.ambient_tint_for(1.0).is_equal_approx(CONFIG.ambient_lit), "the fully lit block gets the full warm tint")
+	_check(_arena.light_boost_for(0.0) > 1.0 and is_equal_approx(_arena.light_boost_for(1.0), 1.0),
+		"lights shine through the dark, and are not boosted once the lot is lit")
+	# Lantern strings go up after the listed waves, one at a time, and never come down.
+	_check(Lanterns.strings_after(0) == 0, "no lantern strings at the start")
+	var first_string_wave: int = CONFIG.lantern_string_waves[0]
+	_check(Lanterns.strings_after(first_string_wave - 1) == 0 and Lanterns.strings_after(first_string_wave) == 1,
+		"the first lantern string goes up after wave %d" % first_string_wave)
+	_check(Lanterns.strings_after(last) == CONFIG.lantern_string_waves.size(), "every string is up at the end")
+	_arena.waves_cleared = first_string_wave
+	_arena._update_light()
+	_check(_arena.lanterns.strings_up == 1, "clearing that wave hangs the string in the lot")
+	_arena.waves_cleared = 0
+	_arena._update_light()
+	_check(_arena.lanterns.strings_up == 1, "and a restarted wave never takes it down")
 
 	# Trees glow; saplings do not; Seven carries a lamp.
 	var tree: ForestTree = _arena.spawn_tree(Vector2i(4, 3), true)
@@ -1250,3 +1304,23 @@ func _test_seal_guard() -> void:
 	_check(not grid.would_seal(Vector2i(6, 5), left, right), "an unrelated cell would not seal")
 	_check(not grid.is_solid(Vector2i(4, 3)), "would_seal leaves the grid unchanged")
 	_check(grid.has_path(left, right), "still connected after asking")
+
+
+## The sunroot pictures: all 64 x 64, and a tree shows the right one for its
+## state (sapling, grown, then cut once it has been damaged).
+func _test_tree_pictures() -> void:
+	var pictures: Array[Texture2D] = [CONFIG.tree_sapling_texture, CONFIG.tree_grown_texture, CONFIG.tree_cut_texture]
+	var all_sized: bool = true
+	for picture: Texture2D in pictures:
+		all_sized = all_sized and picture != null and picture.get_size() == Vector2(64.0, 64.0)
+	_check(all_sized, "the three tree pictures are 64 x 64")
+	await _fresh_arena()
+	var tree: ForestTree = _arena.spawn_tree(Vector2i(5, 5), false)
+	_check(tree != null and tree.current_texture() == CONFIG.tree_sapling_texture, "a new tree shows the sapling picture")
+	if tree == null:
+		return
+	tree.solidify()
+	_check(tree.current_texture() == CONFIG.tree_grown_texture, "a grown tree shows the grown picture")
+	tree.take_damage(1)
+	if is_instance_valid(tree) and tree.hp > 0:
+		_check(tree.current_texture() == CONFIG.tree_cut_texture, "a bitten tree shows the cut picture")

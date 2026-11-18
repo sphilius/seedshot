@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c2kl7gthok23r"
-path="res://.godot/imported/s12-night-look.jpg-26af48ffd867cfde1a3756c2cbda5096.ctex"
+uid="uid://bu7unfxnhrgup"
+path="res://.godot/imported/tree_big.png-102e126b409c147ab05720af587cfb09.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://docs/playtest/shots/s12-night-look.jpg"
-dest_files=["res://.godot/imported/s12-night-look.jpg-26af48ffd867cfde1a3756c2cbda5096.ctex"]
+source_file="res://art/sprites/tree_big.png"
+dest_files=["res://.godot/imported/tree_big.png-102e126b409c147ab05720af587cfb09.ctex"]
 
 [params]
 
