@@ -149,6 +149,7 @@ func _ready() -> void:
 	# The pips redraw themselves every time the player's health changes.
 	player.health_changed.connect(_health_pips.show_health)
 	player.died.connect(_on_player_died)
+	player.fuse_used.connect(_on_player_fuse_used)
 	add_child(player)
 	_health_pips.show_health(player.hp, CONFIG.player_max_hp)
 	# Hand the player to the touch controls, if the scene has them.
@@ -613,8 +614,13 @@ func _on_all_waves_cleared() -> void:
 
 ## Signal handler: the third pod landed on the hidden shop and the cat is out.
 func _on_cat_shop_opened() -> void:
-	player.double_shot = true
-	_show_banner("Lucky cat! Seed pods now fire in pairs", 3.0)
+	player.receive_cat_gift()
+	_show_banner("Lucky's gift: right-click a machine to bind it. Spare fuse fitted.", 4.0)
+
+
+## Signal handler: the spare fuse saved Seven from going down.
+func _on_player_fuse_used() -> void:
+	_show_banner("Fuse blown! Seven is back up", 2.0)
 
 
 ## Signal handler: the player finished a vine zip. The "you can vine to this"

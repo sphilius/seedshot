@@ -141,8 +141,13 @@ extends Resource
 @export var cat_hits_needed: int = 3
 ## Seconds between glints on the shop's shutter (the hint that it is special).
 @export var cat_glint_interval: float = 3.0
-## Gap in pixels between the two pods once the cat's gift is active.
-@export var cat_pair_spacing: float = 14.0
+## THE CAT'S GIFT (story step 3): the live clamp (right-click a machine to yank
+## and bind it; locked until the cat is found) and a spare fuse. With a fuse
+## fitted, the first time Seven would go down it gets back up instead, with this
+## many hit points.
+@export var fuse_revive_hp: int = 3
+## Seconds Seven cannot be hurt after the fuse saves it (it blinks meanwhile).
+@export var fuse_invulnerable_time: float = 2.0
 
 @export_group("Waves")
 ## The first this-many waves are "staged": the next machine only walks in once

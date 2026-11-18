@@ -94,6 +94,7 @@ func _ready() -> void:
 	# Layer 2j: the night look and the windows (STORY.md step 2).
 	await _test_windows_and_night()
 	await _test_tree_pictures()
+	await _test_spare_fuse()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -930,6 +931,9 @@ func _test_vine_yanks_and_binds_a_machine() -> void:
 	var scrapper: Scrapper = _arena.spawn_scrapper_at(Vector2i(11, 12))  # 6 cells away
 	await get_tree().physics_frame
 
+	# Before Lucky's clamp, the vine cannot bind a machine.
+	_check(not player.try_vine(scrapper.global_position) and not scrapper.is_bound, "no binding before the cat's gift")
+	player.receive_cat_gift()
 	_check(player.try_vine(scrapper.global_position), "the vine lands on a machine in clear view")
 	_check(scrapper.is_bound, "the machine is bound")
 	_check(not player.is_zipping, "the bot itself does not move")
@@ -957,6 +961,7 @@ func _test_vine_yanks_and_binds_a_machine() -> void:
 func _test_vine_bind_needs_a_clear_line() -> void:
 	await _fresh_arena()
 	var player: Player = _arena.player
+	player.receive_cat_gift()  # binding needs Lucky's clamp
 	var tree_cell: Vector2i = Arena.TEST_TREE_CELLS[0]
 	# The tree sits exactly between the bot and the Sawbot.
 	player.global_position = _arena.grid.cell_to_world(tree_cell + Vector2i(-3, 0))
@@ -980,6 +985,7 @@ func _test_vine_bind_needs_a_clear_line() -> void:
 func _test_touch_tap_on_a_machine_binds_it() -> void:
 	await _fresh_arena()
 	var touch: TouchControls = _touch_controls()
+	_arena.player.receive_cat_gift()  # binding needs Lucky's clamp
 	_arena.player.global_position = _arena.grid.cell_to_world(Vector2i(5, 12))
 	var spitter: Spitter = _arena.spawn_spitter_at(Vector2i(10, 12))
 	await get_tree().physics_frame
@@ -999,7 +1005,7 @@ func _test_three_pods_open_the_cat_shop() -> void:
 	var shop: CatShop = _arena.cat_shop
 	var pods: Node = _arena.get_node("Pods")
 	_check(shop != null and not shop.is_open and shop.hits == 0, "the arena has a closed shop")
-	_check(not player.double_shot, "pods are single to begin with")
+	_check(not player.can_bind and not player.has_fuse, "no clamp and no fuse to begin with")
 
 	# A pod on the ordinary wall, well left of the shop, must not count.
 	player.global_position = _arena.grid.cell_to_world(Vector2i(4, 3))
@@ -1017,13 +1023,13 @@ func _test_three_pods_open_the_cat_shop() -> void:
 		if shot < CONFIG.cat_hits_needed - 1:
 			_check(not shop.is_open, "the shop stays shut after %d pod(s)" % (shot + 1))
 	_check(shop.is_open, "the third pod opens the shop")
-	_check(player.double_shot, "the cat's gift: pods now fire in pairs")
+	_check(player.can_bind and player.has_fuse, "the cat's gift: the clamp and a spare fuse")
 	await _wait_until(func() -> bool: return pods.get_child_count() == 0, 1.5)
 
-	# Fire sideways, away from the shop, and count the pods in flight.
+	# Paired pods are gone (Sasha's story redesign): one shot is still one pod.
 	await _wait_until(func() -> bool: return player.fire(Vector2.LEFT), 1.0)
 	await get_tree().physics_frame
-	_check(pods.get_child_count() == 2, "one shot is now two pods")
+	_check(pods.get_child_count() == 1, "one shot is still one pod")
 	shop.hit_by_seed()
 	_check(shop.hits == CONFIG.cat_hits_needed, "an open shop ignores further pods")
 
@@ -1324,3 +1330,31 @@ func _test_tree_pictures() -> void:
 	tree.take_damage(1)
 	if is_instance_valid(tree) and tree.hp > 0:
 		_check(tree.current_texture() == CONFIG.tree_cut_texture, "a bitten tree shows the cut picture")
+
+
+## Lucky's spare fuse: it saves Seven once, is NOT refitted by clearing a wave,
+## and IS refitted when Seven is really defeated and the wave restarts.
+func _test_spare_fuse() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	player.take_damage(CONFIG.player_max_hp)
+	_check(player.is_dead, "without the cat's gift, a deadly hit downs Seven")
+	player.revive(player.global_position)
+
+	player.receive_cat_gift()
+	await _wait_frames(70)  # let the revive blink run out
+	player.take_damage(CONFIG.player_max_hp)
+	_check(not player.is_dead and player.hp == CONFIG.fuse_revive_hp, "with a fuse, Seven gets back up (%d HP)" % CONFIG.fuse_revive_hp)
+	_check(not player.has_fuse, "and the fuse is used up")
+
+	# Clearing a wave does not refit it.
+	_arena.waves_cleared += 1
+	_arena._update_light()
+	_check(not player.has_fuse, "clearing a wave does not refit the fuse")
+	await _wait_frames(150)  # let the long fuse blink run out
+	player.take_damage(CONFIG.player_max_hp)
+	_check(player.is_dead, "without a fuse the next deadly hit downs Seven")
+
+	# A real defeat restarts the wave and refits it.
+	player.revive(player.global_position)
+	_check(player.has_fuse, "a real defeat (the wave restart) refits the fuse")
