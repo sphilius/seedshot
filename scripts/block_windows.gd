@@ -9,8 +9,8 @@ extends Node2D
 ##   The block      a row of homes along the BOTTOM wall. Each home has two or
 ##                  three windows (the config's `home_window_counts`). The arena
 ##                  says how many windows are lit and how strongly (set_light).
-##                  A home is a roof seen from above (one of six roof pictures
-##                  from the concept art) with its front wall and windows below.
+##                  The homes are packed edge to edge: one roof unit (from the
+##                  concept art) over each window, 2 or 3 units to a home.
 ##   The next block a row of smaller windows along the very top edge. All dark
 ##                  until the run is won (light_next_block), then they come on
 ##                  one after another: the light has jumped the wall.
@@ -34,20 +34,24 @@ const CONFIG: GameConfig = preload("res://config/game_config.tres")
 
 ## Size of one window of the block, in pixels. Small and wide, so the windows
 ## fit on the home's front wall under its roof.
-const WINDOW_SIZE: Vector2 = Vector2(12.0, 10.0)
-## Each home is a roof seen from above (a picture from the config) with a strip
-## of front wall below it, where the windows are. Together they fill the wall cell.
+const WINDOW_SIZE: Vector2 = Vector2(16.0, 10.0)
+## THE ROW OF HOMES is built from "units": one roof seen from above with a strip
+## of front wall below it, and ONE window in that strip. The units are packed
+## edge to edge along the whole bottom wall, like the concept art's rooftops.
+## A home is 2 or 3 neighbouring units, with a dark seam between homes.
+## UNIT_WIDTH x the number of windows (24) must equal the arena's width (1248).
+const UNIT_WIDTH: float = 52.0
+## Height of a unit's roof; the rest of the wall cell below it is front wall.
 const ROOF_HEIGHT: float = 32.0
-## How many different roof designs the roof pictures hold.
+## How many different roof designs the roof picture holds, side by side.
 const ROOF_DESIGNS: int = 6
+## Width of the dark seam drawn where one home ends and the next begins.
+const SEAM_WIDTH: float = 2.0
 ## Colour of a home's front wall (dark brick brown).
 const FRONT_COLOR: Color = Color(0.24, 0.16, 0.13)
 ## Colour of the thin frame around each window.
 const FRAME_COLOR: Color = Color(0.07, 0.08, 0.08)
-## Empty wall between two windows of the same home, in pixels.
-const WINDOW_GAP: float = 8.0
-## Wall on each side of a home's windows that still belongs to the home.
-const HOME_PADDING: float = 7.0
+
 ## Size of one distant window of the next block, in pixels.
 const FAR_WINDOW_SIZE: Vector2 = Vector2(10.0, 6.0)
 ## How many distant windows the next block has.
@@ -107,28 +111,21 @@ func setup(arena_rect: Rect2, wall_px: float) -> void:
 	_wall_px = wall_px
 	_far_brightness.resize(FAR_WINDOW_COUNT)  # resize fills new entries with 0.0
 
-	# How wide each home is: its windows, the gaps between them, and its padding.
-	var home_widths: Array[float] = []
-	var all_homes_width: float = 0.0
-	for windows_in_home: int in CONFIG.home_window_counts:
-		var width: float = windows_in_home * WINDOW_SIZE.x + (windows_in_home - 1) * WINDOW_GAP + HOME_PADDING * 2.0
-		home_widths.append(width)
-		all_homes_width += width
-	# Whatever wall is left over is shared out as equal gaps between and around the homes.
-	var gap: float = (arena_rect.size.x - all_homes_width) / float(home_count() + 1)
-
 	var top: float = arena_rect.end.y - wall_px
 	# Windows sit in the middle of the front wall, which is the part of the
 	# wall cell below the roof.
 	var window_top: float = top + ROOF_HEIGHT + (wall_px - ROOF_HEIGHT - WINDOW_SIZE.y) / 2.0
-	var x: float = arena_rect.position.x + gap
+	# Walk along the wall one unit at a time, from the left edge of the arena.
+	var x: float = arena_rect.position.x
 	for home: int in home_count():
-		_home_rects.append(Rect2(x, top, home_widths[home], wall_px))
-		for i: int in CONFIG.home_window_counts[home]:
-			var left: float = x + HOME_PADDING + i * (WINDOW_SIZE.x + WINDOW_GAP)
+		var units: int = CONFIG.home_window_counts[home]
+		_home_rects.append(Rect2(x, top, units * UNIT_WIDTH, wall_px))
+		for i: int in units:
+			# Each window is centred in its own unit.
+			var left: float = x + i * UNIT_WIDTH + (UNIT_WIDTH - WINDOW_SIZE.x) / 2.0
 			_window_rects.append(Rect2(Vector2(left, window_top), WINDOW_SIZE))
 			_window_home.append(home)
-		x += home_widths[home] + gap
+		x += units * UNIT_WIDTH
 
 	# The lighting queue. Homes take turns from the two ends inward:
 	# leftmost, rightmost, second from left, second from right, ...
@@ -164,20 +161,6 @@ func window_count() -> int:
 		total += windows_in_home
 	return total
 
-
-## The roof picture home `home` takes its roof from: the wide roofs for a
-## 3-window home, the narrow ones otherwise. Public so the tests can check that
-## each picture's roofs are exactly as wide as the homes they cover.
-func roof_texture_for(home: int) -> Texture2D:
-	if CONFIG.home_window_counts[home] >= 3:
-		return CONFIG.home_roofs_wide
-	return CONFIG.home_roofs_narrow
-
-
-## How wide home `home` is, in pixels (its windows, the gaps between them, and
-## its padding). Used by the tests.
-func home_width(home: int) -> float:
-	return _home_rects[home].size.x
 
 
 ## How many homes the block has.
@@ -254,25 +237,34 @@ func _process(delta: float) -> void:
 
 ## _draw paints the homes, their windows, and the next block's row.
 func _draw() -> void:
+	var unit: int = 0  # counts units along the whole row, left to right
 	for home: int in _home_rects.size():
 		var rect: Rect2 = _home_rects[home]
-		var roof_rect := Rect2(rect.position, Vector2(rect.size.x, ROOF_HEIGHT))
-		var roofs: Texture2D = roof_texture_for(home)
-		if roofs != null:
-			# The roof picture holds six roofs side by side; take design home % 6.
-			var design: int = home % ROOF_DESIGNS
-			var source := Rect2(design * rect.size.x, 0.0, rect.size.x, ROOF_HEIGHT)
-			draw_texture_rect_region(roofs, roof_rect, source)
-		else:
-			draw_rect(roof_rect, HOME_COLOR)
-		# The front wall: everything below the roof.
+		for i: int in CONFIG.home_window_counts[home]:
+			var roof_rect := Rect2(rect.position.x + i * UNIT_WIDTH, rect.position.y, UNIT_WIDTH, ROOF_HEIGHT)
+			if CONFIG.home_roofs != null:
+				# The roof picture holds six designs side by side. Stepping by 5
+				# (not 1) through them keeps two neighbours from repeating a pattern.
+				var design: int = (unit * 5) % ROOF_DESIGNS
+				var source := Rect2(design * UNIT_WIDTH, 0.0, UNIT_WIDTH, ROOF_HEIGHT)
+				draw_texture_rect_region(CONFIG.home_roofs, roof_rect, source)
+			else:
+				draw_rect(roof_rect, HOME_COLOR)
+			unit += 1
+		# The front wall: everything below the roofs.
 		draw_rect(Rect2(rect.position.x, rect.position.y + ROOF_HEIGHT, rect.size.x, rect.size.y - ROOF_HEIGHT), FRONT_COLOR)
+		# A dark seam on the home's left edge marks where it starts (none before the first).
+		if home > 0:
+			draw_rect(Rect2(rect.position.x - SEAM_WIDTH / 2.0, rect.position.y, SEAM_WIDTH, rect.size.y), FRAME_COLOR)
 	for i: int in _window_rects.size():
 		# A 1-pixel frame first (grow(1) makes the rectangle 1 pixel bigger on
 		# every side), then the glass on top of it.
 		draw_rect(_window_rects[i].grow(1.0), FRAME_COLOR)
 		# lerp blends two colours: 0.0 gives the first, 1.0 gives the second.
 		draw_rect(_window_rects[i], DARK_COLOR.lerp(LIT_COLOR, _brightness[i]))
+		# A 1-pixel bar down the middle splits the glass into two panes.
+		var bar_x: float = floorf(_window_rects[i].get_center().x)
+		draw_rect(Rect2(bar_x, _window_rects[i].position.y, 1.0, _window_rects[i].size.y), FRAME_COLOR)
 
 	# The next block: small, along the very top edge. Dark ones are not drawn at
 	# all, so nothing shows there until the run is won.

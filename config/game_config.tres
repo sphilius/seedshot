@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="GameConfig" load_steps=10 format=3]
+[gd_resource type="Resource" script_class="GameConfig" load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://config/game_config.gd" id="1_config"]
 [ext_resource type="Texture2D" path="res://art/sprites/gardener_bot.png" id="2_player"]
@@ -7,8 +7,7 @@
 [ext_resource type="Texture2D" path="res://art/sprites/spitter.png" id="5_spitter"]
 [ext_resource type="Texture2D" path="res://art/sprites/lucky_cat.png" id="6_cat"]
 [ext_resource type="Texture2D" path="res://art/sprites/floor_tiles.png" id="7_floor"]
-[ext_resource type="Texture2D" path="res://art/sprites/home_roofs_narrow.png" id="8_roofs_narrow"]
-[ext_resource type="Texture2D" path="res://art/sprites/home_roofs_wide.png" id="9_roofs_wide"]
+[ext_resource type="Texture2D" path="res://art/sprites/home_roofs.png" id="8_roofs"]
 
 [resource]
 script = ExtResource("1_config")
@@ -18,5 +17,4 @@ sawbot_texture = ExtResource("4_sawbot")
 spitter_texture = ExtResource("5_spitter")
 cat_texture = ExtResource("6_cat")
 floor_tiles = ExtResource("7_floor")
-home_roofs_narrow = ExtResource("8_roofs_narrow")
-home_roofs_wide = ExtResource("9_roofs_wide")
+home_roofs = ExtResource("8_roofs")

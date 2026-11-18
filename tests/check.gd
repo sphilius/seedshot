@@ -1116,15 +1116,13 @@ func _test_windows_and_night() -> void:
 	var last: int = _arena.waves.total_waves()
 	_check(total >= 20 and total <= 25, "the block has a fixed 20 to 25 windows (%d)" % total)
 	_check(windows.home_count() < total, "homes have more than one window (%d homes)" % windows.home_count())
-	# Each roof picture holds six roofs side by side, each exactly as wide as the
-	# homes that use it, so no roof is stretched or cut short.
-	var roofs_fit: bool = true
-	for home: int in windows.home_count():
-		var roofs: Texture2D = windows.roof_texture_for(home)
-		roofs_fit = roofs_fit and roofs != null \
-			and is_equal_approx(roofs.get_width(), windows.home_width(home) * BlockWindows.ROOF_DESIGNS) \
-			and is_equal_approx(roofs.get_height(), BlockWindows.ROOF_HEIGHT)
-	_check(roofs_fit, "every home's roof picture fits it exactly")
+	# The roof picture holds six units side by side, each exactly one unit wide,
+	# and the units packed edge to edge exactly fill the bottom wall.
+	var roofs: Texture2D = CONFIG.home_roofs
+	_check(roofs != null and is_equal_approx(roofs.get_width(), BlockWindows.UNIT_WIDTH * BlockWindows.ROOF_DESIGNS)
+		and is_equal_approx(roofs.get_height(), BlockWindows.ROOF_HEIGHT), "the roof picture holds six whole roof units")
+	_check(is_equal_approx(BlockWindows.UNIT_WIDTH * total, CONFIG.grid_cols * CONFIG.cell_size),
+		"one roof unit per window exactly fills the bottom wall")
 
 	# Before any wave: the first lamps only, shining faintly.
 	_check(windows.lit_count == CONFIG.windows_lit_at_start, "the block starts with %d windows lit" % CONFIG.windows_lit_at_start)

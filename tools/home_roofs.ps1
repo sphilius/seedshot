@@ -11,12 +11,12 @@
 #
 # USE:   .\tools\home_roofs.ps1
 #
-# OUT:   art/sprites/home_roofs_narrow.png   6 roofs side by side, for homes with 2 windows
-#        art/sprites/home_roofs_wide.png     6 roofs side by side, for homes with 3 windows
-#        art/source/klad/home_roofs@8x.png   both rows at 8x, only for looking at
+# OUT:   art/sprites/home_roofs.png          6 roof units side by side, 52 x 32 each
+#        art/source/klad/home_roofs@8x.png   the same at 8x, only for looking at
 #
-# The roof sizes below MUST match the home widths block_windows.gd works out
-# (windows x window width + gaps + padding). tests/check.gd checks that they do.
+# The game packs one roof unit over each of the block's 24 windows, edge to edge along
+# the bottom wall (24 x 52 = 1248 px, the arena's width). A home is 2 or 3 units side by
+# side. The width here MUST match block_windows.gd; tests/check.gd checks that it does.
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Drawing
 # NOTE: PowerShell variable names ignore case: $W and $w would be the same variable.
@@ -31,7 +31,7 @@ New-Item -ItemType Directory -Force $work | Out-Null
 
 $ROOF_H = 32                                   # roof height in the game, in pixels
 $BRIGHTEN = 1.9                                # colour multiplier applied before shrinking (1 = unchanged)
-$sizes  = @(@{ label = "narrow"; width = 46 }, @{ label = "wide"; width = 66 })
+$sizes  = @(@{ label = "units"; width = 52 })   # one roof unit sits over each window
 # Left edge of each of the six concept homes (measured), and the concept roof's top and
 # bottom rows. The roofs run from y 67 to y 192; below that is the concept's front wall.
 $homeLefts = @(156, 272, 396, 504, 619, 736)
@@ -44,9 +44,9 @@ foreach ($size in $sizes) {
 	$strip = [System.Drawing.Bitmap]::new($size.width * $homeLefts.Count, $ROOF_H)
 	$g = [System.Drawing.Graphics]::FromImage($strip)
 	for ($i = 0; $i -lt $homeLefts.Count; $i++) {
-		# A wide home takes one and a half concept roofs, so the roof is not squashed:
-		# the cut has the same shape (width : height) as the roof in the game.
-		$cutW = if ($size.label -eq "wide") { [int]($CONCEPT_HOME_W * 1.5) } else { $CONCEPT_HOME_W }
+		# The cut has the same shape (width : height) as the roof unit in the game,
+		# so nothing is squashed.
+		$cutW = $CONCEPT_HOME_W
 		$cutH = [int][math]::Round($cutW * $ROOF_H / $size.width)
 		$left = [math]::Min($homeLefts[$i], $conceptRight - $cutW)
 		# Cut from the roof's top edge, so the tanks, dishes and plants up there are kept.
@@ -79,14 +79,15 @@ foreach ($size in $sizes) {
 		$g.DrawImage($roofImg, ($i * $size.width), 0, $size.width, $ROOF_H); $roofImg.Dispose()
 	}
 	$g.Dispose()
-	$strip.Save((Join-Path $root "art\sprites\home_roofs_$($size.label).png"), [System.Drawing.Imaging.ImageFormat]::Png)
+	$strip.Save((Join-Path $root "art\sprites\home_roofs.png"), [System.Drawing.Imaging.ImageFormat]::Png)
 	$strip.Dispose()
 }
 $sheetImg.Dispose()
 
 # Both rows at 8x, one above the other, for checking by eye.
-$rows = $sizes | ForEach-Object { [System.Drawing.Bitmap]::FromFile((Join-Path $root "art\sprites\home_roofs_$($_.label).png")) }
-$bigW = [int]$rows[-1].Width * 8          # the wide row is the longer one
+$rows = $sizes | ForEach-Object { [System.Drawing.Bitmap]::FromFile((Join-Path $root "art\sprites\home_roofs.png")) }
+$rows = @($rows)
+$bigW = [int]$rows[0].Width * 8
 $big = [System.Drawing.Bitmap]::new($bigW, $ROOF_H * 8 * $rows.Count + 8)
 $bg = [System.Drawing.Graphics]::FromImage($big)
 $bg.InterpolationMode = "NearestNeighbor"; $bg.PixelOffsetMode = "Half"

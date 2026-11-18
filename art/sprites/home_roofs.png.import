@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://j04omli0ilci"
-path="res://.godot/imported/home_roofs_narrow.png-f320a87c5424e4abb47b9c98004f79c5.ctex"
+uid="uid://b2ovws5y1fri3"
+path="res://.godot/imported/home_roofs.png-b00c0084e592c67d4940311ddfc89749.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/sprites/home_roofs_narrow.png"
-dest_files=["res://.godot/imported/home_roofs_narrow.png-f320a87c5424e4abb47b9c98004f79c5.ctex"]
+source_file="res://art/sprites/home_roofs.png"
+dest_files=["res://.godot/imported/home_roofs.png-b00c0084e592c67d4940311ddfc89749.ctex"]
 
 [params]
 

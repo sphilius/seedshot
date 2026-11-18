@@ -219,3 +219,17 @@ If another tree stands between the bot and the clicked tree, the vine grabs the 
 ## D-001: One config resource (Made, 2026-11-13)
 
 From the kickoff. `config/game_config.tres` holds every speed, cooldown and size, so tuning never needs a code edit.
+
+## D-030 (s14): floor tiles and rooftops from the concept art
+
+- **Floor:** nine 48 px slabs, built by `tools/floor_tiles.ps1`: it cuts slabs out of Sasha's combined concept sheet
+  and Klad's `pixelize` shrinks each one into the game palette. Three plain slabs fill most cells; six detail slabs
+  (crater, moss, puddle, oil, grate, hatch) appear in about 1 in 14 cells. The pick is a hash of the cell's x and y,
+  so the floor never reshuffles. The grid lines are gone: each slab has its own dark edge.
+- **Two floor-only steel steps** (`floor_palette.ops.jsonl`). Without them the slab's light bevel snapped to teal.
+- **Homes:** one roof unit (52 x 32, from `03_wall_and_homes_b`, built by `tools/home_roofs.ps1`) over each of the
+  24 windows, packed edge to edge (24 x 52 = 1248, the arena's width). A home is 2 or 3 units with a dark seam
+  between homes; the game draws the brick front wall and the two-pane windows itself so each window still lights
+  on its own. Spread-out homes (the first try) left more bare wall than homes.
+- The concept's dark and lit strips do not line up (the lit one is 7 px taller), so the lit strip is not used.
+- PowerShell gotcha: variable names ignore case, so `$TILE` and `$tile` are the same variable.

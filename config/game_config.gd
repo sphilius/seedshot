@@ -213,11 +213,9 @@ extends Resource
 ## it has. Ten homes and 24 windows in all.
 @export var home_window_counts: Array[int] = [2, 3, 2, 3, 2, 2, 3, 2, 3, 2]
 ## Roofs for the homes, built from the concept by tools/home_roofs.ps1: six
-## roofs side by side, 32 px tall. "Narrow" roofs fit a 2-window home, "wide"
-## roofs a 3-window home. Home n uses roof number n % 6. Leave empty for plain
-## grey homes.
-@export var home_roofs_narrow: Texture2D
-@export var home_roofs_wide: Texture2D
+## roof units side by side, each 52 x 32 (one unit sits over each window).
+## Leave empty for plain grey roofs.
+@export var home_roofs: Texture2D
 ## Windows already lit before any wave is cleared: the block's first two lamps.
 @export var windows_lit_at_start: int = 2
 ## How strongly a lit window shines before any wave is cleared (0 to 1). It
