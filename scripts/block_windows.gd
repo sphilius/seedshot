@@ -9,6 +9,8 @@ extends Node2D
 ##   The block      a row of homes along the BOTTOM wall. Each home has two or
 ##                  three windows (the config's `home_window_counts`). The arena
 ##                  says how many windows are lit and how strongly (set_light).
+##                  A home is a roof seen from above (one of six roof pictures
+##                  from the concept art) with its front wall and windows below.
 ##   The next block a row of smaller windows along the very top edge. All dark
 ##                  until the run is won (light_next_block), then they come on
 ##                  one after another: the light has jumped the wall.
@@ -30,8 +32,18 @@ extends Node2D
 
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
 
-## Size of one window of the block, in pixels.
-const WINDOW_SIZE: Vector2 = Vector2(14.0, 22.0)
+## Size of one window of the block, in pixels. Small and wide, so the windows
+## fit on the home's front wall under its roof.
+const WINDOW_SIZE: Vector2 = Vector2(12.0, 10.0)
+## Each home is a roof seen from above (a picture from the config) with a strip
+## of front wall below it, where the windows are. Together they fill the wall cell.
+const ROOF_HEIGHT: float = 32.0
+## How many different roof designs the roof pictures hold.
+const ROOF_DESIGNS: int = 6
+## Colour of a home's front wall (dark brick brown).
+const FRONT_COLOR: Color = Color(0.24, 0.16, 0.13)
+## Colour of the thin frame around each window.
+const FRAME_COLOR: Color = Color(0.07, 0.08, 0.08)
 ## Empty wall between two windows of the same home, in pixels.
 const WINDOW_GAP: float = 8.0
 ## Wall on each side of a home's windows that still belongs to the home.
@@ -106,10 +118,12 @@ func setup(arena_rect: Rect2, wall_px: float) -> void:
 	var gap: float = (arena_rect.size.x - all_homes_width) / float(home_count() + 1)
 
 	var top: float = arena_rect.end.y - wall_px
-	var window_top: float = top + (wall_px - WINDOW_SIZE.y) / 2.0
+	# Windows sit in the middle of the front wall, which is the part of the
+	# wall cell below the roof.
+	var window_top: float = top + ROOF_HEIGHT + (wall_px - ROOF_HEIGHT - WINDOW_SIZE.y) / 2.0
 	var x: float = arena_rect.position.x + gap
 	for home: int in home_count():
-		_home_rects.append(Rect2(x, top + 6.0, home_widths[home], wall_px - 6.0))
+		_home_rects.append(Rect2(x, top, home_widths[home], wall_px))
 		for i: int in CONFIG.home_window_counts[home]:
 			var left: float = x + HOME_PADDING + i * (WINDOW_SIZE.x + WINDOW_GAP)
 			_window_rects.append(Rect2(Vector2(left, window_top), WINDOW_SIZE))
@@ -149,6 +163,21 @@ func window_count() -> int:
 	for windows_in_home: int in CONFIG.home_window_counts:
 		total += windows_in_home
 	return total
+
+
+## The roof picture home `home` takes its roof from: the wide roofs for a
+## 3-window home, the narrow ones otherwise. Public so the tests can check that
+## each picture's roofs are exactly as wide as the homes they cover.
+func roof_texture_for(home: int) -> Texture2D:
+	if CONFIG.home_window_counts[home] >= 3:
+		return CONFIG.home_roofs_wide
+	return CONFIG.home_roofs_narrow
+
+
+## How wide home `home` is, in pixels (its windows, the gaps between them, and
+## its padding). Used by the tests.
+func home_width(home: int) -> float:
+	return _home_rects[home].size.x
 
 
 ## How many homes the block has.
@@ -225,9 +254,23 @@ func _process(delta: float) -> void:
 
 ## _draw paints the homes, their windows, and the next block's row.
 func _draw() -> void:
-	for rect: Rect2 in _home_rects:
-		draw_rect(rect, HOME_COLOR)
+	for home: int in _home_rects.size():
+		var rect: Rect2 = _home_rects[home]
+		var roof_rect := Rect2(rect.position, Vector2(rect.size.x, ROOF_HEIGHT))
+		var roofs: Texture2D = roof_texture_for(home)
+		if roofs != null:
+			# The roof picture holds six roofs side by side; take design home % 6.
+			var design: int = home % ROOF_DESIGNS
+			var source := Rect2(design * rect.size.x, 0.0, rect.size.x, ROOF_HEIGHT)
+			draw_texture_rect_region(roofs, roof_rect, source)
+		else:
+			draw_rect(roof_rect, HOME_COLOR)
+		# The front wall: everything below the roof.
+		draw_rect(Rect2(rect.position.x, rect.position.y + ROOF_HEIGHT, rect.size.x, rect.size.y - ROOF_HEIGHT), FRONT_COLOR)
 	for i: int in _window_rects.size():
+		# A 1-pixel frame first (grow(1) makes the rectangle 1 pixel bigger on
+		# every side), then the glass on top of it.
+		draw_rect(_window_rects[i].grow(1.0), FRAME_COLOR)
 		# lerp blends two colours: 0.0 gives the first, 1.0 gives the second.
 		draw_rect(_window_rects[i], DARK_COLOR.lerp(LIT_COLOR, _brightness[i]))
 
