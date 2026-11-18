@@ -34,6 +34,16 @@ const PAINT_COLORS: Array[Color] = [
 
 ## How many lines are on the walls right now. Public so tests can read it.
 var revealed_count: int = 0
+## While true, "KNOCK x3" and an arrow are painted on the floor under the cat
+## shop, at `knock_at` (the shop's position). The arena switches it on from
+## the config's knock_hint_wave if the shop is still shut, and off once it opens.
+var show_knock: bool = false:
+	set(value):
+		# A setter runs whenever show_knock is assigned: redraw only on a change.
+		if value != show_knock:
+			show_knock = value
+			queue_redraw()
+var knock_at: Vector2 = Vector2.ZERO
 
 ## The arena's outer rectangle (walls included), in pixels. Set by setup().
 var _arena_rect: Rect2
@@ -91,3 +101,15 @@ func _draw() -> void:
 		draw_string(font, Vector2.ZERO, text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, FONT_SIZE, color)
 	# Put the "paper" back, so nothing drawn later is turned by accident.
 	draw_set_transform(Vector2.ZERO, 0.0)
+
+	if show_knock:
+		# An arrow pointing up at the shop, then the words under it, in pink paint.
+		var pink: Color = PAINT_COLORS[2]
+		var tip: Vector2 = knock_at + Vector2(0.0, _wall_px * 0.85)
+		var tail: Vector2 = tip + Vector2(0.0, _wall_px * 0.9)
+		draw_line(tail, tip, pink, 4.0)
+		draw_line(tip, tip + Vector2(-10.0, 12.0), pink, 4.0)
+		draw_line(tip, tip + Vector2(10.0, 12.0), pink, 4.0)
+		var words: String = "KNOCK x3"
+		var width: float = font.get_string_size(words, HORIZONTAL_ALIGNMENT_LEFT, -1.0, FONT_SIZE).x
+		draw_string(font, tail + Vector2(-width / 2.0, FONT_SIZE + 2.0), words, HORIZONTAL_ALIGNMENT_LEFT, -1.0, FONT_SIZE, pink)

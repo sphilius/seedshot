@@ -151,6 +151,9 @@ extends Resource
 ## Talking to Lucky: Seven must be within this many cells of the open shop for
 ## the E key to work. (A tap on the shop works from anywhere.)
 @export var lucky_talk_range_cells: float = 3.5
+## From this wave on, if the shop is still shut, a spray-painted "KNOCK x3"
+## arrow on the floor points at it (the cat stays a discovery before then).
+@export var knock_hint_wave: int = 3
 ## Lucky's greeting when the shutter opens, by the wave the cat was found in.
 ## Words only: nothing Lucky says changes the game. (Placeholders, STORY.md.)
 @export_multiline var lucky_greeting_early: String = "Early. I like early. Take the clamp, kid. And a fuse, on the house."

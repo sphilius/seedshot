@@ -169,6 +169,7 @@ func _ready() -> void:
 	cat_shop.position = grid.cell_to_world(CAT_SHOP_CELL) + Vector2(CONFIG.cell_size / 2.0, 0.0)
 	cat_shop.opened.connect(_on_cat_shop_opened)
 	add_child(cat_shop)
+	graffiti.knock_at = cat_shop.position  # where the "KNOCK x3" hint points
 	player.zip_finished.connect(_on_player_zip_finished)
 
 	# Listen to the wave director: it says when, the arena does the spawning.
@@ -545,6 +546,8 @@ func _on_wave_started(number: int, total: int) -> void:
 	_show_banner("Wave %d" % number, 1.5)
 	# By now the controls are learned; the bottom wall belongs to the windows.
 	_hint.visible = number < CONFIG.hint_hide_wave
+	# Still haven't found the cat by now? The Block paints a hint on the floor.
+	graffiti.show_knock = number >= CONFIG.knock_hint_wave and cat_shop != null and not cat_shop.is_open
 	# Under the banner: the opening line (once only), then Helios's notice.
 	var lines: Array[String] = []
 	if not _hook_shown:
@@ -622,6 +625,7 @@ func _on_all_waves_cleared() -> void:
 func _on_cat_shop_opened() -> void:
 	player.receive_cat_gift()
 	lucky_found_wave = maxi(waves.wave, 1)
+	graffiti.show_knock = false
 	_show_banner("Lucky's gift: right-click a machine to bind it. Spare fuse fitted.", 4.0)
 	_show_story_lines([_lucky_says(LuckyLines.greeting_for(lucky_found_wave))])
 
