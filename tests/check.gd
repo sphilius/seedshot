@@ -1409,12 +1409,12 @@ func _test_talking_to_lucky() -> void:
 	_check(not _arena.is_near_lucky(), "across the lot is too far")
 
 
-## Canopy FM: three stations with real song files; the muffle filter opens as the
+## Canopy FM: four stations with real song files; the muffle filter opens as the
 ## block lights; a felled tree dulls the radio for a moment.
 func _test_canopy_fm() -> void:
 	for id: StringName in CanopyFM.STATIONS:
 		_check(ResourceLoader.exists(CanopyFM.STATIONS[id]), "the %s station has its song" % id)
-	_check(CanopyFM.STATIONS.size() == 3, "three stations")
+	_check(CanopyFM.STATIONS.size() == 4, "four stations")
 	_check(CanopyFM.cutoff_for(0.0) < CanopyFM.cutoff_for(0.5) and CanopyFM.cutoff_for(0.5) < CanopyFM.cutoff_for(1.0),
 		"the radio sounds clearer as the block lights")
 	_check(is_equal_approx(CanopyFM.cutoff_for(0.0), CONFIG.music_cutoff_dark_hz), "dark block: muffled")

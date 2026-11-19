@@ -36,6 +36,10 @@ $stations = [ordered]@{
 	chip = "Hopeful chiptune instrumental for a pixel art game. Bright square-wave lead melody, bubbly arpeggios, " +
 	       "warm triangle bass, crisp noise drums at 110 BPM, with a soft analog synth pad underneath. " +
 	       "Optimistic solarpunk mood, a city switching its lights back on. Steady energy, seamless loop, no vocals."
+	trap = "Lo-fi drill trap instrumental for a game. Sliding 808 bass glides, skittering triplet hi-hat rolls, " +
+	       "syncopated drill snares at 142 BPM (half-time feel), a dark but warm detuned piano and vinyl-dusted pad " +
+	       "loop, a little tape saturation. Gritty and determined, a block standing its ground at night, still mellow " +
+	       "enough to sit under gameplay. Steady energy, no drops, seamless loop, no vocals."
 }
 # @(...) copies the key list first: removing from a list while walking it is an error.
 if ($Names) { @($stations.Keys) | Where-Object { $Names -notcontains $_ } | ForEach-Object { $stations.Remove($_) } }

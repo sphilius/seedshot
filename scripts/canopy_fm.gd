@@ -14,7 +14,7 @@ extends Node
 ##     back to muffled and quieter (trailer shot 2, "the music dulls").
 ##   It is ONE recording made to sound fuller or duller, not stacked parts.
 ##
-## STATIONS: three songs (tools/gen_music.ps1 makes them). The first plays by
+## STATIONS: four songs (tools/gen_music.ps1 makes them). The first plays by
 ## default; the player picks another in New Game +, which unlocks after a win.
 ##
 ## The browser will not play sound before the player's first click or key, so
@@ -27,12 +27,14 @@ const STATIONS: Dictionary[StringName, String] = {
 	&"lofi": "res://audio/music/lofi.mp3",
 	&"dub": "res://audio/music/dub.mp3",
 	&"chip": "res://audio/music/chip.mp3",
+	&"trap": "res://audio/music/trap.mp3",
 }
 ## Station id -> the name shown to the player.
 const STATION_NAMES: Dictionary[StringName, String] = {
 	&"lofi": "Rooftop Lo-fi",
 	&"dub": "Block Dub",
 	&"chip": "Switch-On Chip",
+	&"trap": "Corner Drill",
 }
 const BUS_NAME: StringName = &"Music"
 

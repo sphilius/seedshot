@@ -68,8 +68,7 @@ spare fuse that gets you back up once when you'd go down.** Talk to Lucky as oft
 **Short on time?** After wave 5 the game tells you it's a good place to stop and rate. Play on for the ending.
 
 **New Game +**: beat the game once to unlock it on the title screen: 50% more machines, sent faster, and trees that
-survive a whole wave grow into **great sunroots**. You also get to pick your Canopy FM station (lo-fi, dub or
-chiptune). **[add the New Game + mechanic once it is chosen]**
+survive a whole wave grow into **great sunroots**. You also get to pick your Canopy FM station (lo-fi, dub, chiptune or drill trap). **[add the New Game + mechanic once it is chosen]**
 
 ### Made for Jamference AI Game Jam Hack 4
 
@@ -87,7 +86,7 @@ This game was made with AI tools. What each one did:
   sunroot trees, lighting stages, Seven's design and the cover art. I picked and combined the results.
 - **Klad + scripts:** turned the chosen concept art into the in-game pixel art (floor tiles, rooftops, trees) at
   game size, in one fixed palette. Seven's sprite was drawn by a script from the locked design.
-- **ElevenLabs:** the sound effects and the three Canopy FM songs (lo-fi, dub, chiptune).
+- **ElevenLabs:** the sound effects and the four Canopy FM songs (lo-fi, dub, chiptune, drill trap).
 
 My part: the concept, story, characters and dialogue direction, every design decision, art direction and picks, and
 playtesting. **[Edit this line in your own words.]**
