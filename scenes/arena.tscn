@@ -31,7 +31,7 @@ offset_top = 686.0
 offset_right = 1280.0
 offset_bottom = 712.0
 horizontal_alignment = 1
-text = "WASD move   |   Left click: seed pod   |   Right click: zip to a tree   |   Red glow = incoming hit   |   M: mute"
+text = "WASD move   |   Left click: seed pod   |   Right click: zip to a tree   |   Q: brambles   |   Red glow = incoming hit   |   M: mute"
 
 [node name="WaveLabel" type="Label" parent="Hud"]
 modulate = Color(1, 1, 1, 0.85)

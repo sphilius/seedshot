@@ -33,6 +33,9 @@ var speed_scale: float = 1.0
 ## True while the player's vine has this machine tied up: it cannot walk, swing,
 ## shoot or saw. It can still be shot.
 var is_bound: bool = false
+## Physics steps left walking slowly because of a bramble patch. Public so the
+## tests can read it; bramble.gd renews it every step the machine stays inside.
+var _slowed_steps: int = 0
 ## Seconds of binding left.
 var _bound_time_left: float = 0.0
 var hp: int = 0
@@ -102,6 +105,16 @@ func yank_and_bind(puller: Vector2, stop_distance: float, seconds: float) -> voi
 	var tween: Tween = create_tween()
 	tween.set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)  # step in time with physics
 	tween.tween_property(self, "global_position", global_position + travel, travel.length() / CONFIG.vine_yank_speed)
+
+
+## Called by a bramble patch: walk slowly for the next `steps` physics steps.
+func slow_for(steps: int) -> void:
+	_slowed_steps = maxi(_slowed_steps, steps)
+
+
+## True while a bramble is slowing this machine. Used by the tests.
+func is_slowed() -> bool:
+	return _slowed_steps > 0
 
 
 ## Called the moment the vine binds this machine. Does nothing here; a machine
@@ -185,6 +198,10 @@ func _next_goal(final_position: Vector2) -> Vector2:
 ## the sprite to face the way it is going.
 func _walk_towards(goal: Vector2, speed: float) -> void:
 	velocity = global_position.direction_to(goal) * speed * speed_scale
+	# In a bramble patch: walk slower, and count down the steps left in the thorns.
+	if _slowed_steps > 0:
+		velocity *= CONFIG.bramble_slow_factor
+		_slowed_steps -= 1
 	# The art faces "up", and angle() measures from "right", hence the quarter turn.
 	_sprite.rotation = velocity.angle() + PI / 2.0
 	move_and_slide()  # moves by `velocity`, sliding along anything solid
