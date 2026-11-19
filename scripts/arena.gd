@@ -45,6 +45,8 @@ const BACKDROP_COLOR: Color = Color(0.05, 0.05, 0.07)
 const WALL_COLOR: Color = Color(0.19, 0.19, 0.22)
 const FLOOR_COLOR: Color = Color(0.29, 0.29, 0.31)
 const GRID_LINE_COLOR: Color = Color(0.0, 0.0, 0.0, 0.10)
+## The ring round a tap point's soil patch (brighter than white on purpose).
+const TAP_RING_COLOR: Color = Color(2.2, 1.7, 0.6, 0.85)
 
 ## The pathfinding grid. Public so tests can inspect it.
 var grid: ArenaGrid
@@ -245,6 +247,9 @@ func _draw() -> void:
 		if CONFIG.tap_point_texture != null:
 			for cell: Vector2i in tap_points:
 				draw_texture_rect(CONFIG.tap_point_texture, Rect2(grid.origin + Vector2(cell) * cell_px, Vector2.ONE * cell_px), false)
+				# A gold ring, so the patch reads at night. Colour values above 1
+				# keep it bright under the night tint (like the lights, see light_boost).
+				draw_arc(grid.cell_to_world(cell), cell_px * 0.48, 0.0, TAU, 32, TAP_RING_COLOR, 2.0)
 		# Each slab already has its own dark edge, so the grid lines below would
 		# only double them up.
 		return
