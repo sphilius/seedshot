@@ -58,7 +58,9 @@ func _on_body_entered(body: Node2D) -> void:
 	# `as` gives the body as a Player, or null if it is something else.
 	var player := body as Player
 	if player != null:
-		player.take_damage(CONFIG.spit_damage)
+		# Pass where the shot came from (one step back along its path), so Seven
+		# can show which side it was hit from.
+		player.take_damage(CONFIG.spit_damage, global_position - direction * 40.0)
 	else:
 		Sfx.play(&"thunk")  # stopped by a tree or a wall: cover did its job
 	queue_free()

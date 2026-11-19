@@ -42,6 +42,11 @@ var hp: int = 0
 ## The hit points it started with (for the Linebreaker's armour ring).
 var max_hp: int = 0
 var is_dead: bool = false
+## Seconds left of the "I was hit" flash. Public so the tests can read it.
+var hit_flash_left: float = 0.0
+## A small node drawn ABOVE the sprite, for the hit flash. (A node's own _draw
+## is painted behind its children, so the flash needs a child of its own.)
+var _hit_overlay: Node2D
 
 ## The grid to find routes over. Handed in by setup().
 var _grid: ArenaGrid
@@ -72,6 +77,26 @@ func take_damage(amount: int) -> void:
 		is_dead = true
 		died.emit(self)
 		queue_free()
+		return
+	# Still standing: flash, so the player can see the shot landed.
+	hit_flash_left = CONFIG.hit_flash_seconds
+	if _hit_overlay != null:
+		_hit_overlay.queue_redraw()
+
+
+## Paints the hit flash on the overlay node: a pale disc over the machine that
+## fades out, and a ring that closes in on it. Connected to the overlay's `draw`
+## signal in _configure_body.
+func _draw_hit_flash() -> void:
+	if hit_flash_left <= 0.0:
+		return
+	var left: float = hit_flash_left / CONFIG.hit_flash_seconds  # 1 at the hit, 0 when over
+	var radius: float = (_collision.shape as CircleShape2D).radius
+	# Color(colour, alpha) copies a colour with a new see-through value.
+	var color := Color(CONFIG.hit_flash_color, CONFIG.hit_flash_color.a * left)
+	_hit_overlay.draw_circle(Vector2.ZERO, radius * 1.15, color)
+	# lerpf(a, b, t) slides from a to b: the ring starts wide and shrinks.
+	_hit_overlay.draw_arc(Vector2.ZERO, radius * lerpf(1.2, 2.0, left), 0.0, TAU, 24, color, 3.0)
 
 
 ## The vine's second use: drags this machine towards `puller` in a straight line,
@@ -130,6 +155,10 @@ func _on_bound() -> void:
 ## Each machine calls this first thing in its _physics_process. It counts the
 ## binding down and returns true while the machine must stay frozen.
 func _tick_bound(delta: float) -> bool:
+	# Every machine calls this each step, so the hit flash is counted down here too.
+	if hit_flash_left > 0.0:
+		hit_flash_left = maxf(hit_flash_left - delta, 0.0)
+		_hit_overlay.queue_redraw()
 	if not is_bound:
 		return false
 	_bound_time_left -= delta
@@ -173,6 +202,12 @@ func _configure_body(start_hp: int, radius_cells: float, texture: Texture2D, fal
 	hp = start_hp
 	max_hp = start_hp
 	_fallback_color = fallback_color
+	# The hit flash is drawn on a child node with a higher z_index, so it shows
+	# in front of the sprite. Its `draw` signal calls our drawing function.
+	_hit_overlay = Node2D.new()
+	_hit_overlay.z_index = 1
+	add_child(_hit_overlay)
+	_hit_overlay.draw.connect(_draw_hit_flash)
 	(_collision.shape as CircleShape2D).radius = radius_cells * CONFIG.cell_size
 	_sprite.texture = texture
 	if texture != null:

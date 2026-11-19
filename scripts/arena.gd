@@ -96,6 +96,16 @@ var _current_line: Dictionary = {}
 var wave_end_beat_seconds: float = CONFIG.wave_end_slow_seconds
 var _beat_left: float = 0.0
 var _beat_wave: int = 0
+## SCREEN SHAKE. shake_offset is how far the playfield is pushed aside this
+## frame, in pixels (public so the tests can read it). The other two are how
+## hard the current shake started and how many seconds of it are left.
+var shake_offset: Vector2 = Vector2.ZERO
+var _shake_px: float = 0.0
+var _shake_left: float = 0.0
+## The red sheet over the whole screen that flashes when Seven is hurt, and the
+## seconds of that flash left. Public so the tests can read them.
+var hurt_flash: ColorRect
+var hurt_flash_left: float = 0.0
 ## True once the opening line has been shown, so a restarted wave 1 skips it.
 var _hook_shown: bool = false
 ## The cell of the most recent sapling planted by a downed machine.
@@ -258,6 +268,7 @@ func _ready() -> void:
 	player.health_changed.connect(_on_player_health_changed)
 	player.died.connect(_on_player_died)
 	player.fuse_used.connect(_on_player_fuse_used)
+	player.hurt.connect(_on_player_hurt)
 	add_child(player)
 	_health_pips.show_health(player.hp, player.max_hp)
 	# Hand the player to the touch controls, if the scene has them.
@@ -285,6 +296,15 @@ func _ready() -> void:
 	waves.wave_cleared.connect(_on_wave_cleared)
 	waves.all_waves_cleared.connect(_on_all_waves_cleared)
 	_banner.visible = false
+	# The red "Seven is hurt" sheet: a plain coloured rectangle over the whole
+	# screen, see-through until a hit. It sits first in the HUD so every label
+	# and menu is drawn on top of it, and it ignores the mouse and touches.
+	hurt_flash = ColorRect.new()
+	hurt_flash.color = Color(CONFIG.hurt_flash_color, 0.0)
+	hurt_flash.size = get_viewport_rect().size
+	hurt_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	$Hud.add_child(hurt_flash)
+	$Hud.move_child(hurt_flash, 0)
 	radio = Radio.new()
 	$Hud.add_child(radio)
 	upgrade_picker = UpgradePicker.new()
@@ -332,6 +352,7 @@ func _process(delta: float) -> void:
 	# One shared value for every tree's markers (a static var, see forest_tree.gd).
 	ForestTree.light_boost = boost
 	_heart_alarm_left = maxf(_heart_alarm_left - delta, 0.0)
+	_tick_impact(delta)
 	tick_grove_rest(delta)
 	if _beat_left > 0.0:
 		# `delta` is already slowed by Engine.time_scale; dividing by it gives
@@ -498,7 +519,9 @@ func spawn_scrapper_at(cell: Vector2i, heavy: bool = false) -> Scrapper:
 	scrapper.died.connect(_on_enemy_died)
 	# A landed swing goes straight to the player's take_damage. The Scrapper only
 	# announces the hit; it never reaches into the player itself.
-	scrapper.struck.connect(player.take_damage)
+	# The small function in brackets is a "lambda": it adds where the Scrapper is
+	# standing, so Seven can show which side the swing came from.
+	scrapper.struck.connect(func(damage: int) -> void: player.take_damage(damage, scrapper.global_position))
 	_enemies.add_child(scrapper)
 	return scrapper
 
@@ -986,6 +1009,49 @@ func is_wave_end_beat_playing() -> bool:
 ## test finishing): never leave the game running in slow motion.
 func _exit_tree() -> void:
 	Engine.time_scale = 1.0
+	get_viewport().canvas_transform = Transform2D.IDENTITY  # and never leave it shaken
+
+
+## Starts a screen shake of up to `pixels` in any direction. A shake already
+## running is only replaced by a stronger one.
+func shake(pixels: float) -> void:
+	var wanted: float = pixels * CONFIG.shake_scale
+	if wanted <= 0.0:
+		return
+	# How strong the running shake still is (it fades in a straight line).
+	var running: float = _shake_px * (_shake_left / CONFIG.shake_seconds)
+	if wanted < running:
+		return
+	_shake_px = wanted
+	_shake_left = CONFIG.shake_seconds
+
+
+## Runs every frame: moves the shake and the red hurt flash along.
+## The shake pushes the viewport's `canvas_transform` aside. That is the "camera"
+## for everything in the world; the HUD is on a CanvasLayer, which has its own,
+## so the labels stay still. Nothing really moves, so physics is not disturbed.
+func _tick_impact(delta: float) -> void:
+	# `delta` is slowed by Engine.time_scale; dividing gives real seconds.
+	var real_delta: float = delta / maxf(Engine.time_scale, 0.01)
+	if _shake_left > 0.0:
+		_shake_left = maxf(_shake_left - real_delta, 0.0)
+		var strength: float = _shake_px * (_shake_left / CONFIG.shake_seconds)
+		# A new random direction each frame; randf_range picks a number between two.
+		shake_offset = Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * strength
+		get_viewport().canvas_transform = Transform2D(0.0, shake_offset)
+	elif shake_offset != Vector2.ZERO:
+		shake_offset = Vector2.ZERO
+		get_viewport().canvas_transform = Transform2D.IDENTITY
+	if hurt_flash_left > 0.0:
+		hurt_flash_left = maxf(hurt_flash_left - real_delta, 0.0)
+		var share: float = hurt_flash_left / CONFIG.hurt_flash_seconds  # 1 at the hit, 0 when over
+		hurt_flash.color = Color(CONFIG.hurt_flash_color, CONFIG.hurt_flash_color.a * share)
+
+
+## Signal handler: a hit on Seven counted. Shake hard and flash the screen red.
+func _on_player_hurt() -> void:
+	shake(CONFIG.shake_hurt_px)
+	hurt_flash_left = CONFIG.hurt_flash_seconds
 
 
 ## This run's numbers, as lines of text for the pause menu.
@@ -1332,6 +1398,7 @@ func _on_player_died() -> void:
 ## Signal handler: a Scrapper died. Plant a sapling where it fell.
 func _on_enemy_died(enemy: Enemy) -> void:
 	Sfx.play(&"enemy_down")
+	shake(CONFIG.shake_kill_px)  # a small jolt for every machine that goes down
 	var cell: Vector2i = _nearest_free_cell(grid.world_to_cell(enemy.global_position))
 	if cell != ArenaGrid.NO_CELL:
 		# This handler runs in the middle of a physics step (the pod's overlap

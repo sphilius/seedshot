@@ -118,6 +118,7 @@ func _ready() -> void:
 	await _test_pause_menu()
 	await _test_back_wall_and_roof_graffiti()
 	await _test_harder_waves_aim_line_sunburst()
+	await _test_hit_feedback()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -2337,3 +2338,56 @@ func _test_harder_waves_aim_line_sunburst() -> void:
 	_arena.waves.start_wave(3)
 	_check(powers.sunburst_charges == CONFIG.sunburst_charges_per_wave, "the next wave refills them")
 	_check(_arena._is_radio_pending(CONFIG.sunburst_intro_line % CONFIG.sunburst_charges_per_wave), "and Canopy FM explains Sunburst the first time a great sunroot is standing")
+
+## s18 "if time allows" (hit-read, impact): a machine flashes when a shot lands,
+## the screen shakes for a kill and harder for a hit on Seven, and Seven shows
+## which side the hit came from.
+func _test_hit_feedback() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	var player_cell: Vector2i = _arena.grid.world_to_cell(player.global_position)
+
+	# A Linebreaker has enough hit points to survive a pod, so it flashes.
+	var heavy: Scrapper = _arena.spawn_scrapper_at(player_cell + Vector2i(6, 0), true)
+	await _wait_frames(2)
+	_check(heavy.hit_flash_left == 0.0, "a machine that has not been hit does not flash")
+	heavy.take_damage(1)
+	_check(is_equal_approx(heavy.hit_flash_left, CONFIG.hit_flash_seconds), "a hit it survives starts the flash")
+	var flash_over: Callable = func() -> bool: return heavy.hit_flash_left == 0.0
+	_check(await _wait_until(flash_over, CONFIG.hit_flash_seconds + 0.5), "and the flash ends by itself")
+
+	# A machine going down gives a small shake of the playfield.
+	_check(_arena.shake_offset == Vector2.ZERO, "the screen is still before anything goes down")
+	heavy.take_damage(heavy.hp)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	# 1.5: the offset is random in x and y, so its length can pass the px number a little.
+	var kill_shake: float = _arena.shake_offset.length()
+	_check(kill_shake > 0.0 and kill_shake <= CONFIG.shake_kill_px * 1.5, "a machine going down shakes the screen a little (%.1f px)" % kill_shake)
+	_check(get_viewport().canvas_transform.origin.is_equal_approx(_arena.shake_offset), "the shake moves the playfield, not the HUD")
+	var shake_over: Callable = func() -> bool: return _arena.shake_offset == Vector2.ZERO
+	_check(await _wait_until(shake_over, CONFIG.shake_seconds + 0.5), "the shake dies away")
+	_check(get_viewport().canvas_transform == Transform2D.IDENTITY, "and the playfield is back in place")
+
+	# A hit on Seven: a red arc toward the source, a red screen flash, a harder shake.
+	var from: Vector2 = player.global_position + Vector2(120.0, 0.0)
+	_check(_arena.hurt_flash.color.a == 0.0, "the red sheet is see-through until Seven is hurt")
+	_check(player.take_damage(1, from), "a hit on Seven counts")
+	_check(player.hurt_arc_left > 0.0 and player.hurt_from == from, "Seven shows where the hit came from")
+	_check(is_equal_approx(_arena.hurt_flash_left, CONFIG.hurt_flash_seconds), "the screen starts its red flash")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_check(_arena.hurt_flash.color.a > 0.0, "the red sheet shows")
+	_check(_arena.shake_offset.length() > 0.0, "and the screen shakes")
+	_check(_arena.hurt_flash.get_index() == 0, "the red sheet is under every HUD label and menu")
+	var red_over: Callable = func() -> bool: return _arena.hurt_flash_left == 0.0 and _arena.shake_offset == Vector2.ZERO
+	_check(await _wait_until(red_over, 1.5), "both end by themselves")
+	_check(_arena.hurt_flash.color.a == 0.0, "the red sheet is see-through again")
+
+	# A hit that is ignored (Seven is still blinking) does not flash again.
+	_check(not player.take_damage(1, from) and _arena.hurt_flash_left == 0.0, "an ignored hit gives no flash")
+
+	# A weaker shake never replaces a stronger one that is still running.
+	_arena.shake(CONFIG.shake_hurt_px)
+	_arena.shake(CONFIG.shake_kill_px)
+	_check(is_equal_approx(_arena._shake_px, CONFIG.shake_hurt_px * CONFIG.shake_scale), "a small shake does not cut a big one short")

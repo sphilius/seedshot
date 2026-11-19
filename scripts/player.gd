@@ -29,6 +29,9 @@ signal health_changed(current: int, maximum: int)
 signal died
 ## Emitted when the spare fuse saves Seven from going down.
 signal fuse_used
+## Emitted for every hit that counts (also the one that knocks Seven out). The
+## arena shakes the screen and flashes it red.
+signal hurt
 
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
 ## Physics layer 1 ("world") as a bit mask, for ray and shape queries.
@@ -85,6 +88,11 @@ var _zip_tween: Tween
 ## Seconds left of the knock-out animation and of the fuse-revive animation.
 var _knockout_left: float = 0.0
 var _fuse_flash_left: float = 0.0
+## Seconds left of the red "this is what hit me" arc, and where the hit came
+## from in world pixels (Vector2.INF = unknown: draw a full ring). Public so the
+## tests can read them.
+var hurt_arc_left: float = 0.0
+var hurt_from: Vector2 = Vector2.INF
 ## The Tween that plays either animation on the picture, kept so revive() can stop it.
 var _body_tween: Tween
 ## The picture's normal size, remembered so the animations can put it back.
@@ -134,6 +142,7 @@ func _ready() -> void:
 	_aim_overlay.z_index = 1
 	add_child(_aim_overlay)
 	_aim_overlay.draw.connect(_draw_nozzle)
+	_aim_overlay.draw.connect(_draw_hurt_arc)  # a signal can call several functions
 
 
 ## _physics_process runs 60 times per second: cooldowns, aiming, walking, firing.
@@ -143,6 +152,7 @@ func _physics_process(delta: float) -> void:
 	_lash_time_left = maxf(_lash_time_left - delta, 0.0)
 	_knockout_left = maxf(_knockout_left - delta, 0.0)
 	_fuse_flash_left = maxf(_fuse_flash_left - delta, 0.0)
+	hurt_arc_left = maxf(hurt_arc_left - delta, 0.0)
 	_update_hit_blink(delta)
 	_tick_brambles(delta)
 	if is_dead:
@@ -315,10 +325,15 @@ func try_vine(world_point: Vector2, pick_radius_cells: float = -1.0) -> bool:
 
 ## Takes `amount` hit points away. Returns true if the hit counted, false if it
 ## was ignored (already down, or still blinking from the previous hit).
-func take_damage(amount: int) -> bool:
+## `from` is where the hit came from in world pixels, so Seven can show it; it
+## is optional (`= Vector2.INF` is the value used when the caller leaves it out).
+func take_damage(amount: int, from: Vector2 = Vector2.INF) -> bool:
 	if is_dead or _invulnerable_left > 0.0 or amount <= 0:
 		return false
 	hp = maxi(hp - amount, 0)  # maxi = the larger of two whole numbers: never below 0
+	hurt_from = from
+	hurt_arc_left = CONFIG.hurt_arc_seconds
+	hurt.emit()
 	if hp == 0 and has_fuse:
 		# The spare fuse blows instead of Seven: back up, with a long blink.
 		has_fuse = false
@@ -488,6 +503,24 @@ func receive_cat_gift() -> void:
 	can_bind = true
 	has_fuse_slot = true
 	has_fuse = true
+
+
+## Paints the red arc that shows what just hurt Seven: a quarter circle on the
+## side the hit came from, fading out. With no known source it is a full ring.
+## Drawn on the overlay node, so it sits in front of the sprite.
+func _draw_hurt_arc() -> void:
+	if hurt_arc_left <= 0.0:
+		return
+	var left: float = hurt_arc_left / CONFIG.hurt_arc_seconds  # 1 at the hit, 0 when over
+	var color := Color(CONFIG.hurt_arc_color, left)
+	var radius: float = float(CONFIG.cell_size) * 0.85
+	if hurt_from == Vector2.INF:
+		_aim_overlay.draw_arc(Vector2.ZERO, radius, 0.0, TAU, 32, color, 4.0)
+		return
+	# angle() is the direction of a vector in radians; the arc spans an eighth of
+	# a turn (PI / 4) to each side of it.
+	var toward: float = (hurt_from - global_position).angle()
+	_aim_overlay.draw_arc(Vector2.ZERO, radius, toward - PI / 4.0, toward + PI / 4.0, 16, color, 6.0)
 
 
 ## Counts down the "cannot be hurt" time and blinks the bot while it lasts.
