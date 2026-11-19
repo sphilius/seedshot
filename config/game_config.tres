@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="GameConfig" load_steps=12 format=3]
+[gd_resource type="Resource" script_class="GameConfig" load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://config/game_config.gd" id="1_config"]
 [ext_resource type="Texture2D" path="res://art/sprites/gardener_bot.png" id="2_player"]
@@ -11,6 +11,7 @@
 [ext_resource type="Texture2D" path="res://art/sprites/tree_sapling.png" id="9_tree_sapling"]
 [ext_resource type="Texture2D" path="res://art/sprites/tree_grown.png" id="10_tree_grown"]
 [ext_resource type="Texture2D" path="res://art/sprites/tree_cut.png" id="11_tree_cut"]
+[ext_resource type="FontFile" path="res://art/fonts/PermanentMarker-Regular.ttf" id="12_graffiti_font"]
 
 [resource]
 script = ExtResource("1_config")
@@ -22,5 +23,6 @@ cat_texture = ExtResource("6_cat")
 tree_sapling_texture = ExtResource("9_tree_sapling")
 tree_grown_texture = ExtResource("10_tree_grown")
 tree_cut_texture = ExtResource("11_tree_cut")
+graffiti_font = ExtResource("12_graffiti_font")
 floor_tiles = ExtResource("7_floor")
 home_roofs = ExtResource("8_roofs")

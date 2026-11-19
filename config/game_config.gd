@@ -349,6 +349,9 @@ extends Resource
 ## sapling, a grown tree, and the "cut" look a grown tree takes once a Sawbot
 ## has bitten it. Leave empty for the old circle drawing.
 @export var tree_sapling_texture: Texture2D
+## The graffiti lettering: Permanent Marker (Apache 2.0, art/fonts), a marker /
+## spray-paint hand. Leave empty for Godot's plain built-in font.
+@export var graffiti_font: Font
 @export var tree_grown_texture: Texture2D
 @export var tree_cut_texture: Texture2D
 ## The floor slabs: one row of 48 x 48 tiles (one grid cell each), built from

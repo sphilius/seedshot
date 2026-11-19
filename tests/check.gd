@@ -1322,6 +1322,7 @@ func _test_tree_pictures() -> void:
 	for picture: Texture2D in pictures:
 		all_sized = all_sized and picture != null and picture.get_size() == Vector2(64.0, 64.0)
 	_check(all_sized, "the three tree pictures are 64 x 64")
+	_check(CONFIG.graffiti_font != null, "the graffiti has its marker font")
 	await _fresh_arena()
 	var tree: ForestTree = _arena.spawn_tree(Vector2i(5, 5), false)
 	_check(tree != null and tree.current_texture() == CONFIG.tree_sapling_texture, "a new tree shows the sapling picture")

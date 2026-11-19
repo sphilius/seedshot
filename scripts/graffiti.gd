@@ -73,7 +73,8 @@ func line_text(index: int) -> String:
 
 ## _draw paints every revealed line, turned sideways to run along its wall.
 func _draw() -> void:
-	var font: Font = ThemeDB.fallback_font
+	# The marker font from the config, or Godot's plain font if none is set.
+	var font: Font = CONFIG.graffiti_font if CONFIG.graffiti_font != null else ThemeDB.fallback_font
 	# How far along each of the four rows the next line starts.
 	var used: Array[float] = [START_MARGIN, START_MARGIN, START_MARGIN, START_MARGIN]
 	for i: int in revealed_count:
@@ -98,7 +99,7 @@ func _draw() -> void:
 			var y: float = _arena_rect.position.y + _wall_px + along
 			draw_set_transform(Vector2(x, y), PI / 2.0)
 		var color: Color = PAINT_COLORS[i % PAINT_COLORS.size()]
-		draw_string(font, Vector2.ZERO, text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, FONT_SIZE, color)
+		_draw_painted(font, Vector2.ZERO, text, color)
 	# Put the "paper" back, so nothing drawn later is turned by accident.
 	draw_set_transform(Vector2.ZERO, 0.0)
 
@@ -112,4 +113,12 @@ func _draw() -> void:
 		draw_line(tip, tip + Vector2(10.0, 12.0), pink, 4.0)
 		var words: String = "KNOCK x3"
 		var width: float = font.get_string_size(words, HORIZONTAL_ALIGNMENT_LEFT, -1.0, FONT_SIZE).x
-		draw_string(font, tail + Vector2(-width / 2.0, FONT_SIZE + 2.0), words, HORIZONTAL_ALIGNMENT_LEFT, -1.0, FONT_SIZE, pink)
+		_draw_painted(font, tail + Vector2(-width / 2.0, FONT_SIZE + 2.0), words, pink)
+
+
+## Draws `text` like spray paint: first a soft, see-through halo around the
+## letters (the overspray a can leaves), then the letters themselves.
+## draw_string_outline draws only the outline of each letter, `size` pixels wide.
+func _draw_painted(font: Font, at: Vector2, text: String, color: Color) -> void:
+	draw_string_outline(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, FONT_SIZE, 6, Color(color, 0.18))
+	draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, FONT_SIZE, color)
