@@ -82,6 +82,8 @@ var _banner_time_left: float = 0.0
 var _story_queue: Array[Dictionary] = []
 ## Canopy FM tutorial moments already played this run (so each plays once).
 var _dj_said: Dictionary[StringName, bool] = {}
+## Seconds of Grove rest counted toward the next pip (see tick_grove_rest).
+var _rest_progress: float = 0.0
 ## Seconds the story line on screen has left. 0 or less means "until replaced".
 var _story_time_left: float = 0.0
 ## True once the opening line has been shown, so a restarted wave 1 skips it.
@@ -220,6 +222,7 @@ func _ready() -> void:
 	player.seed_fired.connect(_on_player_seed_fired)
 	# The pips redraw themselves every time the player's health changes.
 	player.health_changed.connect(_health_pips.show_health)
+	player.health_changed.connect(_on_player_health_changed)
 	player.died.connect(_on_player_died)
 	player.fuse_used.connect(_on_player_fuse_used)
 	add_child(player)
@@ -291,6 +294,10 @@ func _process(delta: float) -> void:
 	# One shared value for every tree's markers (a static var, see forest_tree.gd).
 	ForestTree.light_boost = boost
 	_heart_alarm_left = maxf(_heart_alarm_left - delta, 0.0)
+	tick_grove_rest(delta)
+	# Keep the health pips clear of the wave label: tell them where its text ends.
+	# get_minimum_size() is the room the label's current text really needs.
+	_health_pips.left_limit = _wave_label.position.x + _wave_label.get_minimum_size().x + CONFIG.hud_pips_gap
 	# The bright cables showed through the upgrade cards: hide them while it is open.
 	great_powers.cables_hidden = upgrade_picker.is_open()
 	_ambient.color = _ambient.color.lerp(wanted_tint, minf(1.0, CONFIG.ambient_change_speed * delta))
@@ -826,7 +833,7 @@ func _on_wave_cleared(number: int) -> void:
 	# wave waits until one is picked.
 	if number < waves.total_waves() and number >= CONFIG.upgrade_from_wave:
 		waves.hold_break = true
-		upgrade_picker.offer(CONFIG.upgrade_choices)
+		upgrade_picker.offer(CONFIG.upgrade_choices, upgrades_left_out())
 	# The Heart Tree heals between waves.
 	if is_instance_valid(heart_tree):
 		heart_tree.hp = heart_tree.max_hp()
@@ -972,8 +979,8 @@ func apply_upgrade(id: StringName) -> void:
 		&"heavy_seeds":
 			seed_damage_bonus += CONFIG.upgrade_seed_damage
 		&"thick_plating":
-			player.max_hp += CONFIG.upgrade_max_hp
-			player.heal(player.max_hp)  # a full repair (heal never goes over max_hp)
+			# More pips, filled, but no repair of old damage (see Player.add_plating).
+			player.add_plating(CONFIG.upgrade_max_hp)
 		&"hardwood":
 			tree_hp_bonus += CONFIG.upgrade_tree_hp
 			# Trees already standing get it too.
@@ -989,6 +996,55 @@ func apply_upgrade(id: StringName) -> void:
 	_show_banner(UpgradePicker.CATALOG[id][0] + "!", 1.2)
 	Sfx.play(&"grow")
 	waves.hold_break = false
+
+
+## Upgrades that must not be dealt right now: Thick Plating once Seven's health
+## is at the cap (the card would do nothing). Public so the tests can read it.
+func upgrades_left_out() -> Array[StringName]:
+	var left_out: Array[StringName] = []
+	if player.max_hp >= CONFIG.player_hp_cap:
+		left_out.append(&"thick_plating")
+	return left_out
+
+
+## How many grown trees (of any kind) stand within `radius_cells` of `point`.
+func grown_trees_near(point: Vector2, radius_cells: float) -> int:
+	var radius: float = radius_cells * CONFIG.cell_size
+	var count: int = 0
+	for tree: ForestTree in _trees_by_cell.values():
+		if not is_instance_valid(tree) or tree.is_queued_for_deletion():
+			continue
+		if tree.stage == ForestTree.Stage.GROWN and tree.global_position.distance_to(point) <= radius:
+			count += 1
+	return count
+
+
+## GROVE REST: Seven's only repair besides tap trees. While a hurt Seven is close
+## to enough grown trees, one pip comes back every grove_rest_seconds_per_pip.
+## Stepping away (or being at full health) resets the count. Called every frame
+## from _process; public so the tests can step it by hand.
+func tick_grove_rest(delta: float) -> void:
+	var hurt: bool = not player.is_dead and player.hp < player.max_hp
+	var resting: bool = hurt and grown_trees_near(player.global_position, CONFIG.grove_rest_radius_cells) >= CONFIG.grove_rest_trees
+	player.is_resting = resting  # the player draws the glow while this is true
+	if not resting:
+		_rest_progress = 0.0
+		return
+	_rest_progress += delta
+	if _rest_progress >= CONFIG.grove_rest_seconds_per_pip:
+		_rest_progress -= CONFIG.grove_rest_seconds_per_pip
+		player.heal(1)
+		Sfx.play(&"grow")  # a small leafy sound for each pip
+
+
+## Signal handler: Seven's health changed. The first time Seven is hurt in a run,
+## Canopy FM explains Grove rest. (Not _dj_once: this is said in New Game + too,
+## even with the tutorial skipped, because the repair rule is new to everyone.)
+func _on_player_health_changed(current: int, maximum: int) -> void:
+	if current >= maximum or current <= 0 or _dj_said.has(&"grove_rest"):
+		return
+	_dj_said[&"grove_rest"] = true
+	_radio_later([_radio_line(Radio.CANOPY, CONFIG.grove_rest_line)])
 
 
 ## The Heart Tree fell: the block's roots are cut, so the wave starts again (like

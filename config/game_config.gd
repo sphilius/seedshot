@@ -357,7 +357,26 @@ extends Resource
 ## Heavy Seeds: extra damage per pod.
 @export var upgrade_seed_damage: int = 1
 ## Thick Plating: extra max health.
-@export var upgrade_max_hp: int = 1
+@export var upgrade_max_hp: int = 2
+## The most pips Seven can ever have, however many Thick Platings are taken, so
+## the row of pips on the HUD always fits. At the cap the card stops being dealt.
+@export var player_hp_cap: int = 10
+## Empty space kept between the wave label and the first pip, in screen pixels.
+@export var hud_pips_gap: float = 24.0
+## Space kept clear at the right edge of the screen (the pause button lives there).
+@export var hud_pips_right_margin: float = 120.0
+## GROVE REST is how Seven repairs (s18; Thick Plating no longer does it): while
+## Seven is within grove_rest_radius_cells of at least grove_rest_trees grown
+## trees, one pip comes back every grove_rest_seconds_per_pip seconds.
+@export var grove_rest_radius_cells: float = 2.0
+@export var grove_rest_trees: int = 4
+@export var grove_rest_seconds_per_pip: float = 4.0
+## The glow around Seven while resting. Values above 1 stay bright at night.
+@export var grove_rest_glow_color: Color = Color(0.55, 1.35, 0.55, 0.40)
+## Radius of that glow, in cells.
+@export var grove_rest_glow_radius_cells: float = 0.85
+## Canopy FM explains it the first time Seven is hurt in a run.
+@export var grove_rest_line: String = "Dented? Stand close to four grown trees and the grove patches you up, one pip at a time."
 ## Hardwood: extra hit points for every tree.
 @export var upgrade_tree_hp: int = 2
 ## Quick Roots multiplies the sapling time by this (0.6 = 40% faster).

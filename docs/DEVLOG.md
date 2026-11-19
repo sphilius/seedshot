@@ -384,6 +384,12 @@ From the kickoff. `config/game_config.tres` holds every speed, cooldown and size
 - The thunk and spit candidates came back very quiet (mean below -36 dB) and need a lot of gain; listen for hiss.
 - The listening page now plays every take evened out to its in-game loudness.
 
+## D-043: Thick Plating without repair, a health cap, and Grove rest (Made, 2026-11-19)
+
+Work-order group 4, from Sasha's New Game + notes: Thick Plating was the obvious pick every time because it also repaired fully. Now it gives +2 max health (`upgrade_max_hp`) and no repair: the new pips arrive filled, damage already taken stays (`Player.add_plating`). Health stops at `player_hp_cap` = 10; at the cap the card is no longer dealt (`Arena.upgrades_left_out`). The pip row is told where the wave label's text ends and never starts left of it; if it still would not fit before `hud_pips_right_margin` it shrinks (`HealthPips.pip_rect`). Repair moved to Grove rest (`Arena.tick_grove_rest`): a hurt Seven within `grove_rest_radius_cells` (2) of `grove_rest_trees` (4) grown trees of any kind gets 1 pip every `grove_rest_seconds_per_pip` (4 s), with a breathing green glow drawn by the player. It works during a fight and does not need Seven to stand still; stepping out resets the count. Canopy FM explains it the first time Seven is hurt in a run, New Game + included. Tap trees still give a pip. Not seen on screen: the glow and the shifted pip row are covered by headless checks only.
+## D-042: Sound round 3 (Made, 2026-11-19)
+
+Sasha's picks by ear: thunk 5, enemy down 3, hurt 4, wave clear 3, unlock 4. Saw is take 4 at half speed (ffmpeg `atempo=0.5`, same pitch, twice as long, saved as take 5) and 3 dB softer (`pick_sfx.ps1` target -28). Still open: bind (takes 5 and 6 blend the whip crack of take 2 with the ratchet of take 4) and spit (takes 5 and 6 are a toy laser, take 7 a cap-pistol shot; two more gunshot takes came back nearly silent and were deleted).
 ## D-041 (s18): New Game + opens with a wake-up and an optional tutorial
 
 - **Sasha's request (2026-11-19).** Before wave 1 of New Game +, Canopy FM says "You're finally back up! Not sure

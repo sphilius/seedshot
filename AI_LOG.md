@@ -38,3 +38,5 @@ One line per asset or system: tool, date, what it did. This feeds the itch page'
 
 - Sound round 2 (s18): 16 new ElevenLabs Sound Effects takes (thunk, enemy_down, bind, spit, saw, hurt, wave_clear, unlock) from prompts written by Claude Code to Sasha's notes; windup take 3 is take 2 slowed with ffmpeg. Sasha picks by ear.
 - New Game + opening (s18): wake-up line, Remind me / Skip buttons (scripts/tutorial_offer.gd) and the tougher-drones line; code by Claude Code, wording from Sasha.
+- Sound round 3 (s18): 5 more ElevenLabs Sound Effects takes (bind 5-6, spit 5-7) from prompts by Claude Code; saw take 5 is take 4 slowed with ffmpeg. Picks by Sasha.
+- Grove rest, health cap and Thick Plating change (s18): code by Claude Code to Sasha's design (scripts/arena.gd, player.gd, health_pips.gd).

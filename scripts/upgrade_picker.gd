@@ -23,7 +23,7 @@ const CONFIG: GameConfig = preload("res://config/game_config.tres")
 const CATALOG: Dictionary[StringName, Array] = {
 	&"seed_pouch": ["Seed Pouch", "Fire %d%% faster."],
 	&"heavy_seeds": ["Heavy Seeds", "Seed pods hit %d harder."],
-	&"thick_plating": ["Thick Plating", "+%d max health, and a full repair."],
+	&"thick_plating": ["Thick Plating", "+%d max health. No repair: rest by 4 trees."],
 	&"hardwood": ["Hardwood", "Every tree gets +%d hit points."],
 	&"quick_roots": ["Quick Roots", "Saplings root %d%% faster."],
 	&"long_trellis": ["Long Trellis", "Trellis vines last %d s longer."],
@@ -52,9 +52,13 @@ func _ready() -> void:
 	visible = false
 
 
-## Deals `count` different upgrades at random and shows them.
-func offer(count: int) -> void:
-	var ids: Array[StringName] = CATALOG.keys()
+## Deals `count` different upgrades at random and shows them. Ids in `left_out`
+## are not dealt (the arena leaves out Thick Plating once health is at its cap).
+func offer(count: int, left_out: Array[StringName] = []) -> void:
+	var ids: Array[StringName] = []
+	for id: StringName in CATALOG.keys():
+		if not left_out.has(id):
+			ids.append(id)
 	# Shuffle with our own random-number generator (a "Fisher-Yates" shuffle:
 	# swap each entry with a random one at or before it).
 	for i: int in range(ids.size() - 1, 0, -1):

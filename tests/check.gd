@@ -111,6 +111,7 @@ func _ready() -> void:
 	await _test_canopy_line_caps()
 	await _test_readable_trees()
 	await _test_ng_plus_opening()
+	await _test_plating_and_grove_rest()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -1693,7 +1694,7 @@ func _test_upgrades() -> void:
 	var player: Player = _arena.player
 	var hp_before: int = player.max_hp
 	_arena.apply_upgrade(&"thick_plating")
-	_check(player.max_hp == hp_before + CONFIG.upgrade_max_hp and player.hp == player.max_hp, "Thick Plating: more max health and a full repair")
+	_check(player.max_hp == hp_before + CONFIG.upgrade_max_hp and player.hp == player.max_hp, "Thick Plating: more max health, and the new pips arrive filled")
 	_arena.apply_upgrade(&"seed_pouch")
 	_check(player.fire_cooldown_scale < 1.0, "Seed Pouch: pods come faster")
 	_arena.apply_upgrade(&"heavy_seeds")
@@ -1985,3 +1986,66 @@ func _test_ng_plus_opening() -> void:
 	# A normal run never shows the question.
 	await _fresh_arena()
 	_check(not _arena.tutorial_offer.is_open() and _arena.tutorial_on, "a normal run has no question and always has the tutorial")
+
+
+## s18 group 4: Thick Plating adds pips without repairing, health has a cap, the
+## pips stay clear of the wave label, and Grove rest is how Seven repairs.
+func _test_plating_and_grove_rest() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	var pips: HealthPips = _arena._health_pips
+
+	# Thick Plating on a hurt Seven: the new pips are filled, the old damage stays.
+	player.take_damage(2)
+	var hp_before: int = player.hp
+	var max_before: int = player.max_hp
+	_arena.apply_upgrade(&"thick_plating")
+	_check(player.max_hp == max_before + CONFIG.upgrade_max_hp, "Thick Plating adds %d max health" % CONFIG.upgrade_max_hp)
+	_check(player.hp == hp_before + CONFIG.upgrade_max_hp, "the new pips arrive filled")
+	_check(player.max_hp - player.hp == 2, "and the damage Seven already had is NOT repaired")
+
+	# The cap: however many are taken, health never passes player_hp_cap.
+	for i: int in 10:
+		_arena.apply_upgrade(&"thick_plating")
+	_check(player.max_hp == CONFIG.player_hp_cap, "max health stops at the cap of %d" % CONFIG.player_hp_cap)
+	_check(_arena.upgrades_left_out().has(&"thick_plating"), "at the cap, Thick Plating is no longer dealt")
+	var dealt_it: bool = false
+	for i: int in 20:
+		_arena.upgrade_picker.offer(CONFIG.upgrade_choices, _arena.upgrades_left_out())
+		dealt_it = dealt_it or _arena.upgrade_picker.offered.has(&"thick_plating")
+	_arena.upgrade_picker.choose(0)  # close the cards again
+	_check(not dealt_it, "20 deals at the cap never show the Thick Plating card")
+
+	# The HUD: with the longest wave label and every pip, the row starts after
+	# the label and ends before the right margin.
+	_arena._wave_label.text = "Wave 10 / 10    Homes lit 40 / 40    Trees 100    Brambles 2 / 2"
+	await _wait_frames(2)  # let the arena's _process hand the label's end to the pips
+	var label_end: float = _arena._wave_label.position.x + _arena._wave_label.get_minimum_size().x
+	var last: Rect2 = pips.pip_rect(pips.maximum - 1)
+	_check(pips.maximum == CONFIG.player_hp_cap and pips.pip_rect(0).position.x >= label_end, "the full row of pips starts after the wave label")
+	_check(last.end.x <= get_viewport().get_visible_rect().size.x - CONFIG.hud_pips_right_margin + 0.5, "and ends before the right margin")
+
+	# Grove rest: no trees nearby, no repair.
+	await _fresh_arena()
+	player = _arena.player
+	player.take_damage(2)
+	var hurt_hp: int = player.hp
+	_arena.tick_grove_rest(CONFIG.grove_rest_seconds_per_pip * 3.0)
+	_check(player.hp == hurt_hp and not player.is_resting, "away from trees, a hurt Seven is not repaired")
+	_check(_arena._dj_said.has(&"grove_rest"), "the first hit makes Canopy FM explain Grove rest")
+
+	# Grow the trees it needs, right around Seven.
+	var here: Vector2i = _arena.grid.world_to_cell(player.global_position)
+	var planted: int = 0
+	for offset: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 1), Vector2i(-1, -1)]:
+		if planted < CONFIG.grove_rest_trees and _arena.spawn_tree(here + offset, true) != null:
+			planted += 1
+	await _wait_frames(2)
+	_check(_arena.grown_trees_near(player.global_position, CONFIG.grove_rest_radius_cells) >= CONFIG.grove_rest_trees, "%d grown trees stand within reach" % CONFIG.grove_rest_trees)
+	_arena.tick_grove_rest(CONFIG.grove_rest_seconds_per_pip * 0.5)
+	_check(player.is_resting and player.hp == hurt_hp, "among them Seven glows, but half the time gives no pip yet")
+	_arena.tick_grove_rest(CONFIG.grove_rest_seconds_per_pip * 0.6)
+	_check(player.hp == hurt_hp + 1, "after grove_rest_seconds_per_pip, one pip is back")
+	_arena.tick_grove_rest(CONFIG.grove_rest_seconds_per_pip)
+	_arena.tick_grove_rest(CONFIG.grove_rest_seconds_per_pip)
+	_check(player.hp == player.max_hp and not player.is_resting, "it stops at full health, and the glow goes out")

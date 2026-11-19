@@ -70,6 +70,9 @@ var bramble_charges: int = CONFIG.bramble_max_charges
 var bramble_recharge_left: float = 0.0
 ## True once hp reaches zero: the bot stops moving, firing and zipping.
 var is_dead: bool = false
+## True while the grove is repairing Seven (Grove rest). The arena decides this
+## and writes it every frame ("call down"); the player only draws the glow.
+var is_resting: bool = false
 
 ## The machine the vine last lashed, and how much longer to draw that vine.
 var _lash_target: Enemy = null
@@ -149,6 +152,16 @@ func _unhandled_input(event: InputEvent) -> void:
 ## _draw paints, in order: the vine (while zipping), the fallback body square (only
 ## if there is no sprite), and the aiming reticle at the mouse pointer.
 func _draw() -> void:
+	if is_resting:
+		# Grove rest: a soft green glow that breathes in and out. It is drawn here,
+		# before the sprite (a child node), so it sits behind Seven like a halo.
+		# sin() swings between -1 and 1; this turns it into 0.75 to 1.0, about
+		# once a second. Time.get_ticks_msec() is milliseconds since the game began.
+		var breath: float = 0.875 + 0.125 * sin(float(Time.get_ticks_msec()) / 160.0)
+		var radius: float = CONFIG.grove_rest_glow_radius_cells * CONFIG.cell_size * breath
+		draw_circle(Vector2.ZERO, radius, CONFIG.grove_rest_glow_color)
+		# A brighter rim (same colour, fully solid), so it reads against lit floor.
+		draw_arc(Vector2.ZERO, radius, 0.0, TAU, 32, Color(CONFIG.grove_rest_glow_color, 0.9), 2.0)
 	if is_zipping:
 		# to_local converts a world position into this node's own coordinates.
 		draw_line(Vector2.ZERO, to_local(_vine_anchor), VINE_COLOR, 4.0)
@@ -301,6 +314,19 @@ func heal(amount: int) -> void:
 		return
 	hp = mini(hp + amount, max_hp)  # mini = the smaller of two whole numbers
 	health_changed.emit(hp, max_hp)
+
+
+## Thick Plating: raises the maximum by up to `amount`, never past the config's
+## player_hp_cap. The NEW pips arrive filled; damage Seven already had stays
+## (repair is Grove rest's job now). Returns how many pips were really added.
+func add_plating(amount: int) -> int:
+	# clampi keeps a whole number between two bounds: here 0 and the room left under the cap.
+	var added: int = clampi(amount, 0, CONFIG.player_hp_cap - max_hp)
+	max_hp += added
+	if not is_dead:
+		hp += added
+	health_changed.emit(hp, max_hp)
+	return added
 
 
 ## Lucky's gift: the clamp (bind machines with the vine) and a spare fuse.
