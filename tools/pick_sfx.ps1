@@ -19,8 +19,8 @@ $sfx = Join-Path $root "audio\sfx"
 # second sit lower so they do not tire the ear; rare, important ones sit higher.
 $targets = @{
 	fire = -27; saw = -25; thunk = -25; spit = -23; zip = -23; grow = -23
-	windup = -20; hurt = -19; bind = -22; enemy_down = -21; unlock = -24
-	player_down = -20; wave_clear = -20; cat = -19
+	windup = -23; hurt = -19; bind = -22; enemy_down = -21; unlock = -24
+	player_down = -20; wave_clear = -16; cat = -19
 }
 
 foreach ($pick in $Picks) {
