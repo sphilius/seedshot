@@ -18,7 +18,7 @@ $sfx = Join-Path $root "audio\sfx"
 # Target average loudness in dB (closer to 0 = louder). Sounds heard many times a
 # second sit lower so they do not tire the ear; rare, important ones sit higher.
 $targets = @{
-	fire = -27; saw = -25; thunk = -25; spit = -23; zip = -23; grow = -23
+	fire = -27; saw = -28; thunk = -25; spit = -23; zip = -23; grow = -23
 	windup = -23; hurt = -19; bind = -22; enemy_down = -21; unlock = -24
 	player_down = -20; wave_clear = -16; cat = -19
 }
