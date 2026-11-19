@@ -33,3 +33,4 @@ One line per asset or system: tool, date, what it did. This feeds the itch page'
 - Props (s16): nine props cut from Sasha's Gemini concept 05_props_b by tools/prop_sprites.py (palette snap, outline); eight are placed in the lot.
 - Lucky wave frame (s16): tools/lucky_wave.py moves the raised paw of the existing Klad sprite down 5 px for a two-frame beckon.
 - Great sunroot powers, Trellis, Heart Tree, upgrades, Linebreakers and Arc Spitters (s16): game code by Claude Code from Sasha's design list.
+- Bramble Seed (s17): the third seed type, game code by Claude Code from Sasha's request (design proposed by Claude, see DEVLOG D-036).

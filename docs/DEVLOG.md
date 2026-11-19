@@ -312,3 +312,13 @@ From the kickoff. `config/game_config.tres` holds every speed, cooldown and size
   barrel, planter, bike and chair as solid props in the four floor corners). Left out: the lantern string (already
   in), the cable coil (lost its black cable in the cut-out), the glowing-cat shutter and the arrow (both would
   point at Lucky). Lucky beckons (two frames, `tools/lucky_wave.py`) and shows its face on the radio.
+
+## D-036 (s17): the third seed type, Bramble Seed
+
+- **Design:** pods are single-target and the vine is one machine at a time; the missing answer is crowds. A Bramble
+  Seed (Q or Space; a "thorns" button on touch) is thrown 5 cells along the aim and grows a 1.5-cell thorn patch
+  for 8 s. Machines inside walk at half speed and take 1 damage a second; machines it kills root as usual. Seven
+  walks through unharmed. 3 charges, one regrows every 6 s, full again on a restart. The HUD shows "Brambles 2 / 3".
+  Canopy FM introduces it on wave 2 (not in New Game +).
+- Cable coil prop remade: its dark rubber matched the dark background and was cut away; a lower background
+  tolerance for that one prop keeps it. It lies flat on the floor near the top-left.

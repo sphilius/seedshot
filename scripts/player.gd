@@ -20,6 +20,9 @@ extends CharacterBody2D
 signal seed_fired(origin: Vector2, direction: Vector2)
 ## Emitted when a vine zip finishes. (Tests wait on this with `await`.)
 signal zip_finished
+## Emitted when Seven throws a Bramble Seed; `at` is where it lands (world pixels,
+## before the arena keeps it on the floor).
+signal bramble_thrown(at: Vector2)
 ## Emitted whenever hit points change. The arena forwards it to the HUD pips.
 signal health_changed(current: int, maximum: int)
 ## Emitted once, when hit points reach zero. The arena restarts the run.
@@ -61,6 +64,10 @@ var hp: int = 0
 var max_hp: int = CONFIG.player_max_hp
 ## Multiplies the time between seed pods (Seed Pouch upgrades make it smaller).
 var fire_cooldown_scale: float = 1.0
+## Bramble Seeds in hand (the third seed type), and seconds until the next one
+## grows back. Public so the HUD and tests can read them.
+var bramble_charges: int = CONFIG.bramble_max_charges
+var bramble_recharge_left: float = 0.0
 ## True once hp reaches zero: the bot stops moving, firing and zipping.
 var is_dead: bool = false
 
@@ -103,6 +110,7 @@ func _physics_process(delta: float) -> void:
 	_vine_cooldown_left = maxf(_vine_cooldown_left - delta, 0.0)
 	_lash_time_left = maxf(_lash_time_left - delta, 0.0)
 	_update_hit_blink(delta)
+	_tick_brambles(delta)
 	if is_dead:
 		return  # a downed bot does nothing until the arena restarts
 	_update_aim()
@@ -132,6 +140,8 @@ func _process(_delta: float) -> void:
 ## _unhandled_input receives input events that no UI element used. The vine is a
 ## single press (not a hold), so it is handled here as an event.
 func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed(&"bramble"):
+		throw_bramble()
 	if event.is_action_pressed(&"vine"):
 		try_vine(get_global_mouse_position())
 
@@ -161,6 +171,33 @@ func _draw() -> void:
 
 ## Fires one seed pod along `direction` if the cooldown allows.
 ## Returns true if a pod was fired.
+## Throws a Bramble Seed (the third seed type) toward the aim, if one is in hand.
+## Seven does not make the patch: the arena hears bramble_thrown and grows it
+## ("signal up"). Returns true if a seed was thrown.
+func throw_bramble() -> bool:
+	if is_dead or bramble_charges <= 0:
+		return false
+	bramble_charges -= 1
+	if bramble_recharge_left <= 0.0:
+		bramble_recharge_left = CONFIG.bramble_recharge_seconds
+	bramble_thrown.emit(global_position + aim_direction * CONFIG.bramble_range_cells * CONFIG.cell_size)
+	Sfx.play(&"grow")
+	return true
+
+
+## Grows Bramble Seeds back, one every bramble_recharge_seconds, up to the max.
+func _tick_brambles(delta: float) -> void:
+	if bramble_charges >= CONFIG.bramble_max_charges:
+		bramble_recharge_left = 0.0
+		return
+	bramble_recharge_left -= delta
+	if bramble_recharge_left <= 0.0:
+		bramble_charges += 1
+		if bramble_charges < CONFIG.bramble_max_charges:
+			bramble_recharge_left = CONFIG.bramble_recharge_seconds
+
+
+## Fires one seed pod along `direction`, if the cooldown allows. Returns true if fired.
 func fire(direction: Vector2) -> bool:
 	if is_dead or _fire_cooldown_left > 0.0 or direction == Vector2.ZERO:
 		return false
@@ -249,6 +286,8 @@ func revive(world_position: Vector2) -> void:
 	hp = max_hp
 	is_dead = false
 	is_zipping = false
+	bramble_charges = CONFIG.bramble_max_charges  # a fresh start refills the seeds
+	bramble_recharge_left = 0.0
 	modulate = Color.WHITE
 	_invulnerable_left = CONFIG.player_hit_invulnerable_time
 	# A real defeat is the only thing that refits a used fuse.

@@ -44,8 +44,13 @@ const AIM_REST_SPOT: Vector2 = Vector2(0.87, 0.76)
 const MOVE_COLOR: Color = Color(1.0, 1.0, 1.0, 0.55)
 const AIM_COLOR: Color = Color(0.75, 0.95, 0.45, 0.60)
 const REST_ALPHA: float = 0.30
-const TOUCH_HINT: String = "Left thumb: move   |   Right thumb: aim + fire   |   Tap a tree: zip   |   Tap a machine: bind"
+const TOUCH_HINT: String = "Left thumb: move   |   Right thumb: aim + fire   |   Tap a tree: zip   |   Tap a machine: bind   |   Thorns button: bramble"
 const ROTATE_TEXT: String = "Turn your phone sideways"
+## The Bramble Seed button: a circle on the right side, above the aim stick's spot
+## (as shares of the screen width and height), and its radius in pixels.
+const BRAMBLE_SPOT: Vector2 = Vector2(0.93, 0.48)
+const BRAMBLE_RADIUS: float = 42.0
+const BRAMBLE_COLOR: Color = Color(0.55, 0.85, 0.40, 0.65)
 
 
 ## One finger on the glass. (An inner class: a small data holder that only this
@@ -144,6 +149,13 @@ func _draw() -> void:
 	var screen: Vector2 = get_viewport_rect().size
 	_draw_stick(_move_finger, MOVE_REST_SPOT * screen, MOVE_COLOR)
 	_draw_stick(_aim_finger, AIM_REST_SPOT * screen, AIM_COLOR)
+	# The Bramble Seed button, with one small dot per seed in hand.
+	var button: Vector2 = BRAMBLE_SPOT * screen
+	draw_arc(button, BRAMBLE_RADIUS, 0.0, TAU, 40, BRAMBLE_COLOR, 3.0)
+	draw_string(ThemeDB.fallback_font, button + Vector2(-BRAMBLE_RADIUS, 6.0), "thorns", HORIZONTAL_ALIGNMENT_CENTER, BRAMBLE_RADIUS * 2.0, 16, BRAMBLE_COLOR)
+	if _player != null:
+		for i: int in _player.bramble_charges:
+			draw_circle(button + Vector2((i - 1) * 12.0, BRAMBLE_RADIUS * 0.55), 4.0, BRAMBLE_COLOR)
 
 	# The game is a wide rectangle. On an upright phone it shrinks to a thin strip,
 	# so ask for landscape. (The window is the real screen area the game was given.)
@@ -201,9 +213,18 @@ func touch_up(index: int) -> void:
 	_apply_sticks()
 
 	var was_tap: bool = finger.can_be_tap and finger.age <= CONFIG.touch_tap_max_time
+	# A tap on the Bramble button throws a Bramble Seed instead of trying the vine.
+	if was_tap and _player != null and bramble_button_hit(finger.start):
+		_player.throw_bramble()
+		return
 	if was_tap and _player != null:
 		# Same function right click uses, with a fingertip-sized pick radius.
 		_player.try_vine(finger.start, CONFIG.touch_vine_pick_radius_cells)
+
+
+## True if screen point `at` is on the Bramble Seed button.
+func bramble_button_hit(at: Vector2) -> bool:
+	return at.distance_to(BRAMBLE_SPOT * get_viewport_rect().size) <= BRAMBLE_RADIUS
 
 
 ## Turns a sliding finger into the MOVE stick (left half) or the AIM stick (right

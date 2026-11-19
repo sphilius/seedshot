@@ -241,6 +241,25 @@ extends Resource
 ## Colour multiplied over the Heart Tree's picture (above 1 = brighter).
 @export var heart_tree_tint: Color = Color(1.25, 1.0, 1.1)
 
+## BRAMBLE SEED (the third seed type, bramble.gd): Q or Space (or the touch
+## button) throws it toward the aim; it lands as a thorn patch.
+## How far it is thrown, in cells (it lands on the floor at most this far away).
+@export var bramble_range_cells: float = 5.0
+## Radius of the thorn patch, in cells.
+@export var bramble_radius_cells: float = 1.5
+## Seconds the patch lasts.
+@export var bramble_seconds: float = 8.0
+## Machines inside walk at this share of their speed (0.5 = half speed).
+@export var bramble_slow_factor: float = 0.5
+## Damage each machine inside takes every bramble_tick_seconds.
+@export var bramble_damage: int = 1
+@export var bramble_tick_seconds: float = 1.0
+## Charges Seven can hold, and seconds for one charge to grow back.
+@export var bramble_max_charges: int = 3
+@export var bramble_recharge_seconds: float = 6.0
+## Colour of the thorns.
+@export var bramble_color: Color = Color(0.40, 0.62, 0.30)
+
 ## TRELLIS (great_powers.gd): a zip from beside one tree to another leaves the
 ## vine strung between them. Seconds it lasts:
 @export var trellis_seconds: float = 6.0
@@ -386,6 +405,13 @@ extends Resource
 @export var dj_first_tree_touch: Array[String] = [
 	"Ha! It rooted. That's a tree now. Spitter shots stop dead on bark: get behind it.",
 	"And kid? Tap any tree. The vine zips you straight to it.",
+]
+## Canopy FM, on wave 2 (not in New Game +): the Bramble Seed. Keyboard and touch.
+@export var dj_bramble: Array[String] = [
+	"One more trick. Press Q or Space: a bramble seed. Thorns slow them down and chew them up.",
+]
+@export var dj_bramble_touch: Array[String] = [
+	"One more trick. Tap the thorn button, right side: a bramble seed. Thorns slow them down and chew them up.",
 ]
 ## Canopy FM, the first time a Sawbot is sent in.
 @export var dj_first_sawbot: Array[String] = [

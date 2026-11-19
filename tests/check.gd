@@ -105,6 +105,7 @@ func _ready() -> void:
 	await _test_new_machines()
 	await _test_upgrades()
 	await _test_props_and_lucky_art()
+	await _test_bramble_seed()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -812,7 +813,8 @@ func _test_wave_three_sends_faster_scrappers_and_a_sawbot() -> void:
 	var label: String = (_arena.get_node("Hud/WaveLabel") as Label).text
 	_check(label.begins_with("Wave %d / %d" % [wave, _arena.waves.total_waves()]), "the HUD shows the wave number")
 	_check(label.contains("Homes lit"), "and how many homes are lit")
-	_check(label.ends_with("Trees %d" % _arena.count_grown_trees()), "and how many trees are standing")
+	_check(label.contains("Trees %d " % _arena.count_grown_trees()), "and how many trees are standing")
+	_check(label.contains("Brambles %d / %d" % [_arena.player.bramble_charges, CONFIG.bramble_max_charges]), "and how many Bramble Seeds Seven holds")
 
 
 ## Waves: going down restarts the same wave, with the forest put back to how it
@@ -1136,7 +1138,7 @@ func _test_story_words() -> void:
 	_check(_arena.dj_lines_for_wave(hint_wave).has(CONFIG.dj_cat_hints[0]), "on wave %d Canopy FM hints at the cat" % hint_wave)
 	for i: int in CONFIG.cat_hits_needed:
 		_arena.cat_shop.hit_by_seed()
-	_check(_arena.dj_lines_for_wave(hint_wave).is_empty(), "no cat hints once Lucky is found")
+	_check(not _arena.dj_lines_for_wave(hint_wave).has(CONFIG.dj_cat_hints[0]), "no cat hints once Lucky is found")
 	_arena._dj_once(&"sawbot", CONFIG.dj_first_sawbot)
 	var queued: int = _arena._story_queue.size()
 	_arena._dj_once(&"sawbot", CONFIG.dj_first_sawbot)
@@ -1697,8 +1699,10 @@ func _test_upgrades() -> void:
 	_check(standing.hp == tree_hp_before + CONFIG.upgrade_tree_hp, "Hardwood: trees already standing get more hit points")
 	var planted: ForestTree = _arena.spawn_tree(Vector2i(4, 12), true)
 	_check(planted.max_hp() == CONFIG.tree_hp + _arena.tree_hp_bonus, "and so do new trees")
+	# (Measure the change: the random first pick above may already have been Long Trellis.)
+	var trellis_before: float = _arena.great_powers.trellis_bonus_seconds
 	_arena.apply_upgrade(&"long_trellis")
-	_check(_arena.great_powers.trellis_bonus_seconds == CONFIG.upgrade_trellis_seconds, "Long Trellis: trellis vines last longer")
+	_check(is_equal_approx(_arena.great_powers.trellis_bonus_seconds - trellis_before, CONFIG.upgrade_trellis_seconds), "Long Trellis: trellis vines last longer")
 	_arena.apply_upgrade(&"quick_roots")
 	_check(_arena.sapling_time_scale < 1.0, "Quick Roots: saplings root faster")
 	for id: StringName in UpgradePicker.CATALOG.keys():
@@ -1716,3 +1720,43 @@ func _test_props_and_lucky_art() -> void:
 	for cell: Vector2i in props.solid_cells:
 		_check(_arena.grid.is_solid(cell), "machines path around the prop at %s" % cell)
 	_check(not _arena._spawn_candidates().has(props.solid_cells[0]), "and no machine spawns inside one")
+
+
+## The third seed type: Bramble Seeds. Thrown toward the aim, they grow a thorn
+## patch that slows and hurts machines; Seven holds a few and they grow back.
+func _test_bramble_seed() -> void:
+	_check(InputMap.has_action(&"bramble"), "the bramble action exists (Q / Space)")
+	await _fresh_arena()
+	var player: Player = _arena.player
+	_check(player.bramble_charges == CONFIG.bramble_max_charges, "Seven starts with %d Bramble Seeds" % CONFIG.bramble_max_charges)
+	player.aim_direction = Vector2.RIGHT
+	_check(player.throw_bramble(), "a Bramble Seed can be thrown")
+	_check(player.bramble_charges == CONFIG.bramble_max_charges - 1, "it uses one seed")
+	var patches: Array[Node] = _arena.get_node("Brambles").get_children()
+	_check(patches.size() == 1, "and a thorn patch grows")
+	var patch: Bramble = patches[0]
+	var expected: Vector2 = player.global_position + Vector2.RIGHT * CONFIG.bramble_range_cells * CONFIG.cell_size
+	_check(patch.global_position.distance_to(expected) < 1.0, "%d cells out along the aim" % CONFIG.bramble_range_cells)
+
+	# A machine in the thorns is slowed and hurt on each tick.
+	var scrapper: Scrapper = _arena.spawn_scrapper_at(_arena.grid.world_to_cell(patch.global_position), true)  # a Linebreaker: enough hit points to survive
+	await _wait_frames(3)
+	_check(scrapper.is_slowed(), "a machine in the thorns is slowed")
+	var hp_before: int = scrapper.hp
+	await _wait_frames(int(CONFIG.bramble_tick_seconds * 60.0) + 5)
+	_check(not is_instance_valid(scrapper) or scrapper.hp < hp_before, "and loses hit points")
+
+	# Throws stop at zero seeds, then they grow back.
+	while player.bramble_charges > 0:
+		player.throw_bramble()
+	_check(not player.throw_bramble(), "no seeds, no throw")
+	var grown_back: Callable = func() -> bool: return player.bramble_charges >= 1
+	_check(await _wait_until(grown_back, CONFIG.bramble_recharge_seconds + 1.0), "a seed grows back after %d s" % CONFIG.bramble_recharge_seconds)
+
+	# A throw at a wall lands on the floor at its foot.
+	var at_wall: Bramble = _arena.spawn_bramble(Vector2(-500.0, -500.0))
+	_check(not _arena.grid.is_solid(_arena.grid.world_to_cell(at_wall.global_position)) or _arena.props.solid_cells.has(_arena.grid.world_to_cell(at_wall.global_position)), "a throw at a wall lands on the floor")
+	# A weak reference does not keep the patch alive, and reads null once it is freed.
+	var patch_ref: WeakRef = weakref(patch)
+	var withered: Callable = func() -> bool: return patch_ref.get_ref() == null
+	_check(await _wait_until(withered, CONFIG.bramble_seconds + 1.0), "the patch withers after %d s" % CONFIG.bramble_seconds)

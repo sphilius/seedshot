@@ -108,6 +108,8 @@ var lanterns: Lanterns
 var great_powers: GreatPowers
 ## Brick walls and street props (see props.gd). Public so tests can read it.
 var props: Props
+## Holds the bramble patches (see bramble.gd), so a restart can clear them.
+var _brambles: Node2D
 ## The Heart Tree, or null if there is none (felled and not yet replanted, or a
 ## test arena without one). Public so tests can read it.
 var heart_tree: ForestTree
@@ -180,6 +182,10 @@ func _ready() -> void:
 	add_child(props)
 	move_child(props, 0)  # draw right after the floor
 	props.setup(grid, Rect2(grid.origin, Vector2(grid.cols, grid.rows) * float(CONFIG.cell_size)))
+	_brambles = Node2D.new()
+	_brambles.name = "Brambles"
+	add_child(_brambles)
+	move_child(_brambles, 1)  # on the floor, just above the props, under everything else
 	lanterns = Lanterns.new()
 	lanterns.setup(Rect2(origin, arena_px).grow(-float(CONFIG.cell_size)))
 	add_child(lanterns)
@@ -225,6 +231,7 @@ func _ready() -> void:
 	add_child(cat_shop)
 
 	player.zip_finished.connect(_on_player_zip_finished)
+	player.bramble_thrown.connect(spawn_bramble)
 
 	# Listen to the wave director: it says when, the arena does the spawning.
 	waves.wave_started.connect(_on_wave_started)
@@ -248,8 +255,10 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	# The corner label doubles as the score: every standing tree powers one home.
 	if waves.wave > 0:
-		_wave_label.text = "Wave %d / %d    Homes lit %d / %d    Trees %d" % [
-			waves.wave, waves.total_waves(), windows.homes_lit(), windows.home_count(), count_grown_trees()]
+		# Bramble Seeds in hand, out of the most Seven can hold.
+		_wave_label.text = "Wave %d / %d    Homes lit %d / %d    Trees %d    Brambles %d / %d" % [
+			waves.wave, waves.total_waves(), windows.homes_lit(), windows.home_count(), count_grown_trees(),
+			player.bramble_charges, CONFIG.bramble_max_charges]
 	# Glide the lot's tint toward what the current light calls for.
 	var wanted_tint: Color = ambient_tint_for(light_level())
 	if cat_shop != null:
@@ -365,6 +374,17 @@ func spawn_tree(cell: Vector2i, grown: bool) -> ForestTree:
 	if grown:
 		grid.set_solid(cell, true)
 	return tree
+
+
+## Grows a bramble patch where a Bramble Seed lands. The landing point is kept
+## on the floor (one cell in from the walls), so a throw at a wall lands at its
+## foot. Connected to the player's bramble_thrown signal; public for the tests.
+func spawn_bramble(at: Vector2) -> Bramble:
+	var floor_rect := Rect2(grid.origin, Vector2(grid.cols, grid.rows) * float(CONFIG.cell_size)).grow(-float(CONFIG.cell_size))
+	var bramble := Bramble.new()
+	bramble.position = at.clamp(floor_rect.position, floor_rect.end)
+	_brambles.add_child(bramble)
+	return bramble
 
 
 ## The grown tree nearest to `point` within `reach` pixels, or null.
@@ -549,7 +569,7 @@ func _restart_current_wave() -> void:
 	# Remove every machine, pod and tree. remove_child takes a node out of the
 	# scene right now (so it stops counting as "in the arena" this very frame);
 	# queue_free then deletes it at the end of the frame.
-	for folder: Node in [_enemies, _pods, _shots, _trees]:
+	for folder: Node in [_enemies, _pods, _shots, _trees, _brambles]:
 		for child: Node in folder.get_children():
 			folder.remove_child(child)
 			child.queue_free()
@@ -685,6 +705,8 @@ func helios_line_for(number: int) -> String:
 ##   cat-hint waves  a hint about the lucky cat, only while the shop is shut.
 func dj_lines_for_wave(number: int) -> Array[String]:
 	var lines: Array[String] = []
+	if number == 2 and not ng_plus:
+		lines.append_array(CONFIG.dj_bramble_touch if _is_touch() else CONFIG.dj_bramble)
 	if number == 1:
 		if ng_plus:
 			lines.append_array(CONFIG.dj_ng_plus_intro)

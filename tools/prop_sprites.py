@@ -35,7 +35,8 @@ from scipy import ndimage
 
 # Reuse the tree script's cut-out step (same folder).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from tree_sprites import TREE_PALETTE, cut_out  # noqa: E402  (import after the path fix)
+import tree_sprites  # noqa: E402  (import after the path fix)
+from tree_sprites import TREE_PALETTE, cut_out  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 CONCEPT = ROOT / "art/concept/05_props/05_props_b.png"
@@ -49,11 +50,17 @@ PROPS = {
     "notice_x":   ((524, 990, 754, 1247), 30),   # one the block crossed out in red paint
     "planter":    ((958, 287, 1297, 554), 58),   # a wooden planter box of seedlings
     "barrel":     ((1418, 187, 1685, 623), 50),  # a rusty barrel turned into a planter
-    "cable":      ((514, 257, 867, 572), 46),    # a coil of cut Helios cable
+    "cable":      ((514, 257, 867, 572), 46),    # a coil of cut Helios cable (lower tolerance)
     "panel":      ((1808, 947, 2242, 1279), 60), # a broken solar panel lying flat
     "bike":       ((2354, 877, 2627, 1359), 56), # a bike, seen from above
     "chair":      ((2263, 230, 2680, 599), 62),  # a folding chair and a card table
 }
+
+# How different (sum of R, G and B differences) a pixel must be from the background to
+# count as part of a prop. The trees used 90, which is fine for bright props, but the
+# cable coil's dark rubber is close to the dark background and vanished, so it gets less.
+DEFAULT_TOLERANCE = 90
+TOLERANCE = {"cable": 24}
 
 # The tree palette plus teal and two steel steps (the panel's glass and the meter's casing).
 PALETTE = dict(TREE_PALETTE, **{
@@ -98,7 +105,11 @@ def shrink(cutout: Image.Image, longest: int) -> np.ndarray:
 def main() -> None:
     """Cut every prop, pack them into one strip, and save it plus a big preview."""
     picture = np.asarray(Image.open(CONCEPT).convert("RGB")).astype(int)
-    frames = [shrink(cut_out(picture, box), longest) for box, longest in PROPS.values()]
+    frames = []
+    for name, (box, longest) in PROPS.items():
+        # cut_out reads the tolerance from the tree script, so set it there for each prop.
+        tree_sprites.BACKGROUND_TOLERANCE = TOLERANCE.get(name, DEFAULT_TOLERANCE)
+        frames.append(shrink(cut_out(picture, box), longest))
     strip = np.concatenate(frames, axis=1)   # side by side, left to right
     out = ROOT / "art/sprites/props.png"
     Image.fromarray(strip, "RGBA").save(out)
