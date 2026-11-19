@@ -220,6 +220,25 @@ extends Resource
 ## Colour of a charged cable (alpha = how solid it looks).
 @export var canopy_line_color: Color = Color(0.75, 1.0, 0.45, 0.85)
 
+## THE HEART TREE (forest_tree.gd is_heart): the big tree in the middle of the
+## lot. Its hit points are tree_hp times this.
+@export var heart_tree_hp_multiplier: int = 5
+## Sawbots judge the Heart Tree this many times as far away as it really is, so
+## below 1 means they go for it first (0.4: it "feels" 2.5 times closer).
+@export var heart_tree_lure: float = 0.4
+## Colour multiplied over the Heart Tree's picture (above 1 = brighter).
+@export var heart_tree_tint: Color = Color(1.25, 1.0, 1.1)
+
+## TRELLIS (great_powers.gd): a zip from beside one tree to another leaves the
+## vine strung between them. Seconds it lasts:
+@export var trellis_seconds: float = 6.0
+## Seconds a machine snared by the trellis stays bound.
+@export var trellis_bind_seconds: float = 2.0
+## How close (cells) Seven must start a zip to a tree for it to count as "from" it.
+@export var trellis_start_reach_cells: float = 1.6
+## Colour of a trellis vine.
+@export var trellis_color: Color = Color(0.45, 0.95, 0.40, 0.9)
+
 ## SUNBURST (great_powers.gd): zip to a great sunroot and it flares.
 ## Radius of the flare, in cells.
 @export var sunburst_radius_cells: float = 3.5
@@ -338,6 +357,7 @@ extends Resource
 ## Canopy FM, the first time a Sawbot is sent in.
 @export var dj_first_sawbot: Array[String] = [
 	"Sawbot on the lot! It doesn't want you. It wants the trees. Drop it first.",
+	"It'll go for the Heart, the big old tree in the middle. Lose the Heart, lose the wave.",
 ]
 ## Canopy FM, wave 1 of New Game +: what great sunroots do.
 @export var dj_ng_plus_intro: Array[String] = [

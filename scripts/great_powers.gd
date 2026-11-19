@@ -19,8 +19,16 @@ extends Node2D
 ##    sunburst_damage. One shared cooldown (sunburst_cooldown) for all trees.
 ##    Strategy: your great trees are escape hatches; zip in when swarmed.
 ##
-## The arena calls sunburst() when the player's zip ends at a great tree. The
-## canopy lines look after themselves every physics step.
+## And one for EVERY tree, in any run:
+##
+## 3. TRELLIS (DESIGN.md's "Overgrowth idea in one rule")
+##    Zip from beside one tree to another and the vine stays strung between them
+##    for trellis_seconds. Each machine that crosses it is snared (bound) once.
+##    Strategy: zip across a lane just before the machines walk into it.
+##
+## The arena calls sunburst() when the player's zip ends at a great tree, and
+## add_trellis() when a zip goes tree to tree. The lines look after themselves
+## every physics step.
 
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
 ## Physics layer 1 ("world"): walls and grown trees block a cable's line of sight.
@@ -35,6 +43,10 @@ var lines: Array[Dictionary] = []
 var sunburst_cooldown_left: float = 0.0
 ## How brightly to draw (above 1 shines through the night tint). Set by the arena.
 var light_boost: float = 1.0
+
+## The trellis vines strung right now: {a: Vector2, b: Vector2, time_left: float,
+## caught: Dictionary of machine ids already snared}. Public for the tests.
+var trellises: Array[Dictionary] = []
 
 ## Cable key ("<tree id>-<tree id>") -> seconds of recharge left.
 var _recharge: Dictionary[String, float] = {}
@@ -53,6 +65,7 @@ func _physics_process(delta: float) -> void:
 	for line: Dictionary in lines:
 		if is_charged(line):
 			_catch_on(line)
+	_tick_trellises(delta)
 	if _burst_time >= 0.0:
 		_burst_time += delta
 		if _burst_time > BURST_SECONDS:
@@ -115,6 +128,33 @@ func _catch_on(line: Dictionary) -> void:
 			return
 
 
+## Strings a trellis vine from `a` to `b` (two tree centres) for trellis_seconds.
+func add_trellis(a: Vector2, b: Vector2) -> void:
+	trellises.append({a = a, b = b, time_left = CONFIG.trellis_seconds, caught = {}})
+	Sfx.play(&"grow")
+
+
+## Counts each trellis down (dropping the spent ones) and snares any machine
+## crossing one for the first time.
+func _tick_trellises(delta: float) -> void:
+	# Walk backwards, so removing an entry does not skip the next one.
+	for i: int in range(trellises.size() - 1, -1, -1):
+		var vine: Dictionary = trellises[i]
+		vine.time_left -= delta
+		if vine.time_left <= 0.0:
+			trellises.remove_at(i)
+			continue
+		for node: Node in get_tree().get_nodes_in_group(Enemy.GROUP):
+			var enemy := node as Enemy
+			if enemy == null or enemy.is_dead or enemy.is_bound or vine.caught.has(enemy.get_instance_id()):
+				continue
+			var nearest: Vector2 = Geometry2D.get_closest_point_to_segment(enemy.global_position, vine.a, vine.b)
+			if enemy.global_position.distance_to(nearest) <= CONFIG.canopy_line_catch_px:
+				vine.caught[enemy.get_instance_id()] = true
+				enemy.yank_and_bind(enemy.global_position, 0.0, CONFIG.trellis_bind_seconds)
+				Sfx.play(&"bind")
+
+
 ## The player's zip ended at a great sunroot standing at `at`: stun and hurt every
 ## machine nearby. Returns how many machines it caught (0 while cooling down).
 func sunburst(at: Vector2) -> int:
@@ -155,6 +195,13 @@ func _draw() -> void:
 		for t: float in [0.25, 0.5, 0.75]:
 			var bud: Vector2 = (a.lerp(mid, t * 2.0) if t <= 0.5 else mid.lerp(b, t * 2.0 - 1.0))
 			draw_circle(bud, 3.0, color)
+	# Trellis vines: a thinner green line that fades out over its last seconds.
+	for vine: Dictionary in trellises:
+		var fade: float = clampf(vine.time_left / 1.5, 0.0, 1.0)
+		var green: Color = CONFIG.trellis_color
+		draw_line(vine.a, vine.b, Color(green * light_boost, green.a * fade), 2.0, true)
+		for t: float in [0.2, 0.4, 0.6, 0.8]:
+			draw_circle(vine.a.lerp(vine.b, t), 2.5, Color(green * light_boost, green.a * fade))
 	if _burst_time >= 0.0:
 		var share: float = _burst_time / BURST_SECONDS  # 0 at the flash, 1 when gone
 		var radius: float = CONFIG.sunburst_radius_cells * CONFIG.cell_size * share

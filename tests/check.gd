@@ -100,6 +100,8 @@ func _ready() -> void:
 	await _test_tap_points()
 	await _test_new_game_plus()
 	await _test_great_powers()
+	await _test_trellis()
+	await _test_heart_tree()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -115,7 +117,9 @@ func _check(condition: bool, message: String) -> void:
 
 
 ## Throws away the old arena (if any) and starts a fresh one with no enemies.
-func _fresh_arena() -> void:
+## `with_heart`: plant the Heart Tree. Off by default, because the older checks
+## were written before it existed and expect only the three hand-placed trees.
+func _fresh_arena(with_heart: bool = false) -> void:
 	if _arena != null:
 		_arena.queue_free()
 		await get_tree().physics_frame
@@ -123,6 +127,7 @@ func _fresh_arena() -> void:
 	# Switch the waves off BEFORE the arena enters the scene (its _ready reads
 	# this), so each test controls exactly which enemies exist.
 	_arena.autostart_waves = false
+	_arena.plant_heart_tree = with_heart
 	add_child(_arena)
 	# Give the physics engine two steps to register the new bodies.
 	await get_tree().physics_frame
@@ -1584,3 +1589,51 @@ func _test_great_powers() -> void:
 	_arena.player.zip_tree = _arena.tree_at(Arena.TEST_TREE_CELLS[0])
 	_arena._on_player_zip_finished()
 	_check(powers.sunburst_cooldown_left == 0.0, "a zip to an ordinary tree does not")
+
+
+## The Trellis: a zip from beside one tree to another leaves a vine between them
+## for a few seconds, which snares each machine crossing it once.
+func _test_trellis() -> void:
+	await _fresh_arena()
+	var powers: GreatPowers = _arena.great_powers
+	var a: ForestTree = _arena.spawn_tree(Vector2i(3, 12), true)
+	var b: ForestTree = _arena.spawn_tree(Vector2i(9, 12), true)
+	# Pretend Seven zipped from right beside tree a to tree b.
+	_arena.player.zip_from = a.global_position + Vector2(CONFIG.cell_size, 0.0)
+	_arena.player.zip_tree = b
+	_arena._on_player_zip_finished()
+	_check(powers.trellises.size() == 1, "a zip from one tree to another strings a trellis")
+	var scrapper: Scrapper = _arena.spawn_scrapper_at(Vector2i(6, 12))
+	await _wait_frames(2)
+	_check(scrapper.is_bound, "a machine crossing the trellis is snared")
+	# A zip that did not start beside a tree strings nothing.
+	_arena.player.zip_from = _arena.grid.cell_to_world(Vector2i(20, 7))
+	_arena._on_player_zip_finished()
+	_check(powers.trellises.size() == 1, "a zip from open ground strings no trellis")
+	var gone: Callable = func() -> bool: return powers.trellises.is_empty()
+	_check(await _wait_until(gone, CONFIG.trellis_seconds + 1.0), "the trellis withers after %d seconds" % CONFIG.trellis_seconds)
+
+
+## The Heart Tree: a tough tree in the middle that Sawbots go for first; if it
+## falls the wave starts again, and it heals between waves.
+func _test_heart_tree() -> void:
+	await _fresh_arena(true)
+	var heart: ForestTree = _arena.heart_tree
+	_check(heart != null and heart.is_heart and heart.cell == Arena.HEART_TREE_CELL, "the Heart Tree stands in the middle of the lot")
+	_check(heart.hp == CONFIG.tree_hp * CONFIG.heart_tree_hp_multiplier, "with %dx a tree's hit points" % CONFIG.heart_tree_hp_multiplier)
+	# A Sawbot a little nearer to an ordinary tree still heads for the Heart.
+	var sawbot: Sawbot = _arena.spawn_sawbot_at(Vector2i(13, 9))  # 1 cell from (13, 10), 2 from the Heart
+	_check(sawbot._nearest_tree(ForestTree.Stage.GROWN, INF) == heart, "a Sawbot goes for the Heart Tree first")
+	sawbot.take_damage(99)
+	# Hurt it, then clear a wave: it heals.
+	heart.take_damage(3)
+	_arena._on_wave_cleared(1)
+	_check(heart.hp == heart.max_hp(), "the Heart Tree heals between waves")
+	# Fell it during a wave: the wave starts again, with the Heart replanted.
+	_arena.waves.start_wave(2)
+	var felled: Array[bool] = [false]
+	_arena.heart_tree_felled.connect(func() -> void: felled[0] = true)
+	heart.take_damage(heart.hp)
+	_check(felled[0], "felling the Heart Tree loses the wave")
+	var replanted: Callable = func() -> bool: return is_instance_valid(_arena.heart_tree) and _arena.heart_tree.is_heart
+	_check(await _wait_until(replanted, CONFIG.death_restart_delay + 1.0), "and the wave restarts with the Heart Tree replanted")

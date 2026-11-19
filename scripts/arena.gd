@@ -16,6 +16,8 @@ extends Node2D
 ## Emitted when the player goes down. (Tests listen for this; the game itself
 ## reacts in _on_player_died.)
 signal player_defeated
+## Emitted when the Heart Tree is felled (the wave then starts again).
+signal heart_tree_felled
 
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
 ## preload() loads a scene file once, when the script itself loads. instantiate()
@@ -31,6 +33,8 @@ const SEED_POD_SCENE: PackedScene = preload("res://scenes/seed_pod.tscn")
 ## Level layout for the gray box (grid cells, not tunables).
 const TEST_TREE_CELLS: Array[Vector2i] = [Vector2i(9, 4), Vector2i(13, 10), Vector2i(17, 5)]
 const PLAYER_START_CELL: Vector2i = Vector2i(6, 7)
+## The Heart Tree's cell: the middle of the lot (see forest_tree.gd is_heart).
+const HEART_TREE_CELL: Vector2i = Vector2i(13, 7)
 ## The hidden shop fills this wall cell and the one to its right: top wall, well
 ## to the right, away from where the fight naturally happens.
 const CAT_SHOP_CELL: Vector2i = Vector2i(20, 0)
@@ -102,6 +106,12 @@ var _lucky_talks: int = 0
 var lanterns: Lanterns
 ## The great sunroots' Canopy lines and Sunburst (see great_powers.gd). Public for tests.
 var great_powers: GreatPowers
+## The Heart Tree, or null if there is none (felled and not yet replanted, or a
+## test arena without one). Public so tests can read it.
+var heart_tree: ForestTree
+## Knob: plant the Heart Tree at the start. The tests switch it off for the
+## older checks that count trees, since writes to the shared config are ignored.
+@export var plant_heart_tree: bool = true
 ## The Block's painted lines on the side walls. Public so tests can reach it.
 var graffiti: Graffiti
 ## The hidden lucky cat's shop, in the top wall. Public so tests can reach it.
@@ -188,6 +198,8 @@ func _ready() -> void:
 
 	for cell: Vector2i in TEST_TREE_CELLS:
 		spawn_tree(cell, true)
+	if plant_heart_tree:
+		heart_tree = spawn_tree(HEART_TREE_CELL, true)
 
 	# The hidden lucky cat's shop. It is two cells wide, so its centre sits on
 	# the line between its two cells: half a cell right of the first one's centre.
@@ -319,6 +331,11 @@ func spawn_tree(cell: Vector2i, grown: bool) -> ForestTree:
 		tree.is_tap = true
 		tap_points.erase(cell)
 		queue_redraw()  # the soil patch disappears from the floor
+	# The Heart Tree's cell always grows the Heart Tree (also when a restarted
+	# wave replants the forest from its snapshot).
+	tree.is_heart = grown and cell == HEART_TREE_CELL and plant_heart_tree
+	if tree.is_heart:
+		heart_tree = tree
 	tree.position = grid.cell_to_world(cell)
 	tree.ready_to_solidify.connect(_on_tree_ready_to_solidify)
 	tree.felled.connect(_on_tree_felled)
@@ -327,6 +344,20 @@ func spawn_tree(cell: Vector2i, grown: bool) -> ForestTree:
 	if grown:
 		grid.set_solid(cell, true)
 	return tree
+
+
+## The grown tree nearest to `point` within `reach` pixels, or null.
+func _grown_tree_near(point: Vector2, reach: float) -> ForestTree:
+	var best: ForestTree = null
+	var best_distance: float = reach
+	for tree: ForestTree in _trees_by_cell.values():
+		if not is_instance_valid(tree) or tree.stage != ForestTree.Stage.GROWN:
+			continue
+		var distance: float = tree.global_position.distance_to(point)
+		if distance <= best_distance:
+			best = tree
+			best_distance = distance
+	return best
 
 
 ## The tree (sapling or grown) on a cell, or null if there is none.
@@ -695,6 +726,10 @@ func _on_spawn_requested(kind: StringName, wave_number: int) -> void:
 func _on_wave_cleared(number: int) -> void:
 	Sfx.play(&"wave_clear")
 	_show_banner(wave_cleared_text(number), CONFIG.wave_break_time)
+	# The Heart Tree heals between waves.
+	if is_instance_valid(heart_tree):
+		heart_tree.hp = heart_tree.max_hp()
+		heart_tree.queue_redraw()
 	# More of the block comes on, and every lit window shines a little stronger.
 	waves_cleared = maxi(waves_cleared, number)
 	_update_light()
@@ -780,8 +815,12 @@ func _on_player_zip_finished() -> void:
 	for tree: ForestTree in _trees_by_cell.values():
 		tree.show_vine_hint = false
 	_vine_hint_done = true
-	# A zip that ends at a great sunroot sets off its Sunburst.
 	var tree: ForestTree = player.zip_tree
+	# TRELLIS: a zip that started beside another tree strings a vine between them.
+	var from_tree: ForestTree = _grown_tree_near(player.zip_from, CONFIG.trellis_start_reach_cells * CONFIG.cell_size)
+	if is_instance_valid(tree) and from_tree != null and from_tree != tree:
+		great_powers.add_trellis(from_tree.global_position, tree.global_position)
+	# A zip that ends at a great sunroot sets off its Sunburst.
 	if is_instance_valid(tree) and tree.is_great and tree.stage == ForestTree.Stage.GROWN:
 		if great_powers.sunburst(tree.global_position) > 0:
 			_show_banner("Sunburst!", 1.0)
@@ -819,6 +858,20 @@ func _on_player_seed_fired(origin: Vector2, direction: Vector2) -> void:
 	pod.position = origin
 	pod.direction = direction
 	_pods.add_child(pod)
+
+
+## The Heart Tree fell: the block's roots are cut, so the wave starts again (like
+## Seven going down). The restart replants it from the wave-start snapshot.
+func _on_heart_tree_felled() -> void:
+	heart_tree = null
+	if waves.wave == 0 or is_run_finished:
+		return
+	heart_tree_felled.emit()
+	_show_banner("The Heart Tree fell! Wave %d starts again" % waves.wave, CONFIG.death_restart_delay)
+	await get_tree().create_timer(CONFIG.death_restart_delay, false).timeout
+	if not is_inside_tree():
+		return
+	_restart_current_wave()
 
 
 ## Signal handler: the player went down. Wait a moment, then restart the wave.
@@ -882,6 +935,8 @@ func _on_tree_felled(tree: ForestTree) -> void:
 	_trees_by_cell.erase(tree.cell)
 	windows.flicker()  # the block feels it: one lit window drops dark for a moment
 	CanopyFM.dull()    # and the radio dulls for a moment
+	if tree.is_heart:
+		_on_heart_tree_felled()
 	if tree.is_tap:
 		_update_light.call_deferred()  # its extra windows go out (once it is gone)
 

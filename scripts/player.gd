@@ -73,6 +73,8 @@ var _vine_anchor: Vector2 = Vector2.ZERO
 ## The tree the latest zip was aimed at. The arena reads it when the zip ends
 ## (a zip to a great sunroot sets off its Sunburst).
 var zip_tree: ForestTree
+## Where Seven stood when the latest zip started (for the Trellis).
+var zip_from: Vector2 = Vector2.ZERO
 
 ## @onready fills these in just before _ready, once the child nodes exist.
 @onready var _collision: CollisionShape2D = $CollisionShape2D
@@ -375,6 +377,7 @@ func _start_zip(tree: ForestTree) -> bool:
 	velocity = Vector2.ZERO
 	_vine_anchor = tree.global_position
 	zip_tree = tree
+	zip_from = global_position
 	Sfx.play(&"zip")
 
 	# A Tween animates a property over time. This one slides global_position to the
