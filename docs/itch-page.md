@@ -22,8 +22,13 @@ Genre: Action. Tags: solarpunk, top-down-shooter, pixel-art, arcade, short, robo
 - Cover (630 x 500): a crop of `art/concept/07_key_art/07_key_art_g.png` (Sasha's pick).
 - Note: don't use a screenshot that shows where Lucky's shop is (it is meant to be found).
 - Banner: the same picture, wide crop.
-- Screenshots: `docs/playtest/shots/s14-light-1-start.jpg`, `s14-light-2-after-wave-5.jpg`, `s14-light-3-end.jpg`,
-  plus one with Lucky's shop open **[take in play]**.
+- Screenshots (1280 x 720, in `docs/playtest/shots/`), in this order:
+  1. `s17-late-wave.png`: a late-wave fight, Linebreakers and Arc Spitters closing in.
+  2. `s17-radio-heart-bramble.png`: Helios on the radio, the Heart Tree, a bramble patch.
+  3. `s17-upgrade-cards.png`: the between-wave upgrade pick.
+  4. `s17-sunburst.png`: New Game +, Canopy lines and a Sunburst.
+  5. `s14-light-3-end.jpg`: the lit block at the end of a run.
+  None of them gives away where Lucky's shop is.
 
 ---
 
@@ -43,6 +48,7 @@ Ten waves. One night. Keep the lights on.
 - Shoot seed pods. A downed machine roots and grows into a tree.
 - Zip to any tree on a live vine. Zip tree to tree and the vine stays strung as a trap.
 - Guard the Heart Tree: the Sawbots want it, and if it falls the wave starts over.
+- Throw Bramble Seeds: thorn patches that slow machines and chew them up.
 - Pick an upgrade between waves, because Helios sends heavier machines as the night goes on.
 - Canopy FM, the block's pirate radio, talks you through it, and gets clearer as the block lights up.
 
@@ -62,6 +68,7 @@ bind machines, and a spare fuse that gets you back up once when you'd go down.**
 | Aim and shoot | mouse; hold left click | slide and hold a thumb on the right half |
 | Zip to a tree | right click on the tree | tap the tree |
 | Bind a machine (after Lucky) | right click on the machine | tap the machine |
+| Throw a Bramble Seed | Q or Space | the "thorns" button, right side |
 | Talk to Lucky | E near the open shop | tap the shop |
 | Pick an upgrade (between waves) | 1, 2 or 3, or click a card | tap a card |
 | Pause | P or Esc | the pause button, top right |
