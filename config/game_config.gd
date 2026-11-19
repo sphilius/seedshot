@@ -173,6 +173,14 @@ extends Resource
 ## fitted, the first time Seven would go down it gets back up instead, with this
 ## many hit points.
 @export var fuse_revive_hp: int = 3
+## KNOCK-OUT animation: Seven jolts, tips over and greys out, throwing sparks,
+## over this many seconds. (Keep it shorter than death_restart_delay.)
+@export var knockout_seconds: float = 0.9
+@export var knockout_spark_color: Color = Color(1.8, 1.4, 0.4)
+## FUSE REVIVE animation: a gold flash, two rings bursting outward and a
+## lightning bolt over Seven, while the picture pops big and settles back.
+@export var fuse_flash_seconds: float = 0.8
+@export var fuse_flash_color: Color = Color(1.9, 1.6, 0.5)
 ## Seconds Seven cannot be hurt after the fuse saves it (it blinks meanwhile).
 @export var fuse_invulnerable_time: float = 2.0
 ## Talking to Lucky: Seven must be within this many cells of the open shop for

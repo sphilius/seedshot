@@ -113,6 +113,7 @@ func _ready() -> void:
 	await _test_ng_plus_opening()
 	await _test_plating_and_grove_rest()
 	await _test_s18_machines_heart_cards_light()
+	await _test_knockout_and_fuse_animations()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -2105,3 +2106,33 @@ func _test_s18_machines_heart_cards_light() -> void:
 	_check(_arena.forest_points() < points_before, "a damaged tree counts for less light")
 	_arena.waves_cleared = _arena.waves.total_waves()
 	_check(is_equal_approx(_arena.forest_share(), 1.0), "winning lights the whole block whatever the forest")
+
+## s18: Seven has a knock-out animation, and a different one when the spare fuse
+## saves it.
+func _test_knockout_and_fuse_animations() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	var sprite: Sprite2D = player._sprite
+	var normal_scale: Vector2 = sprite.scale
+
+	# Knock-out: tips over onto its side and greys out.
+	player.take_damage(player.max_hp)
+	_check(player.is_dead and player.is_knockout_playing() and not player.is_fuse_flash_playing(), "going down starts the knock-out animation")
+	var settled: Callable = func() -> bool: return not player.is_knockout_playing()
+	await _wait_until(settled, CONFIG.knockout_seconds + 1.0)
+	await _wait_frames(3)
+	_check(is_equal_approx(absf(sprite.rotation), PI / 2.0), "Seven ends up lying on its side")
+	_check(player.modulate.r < 0.6, "and greyed out")
+	player.revive(player.global_position)
+	_check(is_zero_approx(sprite.rotation) and sprite.scale.is_equal_approx(normal_scale) and player.modulate.is_equal_approx(Color.WHITE), "a revive stands Seven back up, in full colour")
+
+	# The spare fuse: a different animation, and Seven stays up.
+	player.receive_cat_gift()
+	player._invulnerable_left = 0.0  # skip the safe moment after the revive
+	player.take_damage(player.max_hp)
+	_check(not player.is_dead and player.is_fuse_flash_playing() and not player.is_knockout_playing(), "the fuse plays its own flash, not the knock-out")
+	_check(sprite.scale.x > normal_scale.x and is_zero_approx(sprite.rotation), "the picture pops up big and stays upright")
+	var flashed: Callable = func() -> bool: return not player.is_fuse_flash_playing()
+	await _wait_until(flashed, CONFIG.fuse_flash_seconds + 1.0)
+	await _wait_frames(3)
+	_check(sprite.scale.is_equal_approx(normal_scale), "and settles back to its normal size")
