@@ -20,6 +20,7 @@ Genre: Action. Tags: solarpunk, top-down-shooter, pixel-art, arcade, short, robo
 ## Cover image and banner
 
 - Cover (630 x 500): a crop of `art/concept/07_key_art/07_key_art_g.png` (Sasha's pick).
+- Note: don't use a screenshot that shows where Lucky's shop is (it is meant to be found).
 - Banner: the same picture, wide crop.
 - Screenshots: `docs/playtest/shots/s14-light-1-start.jpg`, `s14-light-2-after-wave-5.jpg`, `s14-light-3-end.jpg`,
   plus one with Lucky's shop open **[take in play]**.
@@ -40,15 +41,16 @@ a window flickers.
 Ten waves. One night. Keep the lights on.
 
 - Shoot seed pods. A downed machine roots and grows into a tree.
-- Zip to any tree on a live vine.
-- Watch the Sawbots: they don't want you, they want your trees.
-- Canopy FM, the block's pirate radio, gets clearer as the block lights up.
+- Zip to any tree on a live vine. Zip tree to tree and the vine stays strung as a trap.
+- Guard the Heart Tree: the Sawbots want it, and if it falls the wave starts over.
+- Pick an upgrade between waves, because Helios sends heavier machines as the night goes on.
+- Canopy FM, the block's pirate radio, talks you through it, and gets clearer as the block lights up.
 
 ### 🐱 There is a hidden lucky cat in this game
 
-Somewhere in the lot, a shuttered shop hides **Lucky**, a lucky cat who sells to the right customers. Find the shop
-and knock (hint: three seed pods). Lucky's gift: **a live clamp that lets your vine yank and bind machines, and a
-spare fuse that gets you back up once when you'd go down.** Talk to Lucky as often as you like.
+Somewhere in the lot, a shuttered shop hides **Lucky**, a lucky cat who sells to the right customers. It is hidden
+for real: keep your eyes open, and listen to Canopy FM. Lucky's gift: **a live clamp that lets your vine yank and
+bind machines, and a spare fuse that gets you back up once when you'd go down.** Talk to Lucky as often as you like.
 
 **[Optional, if you want it spoiler-free: replace the last two sentences with "Find it. It's worth it."]**
 
@@ -61,6 +63,7 @@ spare fuse that gets you back up once when you'd go down.** Talk to Lucky as oft
 | Zip to a tree | right click on the tree | tap the tree |
 | Bind a machine (after Lucky) | right click on the machine | tap the machine |
 | Talk to Lucky | E near the open shop | tap the shop |
+| Pick an upgrade (between waves) | 1, 2 or 3, or click a card | tap a card |
 | Pause | P or Esc | the pause button, top right |
 | Mute | M | the speaker button, top right |
 | Restart after the run | R or Enter | tap the end banner |
@@ -68,7 +71,9 @@ spare fuse that gets you back up once when you'd go down.** Talk to Lucky as oft
 **Short on time?** After wave 5 the game tells you it's a good place to stop and rate. Play on for the ending.
 
 **New Game +**: beat the game once to unlock it on the title screen: 50% more machines, sent faster, and trees that
-survive a whole wave grow into **great sunroots**. You also get to pick your Canopy FM station (lo-fi, dub, chiptune or drill trap). **[add the New Game + mechanic once it is chosen]**
+survive a whole wave grow into **great sunroots**. Two great sunroots in sight of each other string a **Canopy line**
+that tangles machines crossing it, and zipping to one sets off a **Sunburst** that stuns everything around it. You
+also get to pick your Canopy FM station (lo-fi, dub, chiptune or drill trap).
 
 ### Made for Jamference AI Game Jam Hack 4
 

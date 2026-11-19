@@ -22,8 +22,8 @@ const FRAME_PX: float = 64.0
 
 ## Brick size in pixels, and the mortar colour (darker than the wall, see-through).
 const BRICK: Vector2 = Vector2(24.0, 12.0)
-const MORTAR_COLOR: Color = Color(0.0, 0.0, 0.0, 0.22)
-const BRICK_HIGHLIGHT: Color = Color(1.0, 1.0, 1.0, 0.035)
+const MORTAR_COLOR: Color = Color(0.0, 0.0, 0.0, 0.38)
+const BRICK_HIGHLIGHT: Color = Color(1.0, 1.0, 1.0, 0.06)
 
 ## The cells of the solid corner props. Public so the tests (and the arena, for
 ## keeping spawns off them) can read them. Filled in by setup().
