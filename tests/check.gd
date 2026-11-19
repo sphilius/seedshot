@@ -116,6 +116,7 @@ func _ready() -> void:
 	await _test_knockout_and_fuse_animations()
 	await _test_banner_radio_and_wave_beat()
 	await _test_pause_menu()
+	await _test_back_wall_and_roof_graffiti()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -2245,3 +2246,36 @@ func _test_pause_menu() -> void:
 	pause.set_paused(true)
 	pause.choose(PauseOverlay.Item.RESUME)
 	_check(not get_tree().paused, "Resume carries on")
+
+## s18: the back wall is a row of home fronts that hides Lucky's shutter among
+## others, and the graffiti is painted level across the roofs.
+func _test_back_wall_and_roof_graffiti() -> void:
+	await _fresh_arena()
+	var wall: BackWall = _arena.back_wall
+	var shop_front: int = Arena.CAT_SHOP_CELL.x / BackWall.FRONT_CELLS
+	_check(wall.front_count() * BackWall.FRONT_CELLS == CONFIG.grid_cols, "the fronts fill the back wall exactly (%d of them)" % wall.front_count())
+	_check(wall.is_shop_front(shop_front), "one front is left empty for Lucky's shop")
+	_check(is_equal_approx(wall.front_rect(shop_front).get_center().x, _arena.cat_shop.global_position.x), "and the shop stands exactly in it")
+	_check(wall.kind_of(shop_front) == BackWall.Kind.SHUTTER, "that front would be a shutter anyway, so the pattern is unbroken")
+	var other_shutters: int = 0
+	for i: int in wall.front_count():
+		if not wall.is_shop_front(i) and wall.kind_of(i) == BackWall.Kind.SHUTTER:
+			other_shutters += 1
+	_check(other_shutters >= 3, "Lucky's shutter hides among %d others" % other_shutters)
+
+	# Graffiti: every line sits level inside the bottom wall, and inside the arena.
+	var graffiti: Graffiti = _arena.graffiti
+	var arena_rect := Rect2(_arena.grid.origin, Vector2(CONFIG.grid_cols, CONFIG.grid_rows) * float(CONFIG.cell_size))
+	var font: Font = CONFIG.graffiti_font
+	var all_fit: bool = true
+	for i: int in CONFIG.graffiti_lines.size():
+		var place: Array = graffiti.line_place(i)
+		var at: Vector2 = place[0]
+		var slot_width: float = place[1]
+		var text_width: float = font.get_string_size(CONFIG.graffiti_lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1.0, Graffiti.FONT_SIZE).x
+		var in_wall: bool = at.y > arena_rect.end.y - CONFIG.cell_size and at.y <= arena_rect.end.y
+		var in_arena: bool = at.x >= arena_rect.position.x and at.x + slot_width <= arena_rect.end.x + 0.5
+		if not in_wall or not in_arena or text_width > slot_width:
+			all_fit = false
+	_check(all_fit, "every graffiti line fits its slot on the roofs of the bottom wall")
+	_check(graffiti.get_index() > _arena.windows.get_index(), "and is painted over the roofs, not under them")

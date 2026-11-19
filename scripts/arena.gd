@@ -152,6 +152,8 @@ var quit_requests: int = 0
 var trees_planted: int = 0
 ## The Block's painted lines on the side walls. Public so tests can reach it.
 var graffiti: Graffiti
+## The home and shop fronts along the back wall (back_wall.gd).
+var back_wall: BackWall
 ## The hidden lucky cat's shop, in the top wall. Public so tests can reach it.
 var cat_shop: CatShop
 ## True after the last wave is cleared. Public so tests can read it.
@@ -194,13 +196,19 @@ func _ready() -> void:
 	grid = ArenaGrid.new(CONFIG.grid_cols, CONFIG.grid_rows, CONFIG.cell_size, origin)
 	_build_walls()
 
-	# The Block's graffiti. Added first, so everything else draws on top of it.
-	graffiti = Graffiti.new()
-	graffiti.setup(Rect2(origin, arena_px), float(CONFIG.cell_size))
-	add_child(graffiti)
 	windows = BlockWindows.new()
 	windows.setup(Rect2(origin, arena_px), float(CONFIG.cell_size))
 	add_child(windows)
+	# The Block's graffiti: painted across the roofs of the homes on the bottom
+	# wall, so it is added AFTER the windows (later children draw on top).
+	graffiti = Graffiti.new()
+	graffiti.setup(Rect2(origin, arena_px), float(CONFIG.cell_size))
+	add_child(graffiti)
+	# The back (top) wall: a row of home and shop fronts. Lucky's shop is added
+	# further down and draws itself into the gap this leaves for it.
+	back_wall = BackWall.new()
+	back_wall.setup(Rect2(origin, arena_px), float(CONFIG.cell_size), CAT_SHOP_CELL.x)
+	add_child(back_wall)
 	# Lantern strings across the lot. Added before the trees and machines, so
 	# they hang underneath them and never hide the action.
 	# The art pass: brick walls and street props (see props.gd). Added first among
