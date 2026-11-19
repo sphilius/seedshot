@@ -113,6 +113,10 @@ var _brambles: Node2D
 ## The Heart Tree, or null if there is none (felled and not yet replanted, or a
 ## test arena without one). Public so tests can read it.
 var heart_tree: ForestTree
+## How many times Canopy FM has raised the Heart Tree alarm. Public for the tests.
+var heart_alarms: int = 0
+## Seconds until Canopy FM may raise the Heart Tree alarm again.
+var _heart_alarm_left: float = 0.0
 ## Knob: plant the Heart Tree at the start. The tests switch it off for the
 ## older checks that count trees, since writes to the shared config are ignored.
 @export var plant_heart_tree: bool = true
@@ -272,6 +276,9 @@ func _process(delta: float) -> void:
 	windows.light_boost = boost
 	lanterns.light_boost = boost
 	great_powers.light_boost = boost
+	# One shared value for every tree's markers (a static var, see forest_tree.gd).
+	ForestTree.light_boost = boost
+	_heart_alarm_left = maxf(_heart_alarm_left - delta, 0.0)
 	# The bright cables showed through the upgrade cards: hide them while it is open.
 	great_powers.cables_hidden = upgrade_picker.is_open()
 	_ambient.color = _ambient.color.lerp(wanted_tint, minf(1.0, CONFIG.ambient_change_speed * delta))
@@ -371,6 +378,7 @@ func spawn_tree(cell: Vector2i, grown: bool) -> ForestTree:
 	tree.position = grid.cell_to_world(cell)
 	tree.ready_to_solidify.connect(_on_tree_ready_to_solidify)
 	tree.felled.connect(_on_tree_felled)
+	tree.hurt.connect(_on_tree_hurt)
 	_trees.add_child(tree)
 	_trees_by_cell[cell] = tree
 	if grown:
@@ -653,6 +661,24 @@ func _radio_later(lines: Array[Dictionary]) -> void:
 		_show_next_story_line()
 
 
+## Puts one line at the FRONT of the radio queue: it plays next (at once if the
+## radio is quiet). For news that cannot wait, like the Heart Tree being cut.
+func _radio_urgent(line: Dictionary) -> void:
+	_story_queue.push_front(line)  # push_front adds at the start of an Array
+	if not radio.is_on():
+		_show_next_story_line()
+
+
+## Signal handler: a grown tree was hurt but still stands. If it is the Heart
+## Tree, Canopy FM raises the alarm (not more often than heart_alarm_cooldown).
+func _on_tree_hurt(tree: ForestTree) -> void:
+	if not tree.is_heart or _heart_alarm_left > 0.0:
+		return
+	_heart_alarm_left = CONFIG.heart_alarm_cooldown
+	heart_alarms += 1
+	_radio_urgent(_radio_line(Radio.CANOPY, CONFIG.heart_alarm_line))
+
+
 ## One radio line, as the queue wants it.
 static func _radio_line(speaker: StringName, text: String) -> Dictionary:
 	return {speaker = speaker, text = text}
@@ -743,6 +769,9 @@ func _on_wave_started(number: int, total: int) -> void:
 		lines.append(_radio_line(Radio.CANOPY, CONFIG.story_hook))
 	if helios_line_for(number) != "":
 		lines.append(_radio_line(Radio.HELIOS, helios_line_for(number)))
+	# Wave 1: point the Heart Tree out, in every run (Sasha forgot it existed).
+	if number == 1 and is_instance_valid(heart_tree):
+		lines.append(_radio_line(Radio.CANOPY, CONFIG.heart_intro_line))
 	lines.append_array(_dj(dj_lines_for_wave(number)))
 	_show_story_lines(lines)
 
