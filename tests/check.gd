@@ -1688,6 +1688,8 @@ func _test_upgrades() -> void:
 	await _fresh_arena()
 	var picker: UpgradePicker = _arena.upgrade_picker
 	_check(not picker.is_open(), "no upgrade cards before a wave is cleared")
+	for id: StringName in UpgradePicker.CATALOG.keys():
+		_check(picker.has_icon(id), "the '%s' card has its picture" % id)
 	_arena.waves.start_wave(2)  # wave 1 is the staged tutorial: one machine at a time
 	var all_sent: Callable = func() -> bool: return _arena.waves.state == WaveDirector.State.FIGHTING
 	_arena.waves.time_scale = 20.0
