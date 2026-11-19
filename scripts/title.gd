@@ -15,6 +15,8 @@ extends Control
 
 const ARENA_SCENE: String = "res://scenes/arena.tscn"
 const TITLE_ART: String = "res://art/sprites/title_art.jpg"
+## Width given to the story line under the title, in screen pixels.
+const HOOK_WIDTH: float = 900.0
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
 
 ## The buttons. Public so the tests can check them.
@@ -63,6 +65,11 @@ func _ready() -> void:
 	hook.add_theme_color_override(&"font_color", Color(1.0, 0.80, 0.45))
 	hook.add_theme_color_override(&"font_outline_color", Color(0.05, 0.05, 0.07))
 	hook.add_theme_constant_override(&"outline_size", 6)
+	# The line was cut off at its right edge ("...stopped paying for i"): the
+	# column was only as wide as the buttons. Give the line a set width with room
+	# to spare, and let it wrap onto a second line if the words ever get longer.
+	hook.custom_minimum_size = Vector2(HOOK_WIDTH, 0.0)
+	hook.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(hook)
 
 	play_button = _make_button(column, "Play")
