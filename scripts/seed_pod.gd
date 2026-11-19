@@ -56,6 +56,7 @@ func _on_body_entered(body: Node2D) -> void:
 	# and gives null if it is something else, such as a tree or a wall.
 	var enemy := body as Enemy
 	if enemy != null:
+		Sfx.play(&"plink")  # a metallic ping: the pod hit a machine
 		enemy.take_damage(damage)
 	elif body is CatShop:
 		(body as CatShop).hit_by_seed()  # the hidden lucky cat's shop counts pods

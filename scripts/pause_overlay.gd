@@ -55,11 +55,13 @@ const EDGE_COLOR: Color = Color(0.35, 0.90, 0.85)
 const WARN_COLOR: Color = Color(1.0, 0.45, 0.35)
 const TITLE_COLOR: Color = Color(1.0, 0.82, 0.50)
 const TEXT_COLOR: Color = Color(0.92, 0.94, 0.96)
+## The words that mark the bind line in the two lists below.
+const BIND_MARK: String = "bind it"
 const CONTROLS_KEYS: Array[String] = [
 	"WASD / arrows   move",
 	"Mouse   aim        Left click   shoot seeds",
 	"Right click a tree   vine to it",
-	"Right click a machine   bind it (after Lucky's gift)",
+	"Right click a machine   bind it",
 	"Q   throw a Bramble Seed        M   mute",
 	"Stand by 4 grown trees   repair",
 ]
@@ -67,13 +69,17 @@ const CONTROLS_TOUCH: Array[String] = [
 	"Left thumb   move",
 	"Right thumb   aim and shoot",
 	"Tap a tree   vine to it",
-	"Tap a machine   bind it (after Lucky's gift)",
+	"Tap a machine   bind it",
 	"Stand by 4 grown trees   repair",
 ]
 
 ## A function the arena hands over that returns this run's numbers as lines of
 ## text. (A Callable is a function stored in a variable.) Empty until it is set.
 var stats_provider: Callable
+
+## True once Lucky's gift lets the vine bind machines. Until then the controls
+## list leaves that line out, so it does not give the secret away. Set by the arena.
+var bind_unlocked: bool = false
 
 ## The mute state the speaker icon was last drawn with (see _process).
 var _drawn_muted: bool = false
@@ -223,10 +229,19 @@ func _draw() -> void:
 		draw_string(font, Vector2(INFO_LEFT, y), line, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 20, TEXT_COLOR)
 	y += 56.0
 	draw_string(font, Vector2(INFO_LEFT, y), "CONTROLS", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 24, TITLE_COLOR)
-	var controls: Array[String] = CONTROLS_TOUCH if DisplayServer.is_touchscreen_available() else CONTROLS_KEYS
-	for line: String in controls:
+	for line: String in controls_lines(DisplayServer.is_touchscreen_available()):
 		y += 28.0
 		draw_string(font, Vector2(INFO_LEFT, y), line, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 18, Color(TEXT_COLOR, 0.85))
+
+
+## The controls to list: the keyboard or the touch set, without the bind line
+## until Lucky's gift has unlocked it. Public for the tests.
+func controls_lines(touch: bool) -> Array[String]:
+	var lines: Array[String] = []
+	for line: String in (CONTROLS_TOUCH if touch else CONTROLS_KEYS):
+		if bind_unlocked or not line.contains(BIND_MARK):
+			lines.append(line)
+	return lines
 
 
 ## Pauses or un-pauses the whole game.

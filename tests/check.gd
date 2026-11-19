@@ -215,7 +215,7 @@ func _test_art_is_the_right_size() -> void:
 ## from a real file in audio/sfx, not from a generated beep. AudioStreamMP3 is
 ## the type Godot gives an imported .mp3; the beeps are AudioStreamWAV.
 func _test_every_sound_is_a_real_file() -> void:
-	var names: Array[StringName] = [&"unlock", &"fire", &"thunk", &"enemy_down", &"zip", &"grow",
+	var names: Array[StringName] = [&"unlock", &"fire", &"thunk", &"plink", &"enemy_down", &"zip", &"grow",
 		&"windup", &"hurt", &"player_down", &"saw", &"cat", &"bind", &"spit", &"wave_clear"]
 	for sound_name: StringName in names:
 		_check(Sfx.stream_for(sound_name) is AudioStreamMP3, "the '%s' sound is a real file" % sound_name)
@@ -2242,6 +2242,11 @@ func _test_pause_menu() -> void:
 	_check(_arena.quit_requests == 0 and get_tree().paused, "Quit needs two presses in a row")
 	pause.choose(PauseOverlay.Item.QUIT)
 	_check(_arena.quit_requests == 1 and not get_tree().paused, "the second press quits to the main menu")
+
+	# The bind control is listed only after Lucky's gift (it would spoil the secret).
+	_check(not " ".join(pause.controls_lines(false)).contains("bind") and not " ".join(pause.controls_lines(true)).contains("bind"), "before Lucky's gift the controls list does not mention binding")
+	_arena._on_cat_shop_opened()
+	_check(" ".join(pause.controls_lines(false)).contains("bind") and " ".join(pause.controls_lines(true)).contains("bind"), "after the gift it does")
 
 	# Resume by its button.
 	pause.set_paused(true)

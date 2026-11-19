@@ -9,7 +9,8 @@
 | # | File name | Plays when | Duration | Prompt |
 |---|---|---|---|---|
 | 1 | `fire.mp3` | You shoot a seed pod (up to 4 times a second) | 0.5 s | `Soft airy "thwip" of a small seed shot from a spring-loaded tube, light and plucky, very short, dry, no reverb` |
-| 2 | `thunk.mp3` | A pod or spit shot hits a wall or tree | 0.5 s | `Small hollow metallic plink, a seed pinging off a thin empty tin can, bright short clink, dry, no reverb` |
+| 2 | `thunk.mp3` | A pod or spit shot hits a wall or tree | 0.5 s | `Dull woody thunk of a small seed hitting bark, soft and short, dry, no reverb` |
+| 15 | `plink.mp3` | A pod hits a machine | 0.5 s | `Small hollow metallic plink, a seed pinging off a thin empty tin can, bright short clink, dry, no reverb` |
 | 3 | `enemy_down.mp3` | A machine is destroyed | 1.0 s | `Small machine winding down, an electric motor spinning down to a stop with a falling pitch and one last metal clunk, short, dry, no explosion` |
 | 4 | `grow.mp3` | A sapling becomes a tree; a pod lands on the hidden shop | 1.0 s | `Quick leafy rustle with a rising wooden creak, a plant sprouting fast, gentle and bright, no reverb` |
 | 5 | `zip.mp3` | The vine pulls you to a tree | 0.6 s | `Fast whoosh of a rope pulling taut with a leafy swish, rising in pitch, short, dry` |

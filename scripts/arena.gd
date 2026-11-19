@@ -1062,6 +1062,7 @@ func _on_all_waves_cleared() -> void:
 ## Signal handler: the third pod landed on the hidden shop and the cat is out.
 func _on_cat_shop_opened() -> void:
 	player.receive_cat_gift()
+	_pause.bind_unlocked = true  # the pause menu may now list the bind control
 	lucky_found_wave = maxi(waves.wave, 1)
 
 	_show_banner("Lucky's gift: right-click a machine to bind it. Spare fuse fitted.", 4.0)

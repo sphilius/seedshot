@@ -43,6 +43,7 @@ func _ready() -> void:
 	_streams[&"unlock"] = _make_blip(520.0, 1040.0, 0.12, 0.30)
 	_streams[&"fire"] = _make_blip(900.0, 500.0, 0.06, 0.25)
 	_streams[&"thunk"] = _make_blip(220.0, 140.0, 0.07, 0.30)
+	_streams[&"plink"] = _make_blip(1400.0, 900.0, 0.05, 0.25)
 	_streams[&"enemy_down"] = _make_blip(600.0, 120.0, 0.18, 0.35)
 	_streams[&"zip"] = _make_blip(300.0, 1200.0, 0.14, 0.25)
 	_streams[&"grow"] = _make_blip(400.0, 800.0, 0.20, 0.25)

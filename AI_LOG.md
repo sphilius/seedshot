@@ -46,3 +46,4 @@ One line per asset or system: tool, date, what it did. This feeds the itch page'
 - Pause menu (s18): buttons, run stats and controls list drawn in code by Claude Code (scripts/pause_overlay.gd).
 - Back wall fronts and roof graffiti (s18): drawn in code by Claude Code (scripts/back_wall.gd, graffiti.gd), no new art.
 - Aim line, Sunburst charges and wave counts (s18): code and numbers by Claude Code to Sasha's work order.
+- Plink (s18): the metallic thunk take 5 (ElevenLabs) reused as a new 'plink' sound for pods hitting machines; thunk is back on take 3. Sasha's call.
