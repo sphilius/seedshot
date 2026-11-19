@@ -96,6 +96,7 @@ func _ready() -> void:
 	await _test_tree_pictures()
 	await _test_spare_fuse()
 	await _test_talking_to_lucky()
+	await _test_canopy_fm()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -1392,3 +1393,23 @@ func _test_talking_to_lucky() -> void:
 	_check(_arena.is_near_lucky(), "standing just below the shop is close enough to talk")
 	_arena.player.global_position = _arena.grid.cell_to_world(Vector2i(3, 12))
 	_check(not _arena.is_near_lucky(), "across the lot is too far")
+
+
+## Canopy FM: three stations with real song files; the muffle filter opens as the
+## block lights; a felled tree dulls the radio for a moment.
+func _test_canopy_fm() -> void:
+	for id: StringName in CanopyFM.STATIONS:
+		_check(ResourceLoader.exists(CanopyFM.STATIONS[id]), "the %s station has its song" % id)
+	_check(CanopyFM.STATIONS.size() == 3, "three stations")
+	_check(CanopyFM.cutoff_for(0.0) < CanopyFM.cutoff_for(0.5) and CanopyFM.cutoff_for(0.5) < CanopyFM.cutoff_for(1.0),
+		"the radio sounds clearer as the block lights")
+	_check(is_equal_approx(CanopyFM.cutoff_for(0.0), CONFIG.music_cutoff_dark_hz), "dark block: muffled")
+	_check(is_equal_approx(CanopyFM.cutoff_for(1.0), CONFIG.music_cutoff_lit_hz), "lit block: clear")
+	await _fresh_arena()
+	var tree: ForestTree = _arena.spawn_tree(Vector2i(6, 6), true)
+	tree.take_damage(99)
+	_check(CanopyFM.is_dulled(), "cutting a tree down dulls the radio")
+	var start: StringName = CanopyFM.station
+	CanopyFM.set_station(&"dub")
+	_check(CanopyFM.station == &"dub", "the station can be changed")
+	CanopyFM.set_station(start)

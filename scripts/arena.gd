@@ -197,6 +197,8 @@ func _process(delta: float) -> void:
 	# Lights shine brighter than white while the lot is dark, and normally once
 	# it is fully lit; otherwise the end of the run turns into a yellow glare.
 	var boost: float = light_boost_for(light_level())
+	# Canopy FM opens up as the block lights (see canopy_fm.gd).
+	CanopyFM.set_light(light_level())
 	windows.light_boost = boost
 	lanterns.light_boost = boost
 	_ambient.color = _ambient.color.lerp(wanted_tint, minf(1.0, CONFIG.ambient_change_speed * delta))
@@ -754,6 +756,7 @@ func _on_tree_felled(tree: ForestTree) -> void:
 	grid.set_solid(tree.cell, false)
 	_trees_by_cell.erase(tree.cell)
 	windows.flicker()  # the block feels it: one lit window drops dark for a moment
+	CanopyFM.dull()    # and the radio dulls for a moment
 
 
 ## True if screen point `screen_point` (as a touch reports it) lands on the cat

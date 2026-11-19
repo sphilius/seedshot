@@ -257,3 +257,13 @@ From the kickoff. `config/game_config.tres` holds every speed, cooldown and size
   picks them. Words only.
 - **KNOCK x3:** from `knock_hint_wave` (3), a pink floor arrow points at a still-shut shop.
 - Controls line now reads "Right click: zip to a tree" (binding is announced by Lucky's banner).
+
+## D-033 (s15): Canopy FM, story step 4
+
+- Three stations generated with the ElevenLabs music API (`tools/gen_music.ps1`): Rooftop Lo-fi (default), Block Dub,
+  Switch-On Chip. 90 s each, looped. The station picker lives in New Game + (unlocked by a win).
+- `CanopyFM` autoload: its own "Music" bus feeding Master (so M mutes it) with a low-pass filter. The cutoff climbs
+  from 500 Hz to 16 kHz with the light level, on a multiplying scale; a felled tree drops it back to muffled and
+  6 dB quieter for 2.5 s. One recording, filtered: generated tracks would not line up as stems.
+- PowerShell gotcha: two values for a `[string[]]` parameter need the name, `-Names dub,chip`; a second bare word
+  goes to the next parameter.

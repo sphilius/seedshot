@@ -179,6 +179,21 @@ extends Resource
 	"Hold it one more night. Next block's watching.",
 ]
 
+@export_group("Canopy FM")
+## The block's pirate radio (scripts/canopy_fm.gd). How loud the song is, in
+## decibels (0 = as recorded; every -6 roughly halves it).
+@export var music_volume_db: float = -9.0
+## The radio's muffle filter: its cutoff with the block dark, and fully lit, in
+## Hz. Low = muffled, like a radio through a wall; high = clear.
+@export var music_cutoff_dark_hz: float = 500.0
+@export var music_cutoff_lit_hz: float = 16000.0
+## When a tree is cut down the song drops back to muffled for this many
+## seconds, and this many decibels quieter.
+@export var music_dull_seconds: float = 2.5
+@export var music_dull_drop_db: float = 6.0
+## How quickly the filter and volume glide to a new setting. Higher is snappier.
+@export var music_change_speed: float = 2.0
+
 @export_group("Waves")
 ## The first this-many waves are "staged": the next machine only walks in once
 ## the one before it is down. Wave 1 uses this to teach one thing at a time.
