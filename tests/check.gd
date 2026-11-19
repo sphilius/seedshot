@@ -108,6 +108,8 @@ func _ready() -> void:
 	await _test_bramble_seed()
 	# s18: fixes from the phone playtest of 2026-11-19.
 	await _test_web_build_has_no_extra_audio_bus()
+	await _test_canopy_line_caps()
+	await _test_readable_trees()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -1802,3 +1804,133 @@ func _test_web_build_has_no_extra_audio_bus() -> void:
 	var opened: Callable = func() -> bool: return filter.cutoff_hz > before * 1.5
 	_check(await _wait_until(opened, 3.0), "lighting the block opens the filter on the Music bus")
 	CanopyFM.set_light(0.0)
+
+
+## s18, the New Game + overload: 70+ great sunroots each linked to every other,
+## which lagged the game, hid the machines and held one Sawbot for two minutes.
+## Now cables are capped, are worked out only when the forest changes, and a
+## machine that a cable lets go is left alone for a few seconds.
+func _test_canopy_line_caps() -> void:
+	await _fresh_arena()
+	var powers: GreatPowers = _arena.great_powers
+
+	# Fill the lot with 60 great sunroots, row by row. spawn_tree returns null
+	# for a wall, a prop or a taken cell, so those are simply skipped.
+	var planted: int = 0
+	for y: int in CONFIG.grid_rows:
+		for x: int in CONFIG.grid_cols:
+			if planted >= 60:
+				break
+			var tree: ForestTree = _arena.spawn_tree(Vector2i(x, y), true)
+			if tree != null:
+				tree.mature()
+				planted += 1
+	_check(planted == 60, "the lot has room for the 60 great sunroots this check needs (got %d)" % planted)
+	await _wait_frames(3)
+	_check(not powers.lines.is_empty(), "60 great sunroots string some Canopy lines")
+	_check(powers.lines.size() <= CONFIG.canopy_line_max, "60 great sunroots stay under the cap of %d lines (got %d)" % [CONFIG.canopy_line_max, powers.lines.size()])
+	# Count the cables each tree holds: none may have more than its share.
+	var links: Dictionary[int, int] = {}
+	for line: Dictionary in powers.lines:
+		for tree: ForestTree in [line.a, line.b]:
+			links[tree.get_instance_id()] = links.get(tree.get_instance_id(), 0) + 1
+	var most: int = 0
+	for count: int in links.values():
+		most = maxi(most, count)
+	_check(most <= CONFIG.canopy_line_links_per_tree, "no great sunroot holds more than %d lines (most: %d)" % [CONFIG.canopy_line_links_per_tree, most])
+
+	# A forest that is not changing must not be worked out again every step.
+	var rebuilds: int = powers.rebuild_count
+	await _wait_frames(30)
+	_check(powers.rebuild_count == rebuilds, "the lines are not rebuilt while the forest stays the same")
+	# Cutting one tree down changes the forest: exactly then they are rebuilt.
+	(powers.lines[0].a as ForestTree).take_damage(9999)
+	await _wait_frames(3)
+	_check(powers.rebuild_count > rebuilds, "the lines are rebuilt when a great sunroot falls")
+	_check(powers.lines.size() <= CONFIG.canopy_line_max, "still under the cap afterwards")
+
+	# The cards: the arena hides the cables while the upgrade cards are up.
+	_arena.upgrade_picker.offer(CONFIG.upgrade_choices)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_check(powers.cables_hidden, "the Canopy lines are hidden while the upgrade cards are up")
+	_arena.upgrade_picker.offered.clear()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_check(not powers.cables_hidden, "and shown again once a card is picked")
+
+	# A snared machine can walk free afterwards. Two great sunroots, one cable,
+	# and a Scrapper standing on it.
+	await _fresh_arena()
+	powers = _arena.great_powers
+	var a: ForestTree = _arena.spawn_tree(Vector2i(3, 12), true)
+	var b: ForestTree = _arena.spawn_tree(Vector2i(9, 12), true)
+	a.mature()
+	b.mature()
+	var scrapper: Scrapper = _arena.spawn_scrapper_at(Vector2i(6, 12))
+	await _wait_frames(3)
+	_check(scrapper.is_bound and powers.is_immune(scrapper), "a machine on the Canopy line is bound")
+	var released: Callable = func() -> bool: return not scrapper.is_bound
+	_check(await _wait_until(released, CONFIG.canopy_line_bind_seconds + 1.0), "the line lets it go after %.1f s" % CONFIG.canopy_line_bind_seconds)
+	# Put it straight back on the cable with the cable fully charged: before s18
+	# it would be caught again at once, for ever.
+	powers._recharge.clear()
+	scrapper.global_position = _arena.grid.cell_to_world(Vector2i(6, 12))
+	await _wait_frames(3)
+	_check(powers.is_charged(powers.lines[0]) and not scrapper.is_bound, "a machine just let go is not snared again: it can walk free")
+	# Once the immunity has run out, the cable can catch it again.
+	powers._immune.clear()
+	scrapper.global_position = _arena.grid.cell_to_world(Vector2i(6, 12))
+	await _wait_frames(3)
+	_check(scrapper.is_bound, "after %.0f s it can be caught again" % CONFIG.canopy_line_immunity_seconds)
+
+
+## s18, "must fix before I submit": Sasha forgot the Heart Tree existed, could
+## not find it, and could not tell when trees were growing. These check the
+## state behind what is drawn (headless Godot has no screen to look at).
+func _test_readable_trees() -> void:
+	await _fresh_arena(true)
+	var heart: ForestTree = _arena.heart_tree
+	_check(CONFIG.heart_tree_label != "" and heart._overlay != null and heart._overlay.z_index > _arena.great_powers.z_index,
+		"the Heart Tree's label and ring are drawn above the glow and the Canopy lines")
+	_check(not heart.is_alarmed() and _arena.heart_alarms == 0, "an unhurt Heart Tree raises no alarm")
+
+	# Hit it: it shows the alarm, and Canopy FM says so on the radio.
+	heart.take_damage(1)
+	_check(heart.hp < heart.max_hp(), "a hurt tree is below full health, so its health bar shows")
+	_check(heart.is_alarmed(), "a hit Heart Tree shows its alarm colours")
+	_check(_arena.heart_alarms == 1, "Canopy FM raises the alarm when the Heart Tree is hit")
+	var on_air: bool = _arena.radio.text == CONFIG.heart_alarm_line
+	var queued_next: bool = not _arena._story_queue.is_empty() and _arena._story_queue[0].text == CONFIG.heart_alarm_line
+	_check(on_air or queued_next, "the alarm line is on the radio, or is the very next line")
+	# A second hit straight away must not repeat the line.
+	heart.take_damage(1)
+	_check(_arena.heart_alarms == 1, "the alarm is not repeated for every hit")
+	var calm: Callable = func() -> bool: return not heart.is_alarmed()
+	_check(await _wait_until(calm, CONFIG.heart_alarm_show_seconds + 1.0), "the alarm colours fade after %.0f s" % CONFIG.heart_alarm_show_seconds)
+
+	# Wave 1 points the Heart Tree out on the radio.
+	_arena.waves.start_wave(1)
+	var mentioned: bool = _arena.radio.text == CONFIG.heart_intro_line
+	for line: Dictionary in _arena._story_queue:
+		mentioned = mentioned or line.text == CONFIG.heart_intro_line
+	_check(mentioned, "Canopy FM points out the Heart Tree as wave 1 starts")
+
+	# Only the Heart Tree raises the alarm: an ordinary tree does not.
+	await _fresh_arena(true)
+	var plain: ForestTree = _arena.spawn_tree(Vector2i(3, 12), true)
+	plain.take_damage(1)
+	_check(_arena.heart_alarms == 0 and not plain.is_alarmed(), "an ordinary tree being cut raises no Heart Tree alarm")
+
+	# Growth you can see: a sapling's ring fills, then the tree pops.
+	var sapling: ForestTree = _arena.spawn_tree(Vector2i(5, 12), false)
+	_check(sapling.growth() < 0.2 and not sapling.is_popping(), "a new sapling starts with an empty growth ring")
+	var half: Callable = func() -> bool: return sapling.growth() > 0.4
+	_check(await _wait_until(half, CONFIG.sapling_time + 1.0), "the ring fills as the sapling roots")
+	var grown: Callable = func() -> bool: return sapling.stage == ForestTree.Stage.GROWN
+	_check(await _wait_until(grown, CONFIG.sapling_time + 2.0), "the sapling becomes a tree")
+	_check(sapling.is_popping() and sapling.pop_scale() >= 1.0, "becoming a tree plays the pop (a clear visual step)")
+	var settled: Callable = func() -> bool: return not sapling.is_popping()
+	_check(await _wait_until(settled, CONFIG.tree_pop_seconds + 1.0) and is_equal_approx(sapling.pop_scale(), 1.0), "then it settles back to normal size")
+	sapling.mature()
+	_check(sapling.is_popping(), "maturing into a great sunroot pops too")

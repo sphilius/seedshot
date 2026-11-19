@@ -231,6 +231,16 @@ extends Resource
 @export var canopy_line_recharge: float = 4.0
 ## Colour of a charged cable (alpha = how solid it looks).
 @export var canopy_line_color: Color = Color(0.75, 1.0, 0.45, 0.85)
+## THE CAPS (s18). A late New Game + run had 70+ great sunroots and a cable
+## between every pair: the screen was a web, the game lagged, and one machine
+## stayed snared for two minutes. So:
+## Each great sunroot holds at most this many cables (it links to its nearest).
+@export var canopy_line_links_per_tree: int = 2
+## The whole lot holds at most this many cables; the shortest ones win.
+@export var canopy_line_max: int = 12
+## After a Canopy line lets a machine go, no Canopy line can catch that machine
+## again for this many seconds, so it can always walk out of the web.
+@export var canopy_line_immunity_seconds: float = 4.0
 
 ## THE HEART TREE (forest_tree.gd is_heart): the big tree in the middle of the
 ## lot. Its hit points are tree_hp times this.
@@ -240,6 +250,37 @@ extends Resource
 @export var heart_tree_lure: float = 0.4
 ## Colour multiplied over the Heart Tree's picture (above 1 = brighter).
 @export var heart_tree_tint: Color = Color(1.25, 1.0, 1.1)
+## THE HEART TREE'S MARKER (s18: Sasha forgot the Heart Tree existed and could
+## not find it). A ring pulses around it and a label floats above it, both drawn
+## over the glow so they are always visible.
+@export var heart_marker_color: Color = Color(1.0, 0.45, 0.62)
+@export var heart_tree_label: String = "HEART TREE"
+## Letter height of that label in pixels (big enough to read on a phone).
+@export var heart_label_font_size: int = 20
+## The ring and label switch to this colour and text for heart_alarm_show_seconds
+## after every hit the Heart Tree takes.
+@export var heart_alarm_color: Color = Color(1.0, 0.25, 0.2)
+@export var heart_alarm_label: String = "HEART TREE UNDER ATTACK"
+@export var heart_alarm_show_seconds: float = 2.0
+## Canopy FM says this when the Heart Tree is hit, at most once every
+## heart_alarm_cooldown seconds (so one Sawbot does not fill the radio).
+@export var heart_alarm_line: String = "They are cutting the Heart Tree! Get to the middle of the lot!"
+@export var heart_alarm_cooldown: float = 12.0
+## Canopy FM points the Heart Tree out as wave 1 starts.
+@export var heart_intro_line: String = "The big tree in the middle is the Heart Tree. If it falls, the wave starts over."
+
+## TREE STATE YOU CAN READ (s18).
+## A hurt tree shows a small health bar: full colour, nearly-felled colour, back.
+@export var tree_bar_full_color: Color = Color(0.45, 1.0, 0.55)
+@export var tree_bar_low_color: Color = Color(1.0, 0.3, 0.25)
+@export var tree_bar_back_color: Color = Color(0.0, 0.0, 0.0, 0.75)
+## A sapling shows a ring that fills as it roots; this is its colour.
+@export var tree_growth_ring_color: Color = Color(0.6, 1.0, 0.6, 0.9)
+## The moment a sapling becomes a tree (or a tree a great sunroot) it "pops":
+## it swells to tree_pop_scale and settles back over tree_pop_seconds, while a
+## ring of light spreads out from it.
+@export var tree_pop_seconds: float = 0.45
+@export var tree_pop_scale: float = 1.35
 
 ## BRAMBLE SEED (the third seed type, bramble.gd): Q or Space (or the touch
 ## button) throws it toward the aim; it lands as a thorn patch.

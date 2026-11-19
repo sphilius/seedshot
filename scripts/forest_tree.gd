@@ -11,6 +11,10 @@ extends StaticBody2D
 ##      player in. A tree does not know about the grid: "signal up, call down".)
 ##   3. GROWN: solid. Blocks movement and seed pods, and the vine can latch on.
 ##
+## WHAT THE PLAYER SEES (s18, see _draw_overlay): a sapling has a ring that fills
+## as it roots; becoming a tree is a quick swell and a ring of light; a hurt tree
+## has a health bar; the Heart Tree has a pulsing ring and a label.
+##
 ## The scene (forest_tree.tscn) puts this on physics layer 1, "world".
 
 ## Emitted when the sapling timer runs out. The arena answers by calling
@@ -18,6 +22,9 @@ extends StaticBody2D
 signal ready_to_solidify(tree: ForestTree)
 ## Emitted just before a grown tree is removed because its HP reached zero.
 signal felled(tree: ForestTree)
+## Emitted when a grown tree loses HP but is still standing. The arena listens so
+## Canopy FM can raise the alarm when it is the Heart Tree.
+signal hurt(tree: ForestTree)
 
 enum Stage { SAPLING, GROWN }
 
@@ -56,6 +63,21 @@ var hp: int = 0
 ## switches it on for the first tree you grow and off after your first zip.
 var show_vine_hint: bool = false
 
+## How brightly every tree draws its markers (above 1 shines through the night
+## tint). `static` means ONE value shared by all trees, not one each, so the
+## arena sets it once a frame for the whole forest: ForestTree.light_boost = ...
+static var light_boost: float = 1.0
+
+## Seconds this tree has spent as a sapling (fills the growth ring).
+var _sapling_age: float = 0.0
+## Seconds left of the "pop" that plays when it becomes a tree or a great sunroot.
+var _pop_left: float = 0.0
+## Seconds left of showing the Heart Tree's alarm colours after a hit.
+var _alarm_left: float = 0.0
+## A child node that draws the markers (label, rings, health bar) ABOVE the
+## machines, the glow and the cables, so they are never hidden. See _draw_overlay.
+var _overlay: Node2D
+
 ## @onready means "fill this in just before _ready runs", once the child node exists.
 @onready var _collision: CollisionShape2D = $CollisionShape2D
 
@@ -64,6 +86,15 @@ var show_vine_hint: bool = false
 func _ready() -> void:
 	add_to_group(GROUP)
 	hp = max_hp()
+	# The overlay: a plain Node2D with a high z_index (drawn later = on top).
+	# Every CanvasItem has a `draw` signal that fires when it is time to paint;
+	# connecting our own function to it lets this script do the overlay's drawing.
+	_overlay = Node2D.new()
+	_overlay.z_index = 2
+	_overlay.draw.connect(_draw_overlay)
+	add_child(_overlay)
+	# Whenever the tree itself redraws, the overlay redraws too.
+	draw.connect(_overlay.queue_redraw)
 	# The collision square is exactly one cell, so pods cannot slip between two
 	# trees standing side by side.
 	(_collision.shape as RectangleShape2D).size = Vector2.ONE * float(CONFIG.cell_size)
@@ -82,6 +113,7 @@ func solidify() -> void:
 	# has finished its current step. Changing collision mid-step is an error.
 	_collision.set_deferred(&"disabled", false)
 	_add_glow()
+	_pop_left = CONFIG.tree_pop_seconds  # the visible "it grew!" moment
 	queue_redraw()  # ask Godot to call _draw again with the new look
 
 
@@ -102,17 +134,104 @@ func take_damage(amount: int) -> void:
 	if stage != Stage.GROWN:
 		return
 	hp -= amount
-	queue_redraw()  # the canopy shrinks as HP drops (see _draw)
+	queue_redraw()  # the picture and the health bar change with HP (see _draw)
 	if hp <= 0:
 		felled.emit(self)  # tell the arena first, so it can clear the grid cell
 		queue_free()       # then remove this node at the end of the frame
+		return
+	_alarm_left = CONFIG.heart_alarm_show_seconds  # only the Heart Tree shows it
+	hurt.emit(self)
 
 
-## _process runs every drawn frame. Only the hinted tree needs to redraw each
-## frame (its ring is animated); every other tree does nothing here.
-func _process(_delta: float) -> void:
-	if show_vine_hint:
+## _process runs every drawn frame. It counts the little animations down, and
+## asks for a redraw only while something on this tree is actually moving (a
+## sapling's growth ring, a pop, the Heart Tree's pulse, the vine hint). A plain
+## grown tree does nothing here.
+func _process(delta: float) -> void:
+	var moving: bool = show_vine_hint or is_heart or stage == Stage.SAPLING or _pop_left > 0.0
+	if stage == Stage.SAPLING:
+		_sapling_age += delta
+	_pop_left = maxf(_pop_left - delta, 0.0)
+	_alarm_left = maxf(_alarm_left - delta, 0.0)
+	if moving:
 		queue_redraw()
+
+
+## How far a sapling is along, 0 (just planted) to 1 (ready to become a tree).
+## Public for the tests.
+func growth() -> float:
+	if stage != Stage.SAPLING:
+		return 1.0
+	return clampf(_sapling_age / maxf(CONFIG.sapling_time * sapling_time_scale, 0.01), 0.0, 1.0)
+
+
+## True while the "it grew!" pop is playing. Public for the tests.
+func is_popping() -> bool:
+	return _pop_left > 0.0
+
+
+## True while the Heart Tree is showing its alarm colours. Public for the tests.
+func is_alarmed() -> bool:
+	return is_heart and _alarm_left > 0.0
+
+
+## How much bigger than normal to draw the picture right now: 1.0 normally, and
+## a quick swell up to tree_pop_scale and back while the pop plays.
+## sin() of 0..PI goes 0 -> 1 -> 0, which is exactly "swell, then settle".
+func pop_scale() -> float:
+	if _pop_left <= 0.0:
+		return 1.0
+	var done: float = 1.0 - _pop_left / CONFIG.tree_pop_seconds  # 0 at the start, 1 at the end
+	return 1.0 + (CONFIG.tree_pop_scale - 1.0) * sin(PI * done)
+
+
+## A colour brightened by the shared light_boost (its see-through-ness unchanged).
+static func _lit(color: Color) -> Color:
+	return Color(color.r * light_boost, color.g * light_boost, color.b * light_boost, color.a)
+
+
+## Paints the markers on the overlay node (above everything in the lot):
+##   sapling     a ring that fills as it roots
+##   just grown  a ring of light spreading out (the pop)
+##   Heart Tree  a pulsing ring and a label, red for a moment after each hit
+##   hurt tree   a health bar under it
+## Every draw call starts with "_overlay." because we are painting on that node,
+## not on the tree itself.
+func _draw_overlay() -> void:
+	var cell_px: float = float(CONFIG.cell_size)
+	if stage == Stage.SAPLING:
+		# An arc from 12 o'clock (-PI/2) clockwise; TAU is a full turn.
+		_overlay.draw_arc(Vector2.ZERO, cell_px * 0.42, -PI / 2.0, -PI / 2.0 + TAU * growth(), 32, _lit(CONFIG.tree_growth_ring_color), 3.0, true)
+		return
+	if _pop_left > 0.0:
+		var done: float = 1.0 - _pop_left / CONFIG.tree_pop_seconds
+		var ring: Color = _lit(CONFIG.tree_growth_ring_color)
+		ring.a *= 1.0 - done  # fades out as it spreads
+		_overlay.draw_arc(Vector2.ZERO, cell_px * lerpf(0.5, 1.3, done), 0.0, TAU, 48, ring, 4.0, true)
+	if is_heart:
+		var alarmed: bool = _alarm_left > 0.0
+		var color: Color = _lit(CONFIG.heart_alarm_color if alarmed else CONFIG.heart_marker_color)
+		# A slow pulse (faster while alarmed): sin() swings the radius in and out.
+		var speed: float = 10.0 if alarmed else 3.0
+		var pulse: float = sin(Time.get_ticks_msec() / 1000.0 * speed) * 0.04
+		_overlay.draw_arc(Vector2.ZERO, cell_px * (0.80 + pulse), 0.0, TAU, 48, color, 3.0, true)
+		# The label, centred above the tree: a dark outline first so it reads on
+		# any background, then the letters.
+		var font: Font = ThemeDB.fallback_font
+		var text: String = CONFIG.heart_alarm_label if alarmed else CONFIG.heart_tree_label
+		var width: float = cell_px * 6.0
+		var at := Vector2(-width / 2.0, -cell_px * 1.0)
+		_overlay.draw_string_outline(font, at, text, HORIZONTAL_ALIGNMENT_CENTER, width, CONFIG.heart_label_font_size, 5, Color(0.0, 0.0, 0.0, 0.9))
+		_overlay.draw_string(font, at, text, HORIZONTAL_ALIGNMENT_CENTER, width, CONFIG.heart_label_font_size, color)
+	if hp < max_hp():
+		# The health bar: a dark back, and a fill that shortens and reddens.
+		var share: float = clampf(float(hp) / float(max_hp()), 0.0, 1.0)
+		var bar_width: float = cell_px * (1.5 if is_heart else 0.8)
+		var bar_height: float = 7.0 if is_heart else 5.0
+		var top_left := Vector2(-bar_width / 2.0, cell_px * (0.62 if is_heart else 0.42))
+		_overlay.draw_rect(Rect2(top_left - Vector2.ONE, Vector2(bar_width, bar_height) + Vector2.ONE * 2.0), CONFIG.tree_bar_back_color)
+		var fill: Color = _lit(CONFIG.tree_bar_low_color.lerp(CONFIG.tree_bar_full_color, share))
+		_overlay.draw_rect(Rect2(top_left, Vector2(bar_width * share, bar_height)), fill)
 
 
 ## _draw is Godot's custom-drawing callback. Coordinates are relative to this node,
@@ -124,7 +243,8 @@ func _draw() -> void:
 		# Drawn at the same size as every other sprite (64 px), centred on the cell.
 		# 64 px pictures are drawn at sprite size; a bigger picture (the great
 		# sunroot is 72 px) is drawn bigger by the same proportion.
-		var size: float = CONFIG.sprite_size_cells * cell_px * float(picture.get_width()) / 64.0
+		# pop_scale() is 1.0 except during the brief "it grew!" swell.
+		var size: float = CONFIG.sprite_size_cells * cell_px * float(picture.get_width()) / 64.0 * pop_scale()
 		# A tap tree is drawn with a warm gold tint (the last argument multiplies its colours).
 		var tint: Color = CONFIG.tap_tree_tint if is_tap else Color.WHITE
 		if is_heart:
@@ -164,6 +284,7 @@ func mature() -> void:
 		return
 	is_great = true
 	hp = max_hp()
+	_pop_left = CONFIG.tree_pop_seconds  # the same visible step as growing up
 	var glow: Node2D = get_node_or_null(Glow.NODE_NAME)
 	if glow != null:
 		glow.scale *= 1.6

@@ -34,3 +34,4 @@ One line per asset or system: tool, date, what it did. This feeds the itch page'
 - Lucky wave frame (s16): tools/lucky_wave.py moves the raised paw of the existing Klad sprite down 5 px for a two-frame beckon.
 - Great sunroot powers, Trellis, Heart Tree, upgrades, Linebreakers and Arc Spitters (s16): game code by Claude Code from Sasha's design list.
 - Bramble Seed (s17): the third seed type, game code by Claude Code from Sasha's request (design proposed by Claude, see DEVLOG D-036).
+- Tree overlay (s18): Heart Tree ring and label, tree health bars, sapling growth ring and grow pop, drawn in code by Claude Code from Sasha's playtest notes (see DEVLOG D-039).
