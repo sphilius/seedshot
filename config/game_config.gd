@@ -139,8 +139,9 @@ extends Resource
 @export_group("Lucky cat")
 ## Seed pods that must land on the shuttered shop before it opens.
 @export var cat_hits_needed: int = 3
-## Seconds between glints on the shop's shutter (the hint that it is special).
-@export var cat_glint_interval: float = 3.0
+## Seconds between blinks of the cat's eyes behind the shutter (the only visual
+## hint that the shop is special). Long on purpose: the cat is meant to be hard.
+@export var cat_glint_interval: float = 7.0
 ## THE CAT'S GIFT (story step 3): the live clamp (right-click a machine to yank
 ## and bind it; locked until the cat is found) and a spare fuse. With a fuse
 ## fitted, the first time Seven would go down it gets back up instead, with this
@@ -151,9 +152,7 @@ extends Resource
 ## Talking to Lucky: Seven must be within this many cells of the open shop for
 ## the E key to work. (A tap on the shop works from anywhere.)
 @export var lucky_talk_range_cells: float = 3.5
-## From this wave on, if the shop is still shut, a spray-painted "KNOCK x3"
-## arrow on the floor points at it (the cat stays a discovery before then).
-@export var knock_hint_wave: int = 3
+
 ## Lucky's greeting when the shutter opens, by the wave the cat was found in.
 ## Words only: nothing Lucky says changes the game. (Placeholders, STORY.md.)
 @export_multiline var lucky_greeting_early: String = "Early. I like early. Take the clamp, kid. And a fuse, on the house."

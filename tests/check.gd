@@ -1389,15 +1389,13 @@ func _test_talking_to_lucky() -> void:
 	await _fresh_arena()
 	_check(_arena.talk_to_lucky() == "", "Lucky says nothing while the shop is shut")
 	var shop: CatShop = _arena.cat_shop
-	# The KNOCK x3 hint: hidden early, shown from its wave while the shop is shut.
-	_arena.waves.start_wave(CONFIG.knock_hint_wave - 1)
-	_check(not _arena.graffiti.show_knock, "no KNOCK hint before wave %d" % CONFIG.knock_hint_wave)
-	_arena.waves.start_wave(CONFIG.knock_hint_wave)
-	_check(_arena.graffiti.show_knock, "from wave %d a shut shop gets the KNOCK x3 hint" % CONFIG.knock_hint_wave)
+	# No floor arrow or words ever point at the shop: finding it is the player's job.
+	_arena.waves.start_wave(5)
+	_check(not ("show_knock" in _arena.graffiti), "nothing is painted on the floor pointing at the shop")
 	for i: int in CONFIG.cat_hits_needed:
 		shop.hit_by_seed()
 	_check(_arena.lucky_found_wave >= 1, "the arena remembers the wave Lucky was found in")
-	_check(not _arena.graffiti.show_knock, "the KNOCK hint goes once the shop is open")
+
 	var first: String = _arena.talk_to_lucky()
 	var second: String = _arena.talk_to_lucky()
 	_check(first != "" and second != "" and first != second, "talking again gives the next line")
@@ -1507,4 +1505,13 @@ func _test_new_game_plus() -> void:
 	_arena._on_wave_cleared(3)
 	_check(not fresh.is_great, "a tree planted after the wave started does not mature yet")
 
+	# Any win unlocks New Game +, even one where the lucky cat was never found.
+	await _fresh_arena()
+	RunState.ng_plus_unlocked = false
+	_check(not _arena.cat_shop.is_open, "(this run never opened Lucky's shop)")
+	_arena._on_all_waves_cleared()
+	_check(RunState.ng_plus_unlocked, "a win without finding Lucky still unlocks New Game +")
+
 	RunState.ng_plus_unlocked = was_unlocked
+	RunState.just_unlocked = false
+	RunState.save()  # put the save file back the way it was

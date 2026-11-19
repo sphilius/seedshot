@@ -4,10 +4,15 @@ class_name CatShop
 extends StaticBody2D
 ## The hidden lucky cat.
 ##
-## HOW TO FIND IT (from the design): a shuttered shop sits in the top wall, away
-## from the middle of the fight. Its window glints every few seconds and a paw
-## print is painted beside it. Hit the shop with three seed pods: vines grow over
-## the front with each hit, then the shutter lifts and a lucky cat waves.
+## HOW TO FIND IT: it is meant to be HARD (Sasha's call). A shuttered shop sits
+## in the top wall, painted in almost the wall's own colours, so at a glance it
+## is just more wall. The only tells, for a sharp eye:
+##   - its shutter slats are a shade lighter than the wall around them;
+##   - every few seconds two small amber CAT EYES blink between the slats;
+##   - a faded paw print, barely visible, on the wall beside it;
+##   - Canopy FM's DJ drops hints about it on the air.
+## Nothing on the floor points at it. Hit the shop with three seed pods: vines
+## grow over the front with each hit, then the shutter lifts and a lucky cat waves.
 ## REWARD: Lucky's clamp (the vine can bind machines) and a spare fuse. The arena
 ## hands them over when it hears the `opened` signal. Once open, Seven can talk
 ## to Lucky (E key nearby, or a tap on the shop); see lucky_lines.gd.
@@ -27,16 +32,23 @@ const WIDTH_CELLS: float = 2.0
 ## wall "wins" the hit. A pod moves 12 px per physics step (720 / 60), so the
 ## ledge must be deeper than that for the pod to touch the shop one step earlier.
 const STICK_OUT: float = 16.0
-const LEDGE_COLOR: Color = Color(0.24, 0.26, 0.28)
-const GLINT_SECONDS: float = 0.35
 
-const FRONT_COLOR: Color = Color(0.30, 0.33, 0.35)
-const SHUTTER_COLOR: Color = Color(0.52, 0.56, 0.58)
-const SLAT_COLOR: Color = Color(0.36, 0.40, 0.42)
+## How long the cat's eyes stay open each time they blink on, in seconds.
+const EYES_SECONDS: float = 0.5
+
+# Colours. The front and ledge match the arena wall (arena.gd WALL_COLOR), and
+# the shutter is only a shade lighter, so the shop hides in the wall.
+const FRONT_COLOR: Color = Color(0.19, 0.19, 0.22)
+const LEDGE_COLOR: Color = Color(0.19, 0.19, 0.22)
+const SHUTTER_COLOR: Color = Color(0.22, 0.22, 0.25)
+const SLAT_COLOR: Color = Color(0.16, 0.16, 0.19)
 const INSIDE_COLOR: Color = Color(0.10, 0.12, 0.13)
 const VINE_COLOR: Color = Color(0.45, 0.85, 0.35)
-const PAW_COLOR: Color = Color(0.94, 0.90, 0.78, 0.85)
-const GLINT_COLOR: Color = Color(1.0, 1.0, 1.0, 0.9)
+## A faded paw print: low alpha (see-through), so it is barely there.
+const PAW_COLOR: Color = Color(0.94, 0.90, 0.78, 0.16)
+## The cat's eyes: amber, brighter than 1 so they read through the night tint.
+const EYES_COLOR: Color = Color(1.6, 1.15, 0.35)
+const TALK_COLOR: Color = Color(1.0, 1.0, 1.0, 0.9)
 
 ## How many pods have landed so far, and whether the shutter is up.
 ## Public (no underscore) so the tests can read them.
@@ -45,9 +57,10 @@ var is_open: bool = false
 ## Set by the arena while Seven stands close enough to talk: shows "E: talk".
 var show_talk_hint: bool = false
 
-## Seconds until the next glint starts / left of the current glint.
-var _glint_wait: float = 0.0
-var _glint_left: float = 0.0
+## Seconds until the cat's eyes next open / left of the current look.
+## eyes_left is public so the tests can see when the eyes are showing.
+var _eyes_wait: float = 0.0
+var eyes_left: float = 0.0
 ## Total seconds since the scene started, for the cat's wave.
 var _time: float = 0.0
 var _cat: Sprite2D
@@ -78,21 +91,21 @@ func _ready() -> void:
 		# Scale the art to 80% of the shop's height.
 		_cat.scale = Vector2.ONE * (cell_px * 0.8 / float(_cat.texture.get_height()))
 	add_child(_cat)
-	_glint_wait = CONFIG.cat_glint_interval
+	_eyes_wait = CONFIG.cat_glint_interval
 
 
-## _process runs every drawn frame: time the glint and the cat's wave.
+## _process runs every drawn frame: time the cat's eyes and its wave.
 func _process(delta: float) -> void:
 	_time += delta
 	if is_open:
 		# sin() swings smoothly between -1 and 1, so the cat rocks side to side.
 		_cat.rotation = sin(_time * 4.0) * 0.18
 	else:
-		_glint_left = maxf(_glint_left - delta, 0.0)
-		_glint_wait -= delta
-		if _glint_wait <= 0.0:
-			_glint_wait = CONFIG.cat_glint_interval
-			_glint_left = GLINT_SECONDS
+		eyes_left = maxf(eyes_left - delta, 0.0)
+		_eyes_wait -= delta
+		if _eyes_wait <= 0.0:
+			_eyes_wait = CONFIG.cat_glint_interval
+			eyes_left = EYES_SECONDS
 	queue_redraw()  # ask Godot to call _draw again this frame
 
 
@@ -127,11 +140,11 @@ func _draw() -> void:
 		for i: int in range(1, 5):
 			var y: float = window.position.y + window.size.y * i / 5.0
 			draw_line(Vector2(window.position.x, y), Vector2(window.end.x, y), SLAT_COLOR, 2.0)
-		# The hint: a bright diagonal flash across the shutter every few seconds.
-		if _glint_left > 0.0:
-			var slide: float = 1.0 - _glint_left / GLINT_SECONDS  # 0 at start, 1 at end
-			var x: float = lerpf(window.position.x, window.end.x - 14.0, slide)
-			draw_line(Vector2(x, window.end.y), Vector2(x + 14.0, window.position.y), GLINT_COLOR, 4.0)
+		# The hint: two small amber eyes blink open between two slats now and then.
+		if eyes_left > 0.0:
+			var eye_y: float = window.position.y + window.size.y * 0.5
+			for eye_x: float in [-5.0, 5.0]:
+				draw_rect(Rect2(Vector2(eye_x - 1.5, eye_y - 1.0), Vector2(3.0, 2.0)), EYES_COLOR)
 
 	# One vine per pod that has landed, climbing the front.
 	for i: int in mini(hits, CONFIG.cat_hits_needed):
@@ -143,9 +156,9 @@ func _draw() -> void:
 	# "E: talk", just under the ledge, while Seven is close to the open shop.
 	if is_open and show_talk_hint:
 		var font: Font = ThemeDB.fallback_font
-		draw_string(font, Vector2(-half.x, half.y + STICK_OUT + 16.0), "E: talk", HORIZONTAL_ALIGNMENT_CENTER, half.x * 2.0, 14, GLINT_COLOR)
+		draw_string(font, Vector2(-half.x, half.y + STICK_OUT + 16.0), "E: talk", HORIZONTAL_ALIGNMENT_CENTER, half.x * 2.0, 14, TALK_COLOR)
 
-	# The other hint: a paw print painted on the wall just right of the shop.
+	# The other hint: a faded paw print on the wall just right of the shop.
 	var paw := Vector2(half.x + 16.0, 4.0)
 	draw_circle(paw, 5.5, PAW_COLOR)
 	for toe: Vector2 in [Vector2(-6.0, -8.0), Vector2(0.0, -10.5), Vector2(6.0, -8.0)]:
