@@ -246,3 +246,14 @@ From the kickoff. `config/game_config.tres` holds every speed, cooldown and size
 - **Light boost:** the night tint dims lights too, so pools are drawn with colour values above 1. The boost fades
   to 1.0 as the lot reaches full light; without that, the last wave turned the bottom of the screen into glare.
 - Graffiti line 1 is "KEEP THE LIGHTS ON!" (Sasha), matching the chosen key art `07_key_art_g`.
+
+## D-032 (s15): Lucky, story step 3
+
+- **The cat's gift** is now the clamp and a spare fuse (Sasha's redesign); paired pods are gone. The vine zips to
+  trees from the start; binding a machine needs the clamp. The fuse saves Seven once (back up at `fuse_revive_hp`
+  with a long blink) and is refitted only by `revive()`, which runs on a real defeat; clearing a wave never refits it.
+- **Talking to Lucky:** E near the open shop (`lucky_talk_range_cells`) or a tap on the shop. Greeting by the wave
+  the cat was found in; small talk by the wave being played, cycling. Lines live in the config; `lucky_lines.gd`
+  picks them. Words only.
+- **KNOCK x3:** from `knock_hint_wave` (3), a pink floor arrow points at a still-shut shop.
+- Controls line now reads "Right click: zip to a tree" (binding is announced by Lucky's banner).
