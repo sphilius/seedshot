@@ -7,7 +7,8 @@ extends Node2D
 ##              as brick instead of flat grey. (The bottom wall is the homes.)
 ##   Wall props Helios meters and notices (some crossed out by the block) fixed to
 ##              the walls. Graffiti is painted over them, as it would be.
-##   Flat props a broken solar panel lying on the floor. You walk and shoot over it.
+##   Flat props a broken solar panel and a coil of cut Helios cable lying on the floor.
+##              You walk and shoot over them.
 ##   Corner props a planter box, a barrel planter, a bike and a chair with a card
 ##              table, one in each corner of the floor. These are SOLID, like a
 ##              tree that can't be cut: they block walking, pods and shots.
@@ -48,7 +49,7 @@ func setup(grid: ArenaGrid, arena_rect: Rect2) -> void:
 		[&"notice_x", Vector2i(last_col, 4)], [&"meter", Vector2i(last_col, 10)],
 		[&"meter", Vector2i(9, 0)], [&"notice_x", Vector2i(17, 0)],
 		# Flat on the floor (walkable).
-		[&"panel", Vector2i(19, 11)],
+		[&"panel", Vector2i(19, 11)], [&"cable", Vector2i(5, 3)],
 	]
 	# One solid prop in each corner of the floor (the floor starts one cell in from the walls).
 	var corners: Array[Array] = [
