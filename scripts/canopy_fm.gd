@@ -43,6 +43,9 @@ const BUS_NAME: StringName = &"Music"
 
 ## The station playing (or about to play). Public so the menu and tests can read it.
 var station: StringName = &"lofi"
+## False when the player has switched the MUSIC off in the pause menu. Public so
+## the menu can show it; change it with set_music_on.
+var music_on: bool = true
 ## The filter cutoff the song is gliding toward, in Hz (Hertz = pitch). Public for tests.
 var target_cutoff_hz: float = 0.0
 
@@ -120,6 +123,18 @@ func is_dulled() -> bool:
 	return _dull_left > 0.0
 
 
+## Switches the music off or on (the pause menu's Music button). stream_paused
+## holds the song at its place, so switching back on carries on from there.
+func set_music_on(on: bool) -> void:
+	music_on = on
+	_player.stream_paused = not on
+
+
+## The name of the station playing, as shown to the player.
+func station_name() -> String:
+	return STATION_NAMES[station]
+
+
 ## Switches to another station. Keeps playing if a song was already playing.
 func set_station(new_station: StringName) -> void:
 	if not STATIONS.has(new_station) or new_station == station:
@@ -134,7 +149,7 @@ func set_station(new_station: StringName) -> void:
 ## _process runs every frame: start the song once audio is allowed, and glide the
 ## filter (and the volume, while dulled) toward where the light says they should be.
 func _process(delta: float) -> void:
-	if Sfx.is_unlocked and not _player.playing and _player.stream != null:
+	if music_on and Sfx.is_unlocked and not _player.playing and _player.stream != null:
 		_player.play()
 	_dull_left = maxf(_dull_left - delta, 0.0)
 	target_cutoff_hz = cutoff_for(_light)

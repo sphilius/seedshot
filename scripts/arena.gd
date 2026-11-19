@@ -88,6 +88,14 @@ var _rest_progress: float = 0.0
 var _light_refresh_left: float = 0.0
 ## Seconds the story line on screen has left. 0 or less means "until replaced".
 var _story_time_left: float = 0.0
+## The radio line on the air right now ({} when the radio is quiet).
+var _current_line: Dictionary = {}
+## THE WAVE END BEAT. wave_end_beat_seconds is how long the slow-down lasts, in
+## real seconds (public so the tests can switch it off with 0). The other two
+## count the beat down and remember which wave's cards to deal when it ends.
+var wave_end_beat_seconds: float = CONFIG.wave_end_slow_seconds
+var _beat_left: float = 0.0
+var _beat_wave: int = 0
 ## True once the opening line has been shown, so a restarted wave 1 skips it.
 var _hook_shown: bool = false
 ## The cell of the most recent sapling planted by a downed machine.
@@ -138,6 +146,10 @@ var tree_hp_bonus: int = 0
 var sapling_time_scale: float = 1.0
 ## Every upgrade picked this run, in order. Public for tests.
 var upgrades_taken: Array[StringName] = []
+## How many times "Quit to main menu" was confirmed. Public for the tests.
+var quit_requests: int = 0
+## Trees planted this run: one for every machine that went down and took root.
+var trees_planted: int = 0
 ## The Block's painted lines on the side walls. Public so tests can reach it.
 var graffiti: Graffiti
 ## The hidden lucky cat's shop, in the top wall. Public so tests can reach it.
@@ -168,6 +180,7 @@ var is_run_finished: bool = false
 var radio: Radio
 ## The controls line along the bottom wall.
 @onready var _hint: Label = $Hud/Hint
+@onready var _pause: PauseOverlay = $Hud/PauseOverlay
 ## The wave timetable. Public (no underscore) so tests can start a wave directly.
 @onready var waves: WaveDirector = $WaveDirector
 
@@ -218,6 +231,15 @@ func _ready() -> void:
 	_update_light()
 
 	ForestTree.heart_marker_fade = 1.0  # a new run shows the Heart Tree's label again
+	# The pause menu: give it our numbers to show, and listen for its two requests.
+	_pause.stats_provider = pause_stats
+	_pause.restart_wave_requested.connect(_on_pause_restart_wave)
+	_pause.quit_requested.connect(_on_pause_quit)
+	# The banner wraps onto more lines instead of running off the screen edges.
+	# AUTOWRAP_WORD_SMART breaks between words (and inside a word only if it must).
+	_banner.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_banner.offset_left = CONFIG.banner_side_margin
+	_banner.offset_right = get_viewport_rect().size.x - CONFIG.banner_side_margin
 	player = PLAYER_SCENE.instantiate()
 	# Seven's lamp: a warm pool of light that moves with the bot.
 	player.add_child(Glow.make_sprite(CONFIG.player_glow_radius_cells * float(CONFIG.cell_size), CONFIG.player_glow_color))
@@ -298,6 +320,12 @@ func _process(delta: float) -> void:
 	ForestTree.light_boost = boost
 	_heart_alarm_left = maxf(_heart_alarm_left - delta, 0.0)
 	tick_grove_rest(delta)
+	if _beat_left > 0.0:
+		# `delta` is already slowed by Engine.time_scale; dividing by it gives
+		# real seconds, so the beat lasts the same however slow the game runs.
+		_beat_left -= delta / maxf(Engine.time_scale, 0.01)
+		if _beat_left <= 0.0:
+			_end_wave_end_beat()
 	# The Heart Tree's ring and label fade once the first wave(s) are cleared.
 	# move_toward steps a number toward a goal by at most the third argument.
 	var wanted_marker: float = 1.0 if waves_cleared < CONFIG.heart_label_waves else 0.0
@@ -677,17 +705,47 @@ func _update_light() -> void:
 	lanterns.set_strings(Lanterns.strings_after(waves_cleared))
 
 
-## Queues radio lines to play one after another, replacing whatever was on the
-## air. Each line is {speaker, text}; see _radio_line.
+## Queues radio lines to play one after another, AFTER whatever is already on
+## the air or waiting. (Until s18 this replaced them, which cut the tutorial off
+## whenever a wave ended quickly.) Each line is {speaker, text}; see _radio_line.
 func _show_story_lines(lines: Array[Dictionary]) -> void:
-	_story_queue = lines.duplicate()
+	_radio_later(lines)
+
+
+## True if a line with this text is on the air or waiting, so it is not said twice
+## (a restarted wave asks for its opening lines again).
+func _is_radio_pending(text: String) -> bool:
+	if radio.is_on() and radio.text == text:
+		return true
+	for line: Dictionary in _story_queue:
+		if line.text == text:
+			return true
+	return false
+
+
+## Takes Helios lines that have not started yet out of the queue. Called as a new
+## wave starts: an old notice would be stale, but Canopy FM's tips still matter.
+func _drop_waiting_helios_lines() -> void:
+	# filter keeps only the entries for which the function returns true.
+	_story_queue = _story_queue.filter(func(line: Dictionary) -> bool: return line.speaker != Radio.HELIOS)
+
+
+## Breaks in with one line right now (Lucky answering a tap must not wait). If
+## the line on the air had not finished, it goes back to the front of the queue
+## and is said again afterwards, so nothing is lost.
+func _radio_interrupt(line: Dictionary) -> void:
+	if radio.is_on() and _story_time_left > 0.0 and not _current_line.is_empty():
+		_story_queue.push_front(_current_line)
+	_story_queue.push_front(line)
 	_show_next_story_line()
 
 
 ## Adds lines to the END of the radio queue, without cutting off what is playing.
 ## Used for Canopy FM's tips, which react to things happening in the fight.
 func _radio_later(lines: Array[Dictionary]) -> void:
-	_story_queue.append_array(lines)
+	for line: Dictionary in lines:
+		if not _is_radio_pending(line.text):
+			_story_queue.append(line)
 	if not radio.is_on():
 		_show_next_story_line()
 
@@ -744,8 +802,10 @@ func _show_next_story_line() -> void:
 	if _story_queue.is_empty():
 		radio.clear()
 		_story_time_left = 0.0
+		_current_line = {}
 		return
 	var line: Dictionary = _story_queue.pop_front()  # pop_front removes and returns the first entry
+	_current_line = line
 	radio.say(line.speaker, line.text)
 	_story_time_left = CONFIG.story_line_seconds + float(line.text.length()) / CONFIG.radio_chars_per_second
 
@@ -795,6 +855,7 @@ func _on_wave_started(number: int, total: int) -> void:
 	_hint.visible = number < CONFIG.hint_hide_wave
 	# On the radio: Canopy FM's opening line (once only), then Helios's notice,
 	# then whatever Canopy FM has to say about this wave (tips, cat hints).
+	_drop_waiting_helios_lines()  # a notice for an earlier wave is stale now
 	var lines: Array[Dictionary] = []
 	if not _hook_shown:
 		_hook_shown = true
@@ -851,9 +912,8 @@ func _on_wave_cleared(number: int) -> void:
 	# Between waves (not after the last one): deal the upgrade cards. The next
 	# wave waits until one is picked.
 	if number < waves.total_waves() and number >= CONFIG.upgrade_from_wave:
-		waves.hold_break = true
-		upgrade_picker.offer(CONFIG.upgrade_choices, upgrades_left_out())
-		_park_player_for_cards()
+		waves.hold_break = true  # the next wave waits from this moment on
+	_start_wave_end_beat(number)
 	# The Heart Tree heals between waves.
 	if is_instance_valid(heart_tree):
 		heart_tree.hp = heart_tree.max_hp()
@@ -865,7 +925,74 @@ func _on_wave_cleared(number: int) -> void:
 		mature_trees()
 	# The Block answers Helios: one more painted line on the walls.
 	graffiti.reveal_up_to(number)
-	_show_story_lines([])  # clear any Helios line still showing
+	# The radio is left alone: lines still waiting (the tutorial) play on.
+
+
+## THE WAVE END BEAT, step 1: slow the whole game down for a moment so the last
+## kill lands. Engine.time_scale multiplies the speed of everything (1 = normal).
+## With the beat switched off (0 seconds) the cards are dealt straight away.
+func _start_wave_end_beat(number: int) -> void:
+	_beat_wave = number
+	if wave_end_beat_seconds <= 0.0:
+		_end_wave_end_beat()
+		return
+	_beat_left = wave_end_beat_seconds
+	Engine.time_scale = CONFIG.wave_end_slow_scale
+
+
+## Step 2: back to normal speed, then the upgrade cards (between waves only).
+func _end_wave_end_beat() -> void:
+	_beat_left = 0.0
+	Engine.time_scale = 1.0
+	if waves.hold_break and not is_run_finished and not upgrade_picker.is_open():
+		upgrade_picker.offer(CONFIG.upgrade_choices, upgrades_left_out())
+		_park_player_for_cards()
+
+
+## True while the wave end slow-down is running. Public for the tests.
+func is_wave_end_beat_playing() -> bool:
+	return _beat_left > 0.0
+
+
+## _exit_tree runs when the arena leaves the scene (back to the title, or a
+## test finishing): never leave the game running in slow motion.
+func _exit_tree() -> void:
+	Engine.time_scale = 1.0
+
+
+## This run's numbers, as lines of text for the pause menu.
+func pause_stats() -> Array[String]:
+	var mode: String = "New Game +" if ng_plus else "Regular game"
+	return [
+		"%s, wave %d of %d" % [mode, maxi(waves.wave, 1), waves.total_waves()],
+		"Homes lit: %d of %d" % [windows.homes_lit(), windows.home_count()],
+		"Trees standing: %d" % count_grown_trees(),
+		"Trees planted: %d" % trees_planted,
+		"Health: %d of %d" % [player.hp, player.max_hp],
+		"Upgrades taken: %d" % upgrades_taken.size(),
+		"On Canopy FM: %s" % CanopyFM.station_name(),
+	]
+
+
+## Signal handler: the pause menu's "Restart this wave" was confirmed. Same as
+## Seven going down: the forest goes back to how it stood when the wave began.
+func _on_pause_restart_wave() -> void:
+	if waves.wave == 0 or is_run_finished:
+		return  # no wave is running: nothing to restart
+	Engine.time_scale = 1.0  # in case a wave end slow-down was running
+	_beat_left = 0.0
+	player.locked = false
+	_restart_current_wave()
+
+
+## Signal handler: the pause menu's "Quit to main menu" was confirmed. Only
+## when the arena IS the running scene (in the tests it is a child of the test
+## scene, and changing scene would end the tests).
+func _on_pause_quit() -> void:
+	quit_requests += 1
+	if get_tree().current_scene == self:
+		RunState.just_unlocked = false
+		get_tree().change_scene_to_file(TITLE_SCENE)
 
 
 ## The banner text for clearing wave `number`. The marker wave (halfway) adds
@@ -881,8 +1008,13 @@ func wave_cleared_text(number: int) -> String:
 
 ## The end screen's banner text: the headline and the final score.
 func end_banner_text() -> String:
-	var unlocked: String = "\nNew Game + unlocked! " if RunState.just_unlocked else "\n"
-	return "%s\nTrees standing: %d%sPress R or tap here for the title screen" % [CONFIG.end_headline, count_grown_trees(), unlocked]
+	# One short line each, so nothing is cut off at the screen edges.
+	var lines: Array[String] = [CONFIG.end_headline, "Trees standing: %d" % count_grown_trees()]
+	if RunState.just_unlocked:
+		lines.append(CONFIG.end_unlocked_line)
+	lines.append(CONFIG.end_restart_line_touch if _is_touch() else CONFIG.end_restart_line)
+	# "\n".join glues the list into one text with a line break between entries.
+	return "\n".join(lines)
 
 
 ## Signal handler: the last wave is cleared. Show the end screen over the forest.
@@ -905,7 +1037,7 @@ func _on_cat_shop_opened() -> void:
 	lucky_found_wave = maxi(waves.wave, 1)
 
 	_show_banner("Lucky's gift: right-click a machine to bind it. Spare fuse fitted.", 4.0)
-	_show_story_lines([_lucky_says(LuckyLines.greeting_for(lucky_found_wave))])
+	_radio_interrupt(_lucky_says(LuckyLines.greeting_for(lucky_found_wave)))
 
 
 ## Seven talks to Lucky: the next small-talk line for the wave being played.
@@ -915,7 +1047,7 @@ func talk_to_lucky() -> String:
 		return ""
 	var line: String = LuckyLines.small_talk_for(maxi(waves.wave, 1), _lucky_talks)
 	_lucky_talks += 1
-	_show_story_lines([_lucky_says(line)])
+	_radio_interrupt(_lucky_says(line))
 	Sfx.play(&"cat")
 	return line
 
@@ -1177,6 +1309,7 @@ func _on_enemy_died(enemy: Enemy) -> void:
 		# callback caused the death), and Godot forbids adding physics bodies at
 		# that moment. call_deferred queues the call for the end of the frame.
 		spawn_tree.call_deferred(cell, false)
+		trees_planted += 1
 		_last_planted_cell = cell
 		# The first machine to go down: Canopy FM explains cover and the vine.
 		_dj_once(&"first_tree", CONFIG.dj_first_tree_touch if _is_touch() else CONFIG.dj_first_tree)

@@ -173,6 +173,14 @@ extends Resource
 ## fitted, the first time Seven would go down it gets back up instead, with this
 ## many hit points.
 @export var fuse_revive_hp: int = 3
+## KNOCK-OUT animation: Seven jolts, tips over and greys out, throwing sparks,
+## over this many seconds. (Keep it shorter than death_restart_delay.)
+@export var knockout_seconds: float = 0.9
+@export var knockout_spark_color: Color = Color(1.8, 1.4, 0.4)
+## FUSE REVIVE animation: a gold flash, two rings bursting outward and a
+## lightning bolt over Seven, while the picture pops big and settles back.
+@export var fuse_flash_seconds: float = 0.8
+@export var fuse_flash_color: Color = Color(1.9, 1.6, 0.5)
 ## Seconds Seven cannot be hurt after the fuse saves it (it blinks meanwhile).
 @export var fuse_invulnerable_time: float = 2.0
 ## Talking to Lucky: Seven must be within this many cells of the open shop for
@@ -439,6 +447,11 @@ extends Resource
 @export var wave_spawn_interval: float = 1.4
 ## Rest time between clearing a wave and the next one starting.
 @export var wave_break_time: float = 3.0
+## THE WAVE END BEAT: when the last machine of a wave goes down, the whole game
+## runs at wave_end_slow_scale speed (0.3 = 30%) for wave_end_slow_seconds of
+## real time. Then the upgrade cards come up, then the next wave.
+@export var wave_end_slow_scale: float = 0.3
+@export var wave_end_slow_seconds: float = 0.9
 ## After clearing this wave, the banner tells the player it is a fine place to
 ## stop and rate the game. Jam judges play many entries; this tells them they
 ## have seen the core of it. 0 switches the marker off.
@@ -462,9 +475,9 @@ extends Resource
 	"We'd hate to lose you. Ask about our amnesty plan.",
 	"Your neighbours are paying for your choices.",
 	"Unit MR-7 is stolen Helios property.",
+	"Your amnesty offer has expired. Recovery crews are on site.",
+	"Service area reclassified. Recovering all assets, trees included.",
 	"Final notice.",
-	"Service area reclassified. Recovering assets.",
-	"Please hold.",
 ]
 ## What the Block paints on the walls when each wave is cleared. Entry 0 is wave 1.
 @export var graffiti_lines: Array[String] = [
@@ -481,6 +494,13 @@ extends Resource
 ]
 ## The end screen: the big headline, and Helios's last word under it.
 @export var end_headline: String = "PASS IT ON"
+## The last lines of the end screen. Kept short: the banner is 52 px text on a
+## 1280 px screen, and the old single line ran off both edges.
+@export var end_unlocked_line: String = "New Game + unlocked!"
+@export var end_restart_line: String = "Press R for the title screen"
+@export var end_restart_line_touch: String = "Tap here for the title screen"
+## Empty space kept on each side of the banner, in screen pixels.
+@export var banner_side_margin: float = 40.0
 @export var helios_end_line: String = "Account closed."
 ## Seconds each radio line stays on the air once it has finished typing.
 @export var story_line_seconds: float = 3.0

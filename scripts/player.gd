@@ -82,6 +82,13 @@ var rest_trees: int = 0
 var locked: bool = false
 ## The Tween moving Seven along the vine, kept so park() can stop it.
 var _zip_tween: Tween
+## Seconds left of the knock-out animation and of the fuse-revive animation.
+var _knockout_left: float = 0.0
+var _fuse_flash_left: float = 0.0
+## The Tween that plays either animation on the picture, kept so revive() can stop it.
+var _body_tween: Tween
+## The picture's normal size, remembered so the animations can put it back.
+var _sprite_base_scale: Vector2 = Vector2.ONE
 
 ## The machine the vine last lashed, and how much longer to draw that vine.
 var _lash_target: Enemy = null
@@ -114,6 +121,7 @@ func _ready() -> void:
 	if _sprite.texture != null:
 		var wanted_px: float = CONFIG.sprite_size_cells * CONFIG.cell_size
 		_sprite.scale = Vector2.ONE * (wanted_px / float(_sprite.texture.get_width()))
+	_sprite_base_scale = _sprite.scale
 
 
 ## _physics_process runs 60 times per second: cooldowns, aiming, walking, firing.
@@ -121,6 +129,8 @@ func _physics_process(delta: float) -> void:
 	_fire_cooldown_left = maxf(_fire_cooldown_left - delta, 0.0)
 	_vine_cooldown_left = maxf(_vine_cooldown_left - delta, 0.0)
 	_lash_time_left = maxf(_lash_time_left - delta, 0.0)
+	_knockout_left = maxf(_knockout_left - delta, 0.0)
+	_fuse_flash_left = maxf(_fuse_flash_left - delta, 0.0)
 	_update_hit_blink(delta)
 	_tick_brambles(delta)
 	if is_dead:
@@ -166,6 +176,8 @@ func _unhandled_input(event: InputEvent) -> void:
 ## _draw paints, in order: the vine (while zipping), the fallback body square (only
 ## if there is no sprite), and the aiming reticle at the mouse pointer.
 func _draw() -> void:
+	_draw_knockout_sparks()
+	_draw_fuse_flash()
 	if is_resting:
 		# Grove rest: a soft green glow that breathes in and out. It is drawn here,
 		# before the sprite (a child node), so it sits behind Seven like a halo.
@@ -297,6 +309,7 @@ func take_damage(amount: int) -> bool:
 		has_fuse = false
 		hp = CONFIG.fuse_revive_hp
 		_invulnerable_left = CONFIG.fuse_invulnerable_time
+		_play_fuse_flash()
 		health_changed.emit(hp, max_hp)
 		Sfx.play(&"cat")
 		fuse_used.emit()
@@ -305,7 +318,7 @@ func take_damage(amount: int) -> bool:
 	if hp == 0:
 		is_dead = true
 		velocity = Vector2.ZERO
-		modulate = Color(0.45, 0.45, 0.45, 0.8)  # greyed out
+		_play_knockout()  # tips over and greys out (see below)
 		Sfx.play(&"player_down")
 		died.emit()
 		return true
@@ -325,6 +338,7 @@ func revive(world_position: Vector2) -> void:
 	bramble_charges = CONFIG.bramble_max_charges  # a fresh start refills the seeds
 	bramble_recharge_left = 0.0
 	modulate = Color.WHITE
+	_reset_body()  # stand the picture back up after the knock-out
 	_invulnerable_left = CONFIG.player_hit_invulnerable_time
 	# A real defeat is the only thing that refits a used fuse.
 	has_fuse = has_fuse_slot
@@ -337,6 +351,97 @@ func heal(amount: int) -> void:
 		return
 	hp = mini(hp + amount, max_hp)  # mini = the smaller of two whole numbers
 	health_changed.emit(hp, max_hp)
+
+
+## True while the knock-out animation is playing. Public for the tests.
+func is_knockout_playing() -> bool:
+	return _knockout_left > 0.0
+
+
+## True while the fuse-revive animation is playing. Public for the tests.
+func is_fuse_flash_playing() -> bool:
+	return _fuse_flash_left > 0.0
+
+
+## Stops any body animation and puts the picture back: upright, normal size,
+## in the middle, normal colours.
+func _reset_body() -> void:
+	if _body_tween != null and _body_tween.is_valid():
+		_body_tween.kill()  # kill stops a Tween for good
+	_knockout_left = 0.0
+	_sprite.rotation = 0.0
+	_sprite.position = Vector2.ZERO
+	_sprite.scale = _sprite_base_scale
+	_sprite.self_modulate = Color.WHITE
+
+
+## KNOCK-OUT: Seven jolts up, tips over sideways and settles on the ground while
+## fading to grey. A Tween plays the steps in order; set_parallel(true) makes
+## the steps that follow run at the same time instead of one after another.
+func _play_knockout() -> void:
+	_reset_body()
+	_knockout_left = CONFIG.knockout_seconds
+	var total: float = CONFIG.knockout_seconds
+	# Fall away from the way Seven was facing: +1 tips right, -1 tips left.
+	var side: float = -1.0 if _sprite.flip_h else 1.0
+	_body_tween = create_tween()
+	# 1. The jolt: a quick hop up and a swell, like a shock going through.
+	_body_tween.set_parallel(true)
+	_body_tween.tween_property(_sprite, "position", Vector2(0.0, -12.0), total * 0.15)
+	_body_tween.tween_property(_sprite, "scale", _sprite_base_scale * 1.2, total * 0.15)
+	# 2. The fall: a quarter turn onto its side, landing with a small bounce
+	#    (TRANS_BOUNCE), back to normal size, and the colour drains to grey.
+	_body_tween.chain().set_parallel(true)  # chain() = "after the steps above"
+	_body_tween.tween_property(_sprite, "rotation", side * PI / 2.0, total * 0.6).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	_body_tween.tween_property(_sprite, "position", Vector2(0.0, 10.0), total * 0.6).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	_body_tween.tween_property(_sprite, "scale", _sprite_base_scale, total * 0.3)
+	_body_tween.tween_property(self, "modulate", Color(0.45, 0.45, 0.45, 0.8), total * 0.85)
+
+
+## FUSE REVIVE: the opposite feeling. The picture flashes gold and pops up big,
+## then springs back to normal (TRANS_BACK overshoots a little, like a spring).
+func _play_fuse_flash() -> void:
+	_reset_body()
+	_fuse_flash_left = CONFIG.fuse_flash_seconds
+	_sprite.scale = _sprite_base_scale * 1.6
+	_sprite.self_modulate = CONFIG.fuse_flash_color
+	_body_tween = create_tween().set_parallel(true)
+	_body_tween.tween_property(_sprite, "scale", _sprite_base_scale, CONFIG.fuse_flash_seconds).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_body_tween.tween_property(_sprite, "self_modulate", Color.WHITE, CONFIG.fuse_flash_seconds)
+
+
+## Sparks thrown out by the knock-out: eight short streaks flying outward and
+## fading. Called from _draw.
+func _draw_knockout_sparks() -> void:
+	if _knockout_left <= 0.0:
+		return
+	var done: float = 1.0 - _knockout_left / CONFIG.knockout_seconds  # 0 at the start, 1 at the end
+	var color := Color(CONFIG.knockout_spark_color, 1.0 - done)
+	for i: int in 8:
+		# Eight directions, evenly round the circle, each a slightly different length.
+		var direction: Vector2 = Vector2.from_angle(TAU * float(i) / 8.0 + 0.3)
+		var reach: float = CONFIG.cell_size * (0.5 + 1.1 * done) * (0.8 + 0.1 * float(i % 3))
+		draw_line(direction * reach, direction * (reach + 9.0), color, 3.0)
+
+
+## The fuse blowing: two gold rings bursting outward (the second a beat behind
+## the first) and a zigzag lightning bolt above Seven. Called from _draw.
+func _draw_fuse_flash() -> void:
+	if _fuse_flash_left <= 0.0:
+		return
+	var done: float = 1.0 - _fuse_flash_left / CONFIG.fuse_flash_seconds
+	var cell_px: float = float(CONFIG.cell_size)
+	for delay: float in [0.0, 0.25]:
+		# Each ring has its own 0-to-1 clock, started `delay` late.
+		var ring_done: float = clampf((done - delay) / (1.0 - delay), 0.0, 1.0)
+		if ring_done > 0.0:
+			draw_arc(Vector2.ZERO, cell_px * lerpf(0.4, 1.8, ring_done), 0.0, TAU, 48, Color(CONFIG.fuse_flash_color, 1.0 - ring_done), 5.0)
+	# The bolt: a fixed zigzag of points, drawn as one bent line that fades out.
+	var bolt := PackedVector2Array([
+		Vector2(6.0, -cell_px * 1.9), Vector2(-8.0, -cell_px * 1.35),
+		Vector2(5.0, -cell_px * 1.25), Vector2(-6.0, -cell_px * 0.7),
+	])
+	draw_polyline(bolt, Color(CONFIG.fuse_flash_color, 1.0 - done), 4.0)
 
 
 ## Puts Seven at `world_position` and locks it there (the upgrade cards are up).

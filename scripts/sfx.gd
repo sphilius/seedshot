@@ -23,6 +23,9 @@ var is_unlocked: bool = false
 
 ## True while the player has sound switched off (M key, or the speaker button).
 var is_muted: bool = false
+## False when the player has switched sound EFFECTS off in the pause menu (the
+## music carries on). Separate from is_muted, which silences everything.
+var effects_on: bool = true
 
 ## Sound name -> audio clip. (A typed Dictionary: keys are StringNames.)
 ## AudioStream is the parent type of both the generated beeps (AudioStreamWAV)
@@ -98,7 +101,7 @@ func set_muted(muted: bool) -> void:
 ## Plays a named sound. Silently does nothing before the first input (the browser
 ## would block it anyway) or if the name is unknown.
 func play(sound_name: StringName) -> void:
-	if not is_unlocked or not _streams.has(sound_name):
+	if not is_unlocked or not effects_on or not _streams.has(sound_name):
 		return
 	var player: AudioStreamPlayer = _players[_next_player]
 	_next_player = (_next_player + 1) % _players.size()
