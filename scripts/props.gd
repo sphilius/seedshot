@@ -47,7 +47,7 @@ func setup(grid: ArenaGrid, arena_rect: Rect2) -> void:
 	_placements = [
 		[&"meter", Vector2i(0, 3)], [&"notice", Vector2i(0, 9)],
 		[&"notice_x", Vector2i(last_col, 4)], [&"meter", Vector2i(last_col, 10)],
-		[&"meter", Vector2i(9, 0)], [&"notice_x", Vector2i(17, 0)],
+		[&"meter", Vector2i(16, 0)], [&"notice_x", Vector2i(18, 0)],
 		# Flat on the floor (walkable).
 		[&"panel", Vector2i(19, 11)], [&"cable", Vector2i(5, 3)],
 	]
