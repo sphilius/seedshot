@@ -106,6 +106,8 @@ func _ready() -> void:
 	await _test_upgrades()
 	await _test_props_and_lucky_art()
 	await _test_bramble_seed()
+	# s18: fixes from the phone playtest of 2026-11-19.
+	await _test_web_build_has_no_extra_audio_bus()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -1760,3 +1762,43 @@ func _test_bramble_seed() -> void:
 	var patch_ref: WeakRef = weakref(patch)
 	var withered: Callable = func() -> bool: return patch_ref.get_ref() == null
 	_check(await _wait_until(withered, CONFIG.bramble_seconds + 1.0), "the patch withers after %d s" % CONFIG.bramble_seconds)
+
+
+## s18, the "no sound at all on the web build" bug. In a browser, Godot 4.7.2
+## wires any second audio bus into a closed loop with Master, so nothing reaches
+## the speakers (the full story is on CanopyFM.uses_music_bus). The fix: the web
+## build makes no extra bus. Headless tests cannot hear a browser, so these guard
+## the cause; the real proof is the web export measured in a browser.
+func _test_web_build_has_no_extra_audio_bus() -> void:
+	_check(not CanopyFM.uses_music_bus(true), "the web build makes no extra audio bus (one silences every sound there)")
+	_check(CanopyFM.uses_music_bus(false), "desktop builds keep the Music bus and its filter")
+	# These tests run on desktop, so here the bus does exist. Exactly one extra
+	# bus: if another script ever adds one, the web build needs the same care.
+	var music: int = AudioServer.get_bus_index(CanopyFM.BUS_NAME)
+	_check(music == 1 and AudioServer.bus_count == 2, "Master and Music are the only audio buses")
+	if music < 0:
+		return  # the checks below would only print engine errors
+	_check(AudioServer.get_bus_send(music) == &"Master", "the Music bus feeds Master, so mute covers the radio")
+	_check(not AudioServer.is_bus_mute(0) and not AudioServer.is_bus_mute(music), "the game starts with sound on")
+	var filter := AudioServer.get_bus_effect(music, 0) as AudioEffectLowPassFilter
+	_check(filter != null, "the Music bus carries the low-pass filter")
+	if filter == null:
+		return
+	# Canopy FM must be steering THIS filter (the one on the bus), not a spare copy:
+	# light the block fully and the cutoff on the bus has to climb.
+	# An arena reports its own light level every frame, which would overwrite ours,
+	# so remove the one the previous test left behind first.
+	if _arena != null:
+		_arena.queue_free()
+		_arena = null
+		await get_tree().physics_frame
+	# Start from a known state: a dark block, with any "tree was cut" dulling over.
+	# (await pauses this function until _wait_until has finished its own waiting.)
+	CanopyFM.set_light(0.0)
+	var closed: Callable = func() -> bool: return not CanopyFM.is_dulled() and filter.cutoff_hz < CONFIG.music_cutoff_dark_hz * 1.2
+	await _wait_until(closed, CONFIG.music_dull_seconds + 4.0)
+	var before: float = filter.cutoff_hz
+	CanopyFM.set_light(1.0)
+	var opened: Callable = func() -> bool: return filter.cutoff_hz > before * 1.5
+	_check(await _wait_until(opened, 3.0), "lighting the block opens the filter on the Music bus")
+	CanopyFM.set_light(0.0)

@@ -322,3 +322,21 @@ From the kickoff. `config/game_config.tres` holds every speed, cooldown and size
   Canopy FM introduces it on wave 2 (not in New Game +).
 - Cable coil prop remade: its dark rubber matched the dark background and was cut away; a lower background
   tolerance for that one prop keeps it. It lies flat on the floor near the top-left.
+
+## D-037 (s18): the web build was completely silent
+
+- **Found in the 2026-11-19 phone playtest:** no music, no sound effects, no radio. It was not the phone and not
+  the mute button: the web export sent nothing to the speakers in any browser, on desktop too.
+- **Cause:** `canopy_fm.gd` added a "Music" bus with `AudioServer.add_bus()`. The web export plays sounds through
+  the browser's own audio engine ("sample" playback), and in Godot 4.7.2 that code inserts the new bus BEFORE
+  Master in its list. Master's output is then wired into the Music bus and the Music bus back into Master: a closed
+  loop with no way out to the speakers. Desktop builds mix audio themselves and were never affected.
+- **Fix:** `CanopyFM.uses_music_bus()` is false on web, so the web build has only the Master bus and the song plays
+  straight into it. Desktop keeps the bus and its low-pass filter.
+- **Known gap:** bus effects do nothing in a browser, so on web the song does not get clearer as the block lights.
+  The quieter moment when a tree is cut still works (it is a volume change, not an effect).
+- **How it was measured:** a throwaway page loaded the web export with a meter on the browser's audio output and
+  an audio context that starts blocked, as on a phone. Before: peak level 0.0 after tapping Play. After: about 0.2
+  with the song alone, back to 0.0 with the speaker button off. Headless checks cannot hear a browser, so re-measure
+  like this if another audio bus is ever added.
+- **Not verified:** a real phone. The fix has only been measured in a desktop browser emulating one.
