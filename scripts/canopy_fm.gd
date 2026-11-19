@@ -20,6 +20,9 @@ extends Node
 ## The browser will not play sound before the player's first click or key, so
 ## the song waits for Sfx.is_unlocked. Mute (M) silences the Master bus, which
 ## the Music bus feeds into, so it covers the radio too.
+##
+## WEB BUILD: there is no Music bus and no filter in a browser (see
+## uses_music_bus for why); the song plays straight into the Master bus.
 
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
 ## Station id -> song file, in the order the menu lists them.
@@ -53,21 +56,42 @@ var _light: float = 0.0
 var _dull_left: float = 0.0
 
 
-## _ready runs once at game start: make the Music bus with its filter, and the player.
+## Should the song get its own "Music" bus with the low-pass filter?
+## Everywhere except in a browser. `is_web` is passed in (instead of asked for
+## inside) so the tests can check the browser answer without being a browser.
+##
+## WHY NOT ON WEB (s18, the "no sound at all" bug): the web build plays sounds
+## through the browser's own audio engine, and Godot 4.7.2's code for that has a
+## bug. Any bus after Master, whether added in code or in a bus layout file, is
+## put BEFORE Master in the browser's list. Master's output is then plugged into
+## the new bus and the new bus back into Master: a closed loop that never reaches
+## the speakers, so every sound in the game is silent. Bus effects such as the
+## filter do nothing in a browser anyway, so on web the song simply plays into
+## Master and only the "tree was cut" volume dip is heard.
+static func uses_music_bus(is_web: bool) -> bool:
+	return not is_web
+
+
+## _ready runs once at game start: make the Music bus with its filter (not on web,
+## see uses_music_bus), and the player that plays the song.
 func _ready() -> void:
-	# A bus is a mixing channel. Add one called "Music" that feeds into Master
-	# (bus 0), so the mute switch on Master silences the radio too.
-	AudioServer.add_bus()
-	var bus: int = AudioServer.bus_count - 1
-	AudioServer.set_bus_name(bus, BUS_NAME)
-	AudioServer.set_bus_send(bus, &"Master")
 	_filter = AudioEffectLowPassFilter.new()
 	_filter.cutoff_hz = CONFIG.music_cutoff_dark_hz
-	AudioServer.add_bus_effect(bus, _filter)
 	target_cutoff_hz = CONFIG.music_cutoff_dark_hz
 
 	_player = AudioStreamPlayer.new()
-	_player.bus = BUS_NAME
+	# OS.has_feature("web") is true only in the web export (a browser).
+	if uses_music_bus(OS.has_feature("web")):
+		# A bus is a mixing channel. Add one called "Music" that feeds into Master
+		# (bus 0), so the mute switch on Master silences the radio too.
+		AudioServer.add_bus()
+		var bus: int = AudioServer.bus_count - 1
+		AudioServer.set_bus_name(bus, BUS_NAME)
+		AudioServer.set_bus_send(bus, &"Master")
+		AudioServer.add_bus_effect(bus, _filter)
+		_player.bus = BUS_NAME
+	# On web the player stays on its default bus, Master, and _filter is attached
+	# to nothing: _process still moves its cutoff, which is harmless.
 	_player.volume_db = CONFIG.music_volume_db
 	add_child(_player)
 	_load_station(station)
