@@ -82,6 +82,10 @@ var _banner_time_left: float = 0.0
 var _story_queue: Array[Dictionary] = []
 ## Canopy FM tutorial moments already played this run (so each plays once).
 var _dj_said: Dictionary[StringName, bool] = {}
+## Seconds of Grove rest counted toward the next pip (see tick_grove_rest).
+var _rest_progress: float = 0.0
+## Seconds until the windows are next brought up to date with the forest.
+var _light_refresh_left: float = 0.0
 ## Seconds the story line on screen has left. 0 or less means "until replaced".
 var _story_time_left: float = 0.0
 ## True once the opening line has been shown, so a restarted wave 1 skips it.
@@ -122,6 +126,12 @@ var _heart_alarm_left: float = 0.0
 @export var plant_heart_tree: bool = true
 ## The between-wave upgrade cards (see upgrade_picker.gd). Public for tests.
 var upgrade_picker: UpgradePicker
+## New Game +'s "do you remember what to do?" buttons (see tutorial_offer.gd).
+## Public for tests.
+var tutorial_offer: TutorialOffer
+## True while the tutorial plays: the staged first wave and Canopy FM's tips.
+## Always true in a normal run; in New Game + only if the player asks for it.
+var tutorial_on: bool = true
 ## Run-long upgrade effects the arena hands out (see apply_upgrade). Public for tests.
 var seed_damage_bonus: int = 0
 var tree_hp_bonus: int = 0
@@ -207,6 +217,7 @@ func _ready() -> void:
 	add_child(_ambient)
 	_update_light()
 
+	ForestTree.heart_marker_fade = 1.0  # a new run shows the Heart Tree's label again
 	player = PLAYER_SCENE.instantiate()
 	# Seven's lamp: a warm pool of light that moves with the bot.
 	player.add_child(Glow.make_sprite(CONFIG.player_glow_radius_cells * float(CONFIG.cell_size), CONFIG.player_glow_color))
@@ -214,6 +225,7 @@ func _ready() -> void:
 	player.seed_fired.connect(_on_player_seed_fired)
 	# The pips redraw themselves every time the player's health changes.
 	player.health_changed.connect(_health_pips.show_health)
+	player.health_changed.connect(_on_player_health_changed)
 	player.died.connect(_on_player_died)
 	player.fuse_used.connect(_on_player_fuse_used)
 	add_child(player)
@@ -248,11 +260,17 @@ func _ready() -> void:
 	upgrade_picker = UpgradePicker.new()
 	upgrade_picker.picked.connect(apply_upgrade)
 	$Hud.add_child(upgrade_picker)
+	tutorial_offer = TutorialOffer.new()
+	tutorial_offer.answered.connect(_on_tutorial_answered)
+	$Hud.add_child(tutorial_offer)
 	_wave_label.text = ""
 	if RunState.ng_plus:
 		apply_ng_plus()
 	if autostart_waves:
-		waves.start_wave(1)
+		if ng_plus:
+			offer_refresher()  # wave 1 starts when the player answers
+		else:
+			waves.start_wave(1)
 
 
 ## _process runs every drawn frame: hide the banner when its time is up.
@@ -279,6 +297,19 @@ func _process(delta: float) -> void:
 	# One shared value for every tree's markers (a static var, see forest_tree.gd).
 	ForestTree.light_boost = boost
 	_heart_alarm_left = maxf(_heart_alarm_left - delta, 0.0)
+	tick_grove_rest(delta)
+	# The Heart Tree's ring and label fade once the first wave(s) are cleared.
+	# move_toward steps a number toward a goal by at most the third argument.
+	var wanted_marker: float = 1.0 if waves_cleared < CONFIG.heart_label_waves else 0.0
+	ForestTree.heart_marker_fade = move_toward(ForestTree.heart_marker_fade, wanted_marker, delta / CONFIG.heart_label_fade_seconds)
+	# The windows follow the forest: bring them up to date a few times a second.
+	_light_refresh_left -= delta
+	if _light_refresh_left <= 0.0:
+		_light_refresh_left = CONFIG.light_refresh_seconds
+		_update_light()
+	# Keep the health pips clear of the wave label: tell them where its text ends.
+	# get_minimum_size() is the room the label's current text really needs.
+	_health_pips.left_limit = _wave_label.position.x + _wave_label.get_minimum_size().x + CONFIG.hud_pips_gap
 	# The bright cables showed through the upgrade cards: hide them while it is open.
 	great_powers.cables_hidden = upgrade_picker.is_open()
 	_ambient.color = _ambient.color.lerp(wanted_tint, minf(1.0, CONFIG.ambient_change_speed * delta))
@@ -642,7 +673,7 @@ func light_boost_for(level: float) -> float:
 
 ## Tells the windows and lanterns what the waves cleared so far have earned.
 func _update_light() -> void:
-	windows.set_light(lit_windows_after(waves_cleared) + tap_bonus_windows(), window_strength_after(waves_cleared))
+	windows.set_light(lit_windows_now() + tap_bonus_windows(), window_strength_now())
 	lanterns.set_strings(Lanterns.strings_after(waves_cleared))
 
 
@@ -692,10 +723,10 @@ static func _dj(texts: Array[String]) -> Array[Dictionary]:
 	return lines
 
 
-## Plays a Canopy FM tutorial moment once per run (and never in New Game +,
-## where the player already knows the controls).
+## Plays a Canopy FM tutorial moment once per run. Not in New Game +, where the
+## player already knows the controls, unless they asked for the reminder.
 func _dj_once(moment: StringName, texts: Array[String]) -> void:
-	if ng_plus or _dj_said.has(moment):
+	if not tutorial_on or _dj_said.has(moment):
 		return
 	_dj_said[moment] = true
 	_radio_later(_dj(texts))
@@ -733,13 +764,14 @@ func helios_line_for(number: int) -> String:
 ##   cat-hint waves  a hint about the lucky cat, only while the shop is shut.
 func dj_lines_for_wave(number: int) -> Array[String]:
 	var lines: Array[String] = []
-	if number == 2 and not ng_plus:
+	if number == 2 and tutorial_on:
 		lines.append_array(CONFIG.dj_bramble_touch if _is_touch() else CONFIG.dj_bramble)
 	if number == 1:
+		# The controls, for a first run or a New Game + player who asked.
+		if tutorial_on:
+			lines.append_array(CONFIG.dj_intro_touch if _is_touch() else CONFIG.dj_intro)
 		if ng_plus:
 			lines.append_array(CONFIG.dj_ng_plus_intro)
-		else:
-			lines.append_array(CONFIG.dj_intro_touch if _is_touch() else CONFIG.dj_intro)
 	var hint: int = CONFIG.dj_cat_hint_waves.find(number)
 	if hint >= 0 and hint < CONFIG.dj_cat_hints.size() and cat_shop != null and not cat_shop.is_open:
 		lines.append(CONFIG.dj_cat_hints[hint])
@@ -767,6 +799,9 @@ func _on_wave_started(number: int, total: int) -> void:
 	if not _hook_shown:
 		_hook_shown = true
 		lines.append(_radio_line(Radio.CANOPY, CONFIG.story_hook))
+	# New Game +: the machines are tougher and faster, and Canopy FM says so.
+	if ng_plus and number == 1:
+		lines.append(_radio_line(Radio.CANOPY, CONFIG.ng_plus_threat_line))
 	if helios_line_for(number) != "":
 		lines.append(_radio_line(Radio.HELIOS, helios_line_for(number)))
 	# Wave 1: point the Heart Tree out, in every run (Sasha forgot it existed).
@@ -787,11 +822,13 @@ func _on_spawn_requested(kind: StringName, wave_number: int) -> void:
 	if cell == ArenaGrid.NO_CELL:
 		waves.enemy_gone()  # nowhere to put it: tell the director not to wait for it
 		return
+	# The machine sent in, whatever its kind (every kind is an Enemy).
+	var machine: Enemy
 	if kind == WaveDirector.SAWBOT:
-		spawn_sawbot_at(cell)
+		machine = spawn_sawbot_at(cell)
 		_dj_once(&"sawbot", CONFIG.dj_first_sawbot)
 	elif kind == WaveDirector.SPITTER or kind == WaveDirector.ARC_SPITTER:
-		spawn_spitter_at(cell, kind == WaveDirector.ARC_SPITTER)
+		machine = spawn_spitter_at(cell, kind == WaveDirector.ARC_SPITTER)
 		if kind == WaveDirector.ARC_SPITTER:
 			_dj_once(&"arc_spitter", CONFIG.dj_first_arc_spitter)
 	else:
@@ -800,6 +837,11 @@ func _on_spawn_requested(kind: StringName, wave_number: int) -> void:
 			_dj_once(&"linebreaker", CONFIG.dj_first_linebreaker)
 		# Faster every wave: wave 1 is 1.0, wave 2 is 1.12, wave 3 is 1.24, ...
 		scrapper.speed_scale = 1.0 + CONFIG.scrapper_speed_gain_per_wave * (wave_number - 1)
+		machine = scrapper
+	# New Game +: everything walks faster, and the two heavy kinds are tougher.
+	if ng_plus and machine != null:
+		var is_heavy_kind: bool = kind == WaveDirector.LINEBREAKER or kind == WaveDirector.ARC_SPITTER
+		machine.toughen(CONFIG.ng_plus_heavy_hp_multiplier if is_heavy_kind else 1.0, CONFIG.ng_plus_speed_multiplier)
 
 
 ## Signal handler: every machine of a wave is down.
@@ -810,7 +852,8 @@ func _on_wave_cleared(number: int) -> void:
 	# wave waits until one is picked.
 	if number < waves.total_waves() and number >= CONFIG.upgrade_from_wave:
 		waves.hold_break = true
-		upgrade_picker.offer(CONFIG.upgrade_choices)
+		upgrade_picker.offer(CONFIG.upgrade_choices, upgrades_left_out())
+		_park_player_for_cards()
 	# The Heart Tree heals between waves.
 	if is_instance_valid(heart_tree):
 		heart_tree.hp = heart_tree.max_hp()
@@ -956,8 +999,8 @@ func apply_upgrade(id: StringName) -> void:
 		&"heavy_seeds":
 			seed_damage_bonus += CONFIG.upgrade_seed_damage
 		&"thick_plating":
-			player.max_hp += CONFIG.upgrade_max_hp
-			player.heal(player.max_hp)  # a full repair (heal never goes over max_hp)
+			# More pips, filled, but no repair of old damage (see Player.add_plating).
+			player.add_plating(CONFIG.upgrade_max_hp)
 		&"hardwood":
 			tree_hp_bonus += CONFIG.upgrade_tree_hp
 			# Trees already standing get it too.
@@ -972,7 +1015,128 @@ func apply_upgrade(id: StringName) -> void:
 			great_powers.trellis_bonus_seconds += CONFIG.upgrade_trellis_seconds
 	_show_banner(UpgradePicker.CATALOG[id][0] + "!", 1.2)
 	Sfx.play(&"grow")
+	player.locked = false  # the cards are gone: Seven can move again
 	waves.hold_break = false
+
+
+## Upgrades that must not be dealt right now: Thick Plating once Seven's health
+## is at the cap (the card would do nothing). Public so the tests can read it.
+func upgrades_left_out() -> Array[StringName]:
+	var left_out: Array[StringName] = []
+	if player.max_hp >= CONFIG.player_hp_cap:
+		left_out.append(&"thick_plating")
+	return left_out
+
+
+## How many grown trees (of any kind) stand within `radius_cells` of `point`.
+func grown_trees_near(point: Vector2, radius_cells: float) -> int:
+	var radius: float = radius_cells * CONFIG.cell_size
+	var count: int = 0
+	for tree: ForestTree in _trees_by_cell.values():
+		if not is_instance_valid(tree) or tree.is_queued_for_deletion():
+			continue
+		if tree.stage == ForestTree.Stage.GROWN and tree.global_position.distance_to(point) <= radius:
+			count += 1
+	return count
+
+
+## GROVE REST: Seven's only repair besides tap trees. While a hurt Seven is close
+## to enough grown trees, one pip comes back every grove_rest_seconds_per_pip.
+## Stepping away (or being at full health) resets the count. Called every frame
+## from _process; public so the tests can step it by hand.
+func tick_grove_rest(delta: float) -> void:
+	var hurt: bool = not player.is_dead and player.hp < player.max_hp
+	# Trees in reach are only counted (and shown under Seven) while Seven is hurt.
+	var near: int = grown_trees_near(player.global_position, CONFIG.grove_rest_radius_cells) if hurt else 0
+	var resting: bool = near >= CONFIG.grove_rest_trees
+	player.is_resting = resting  # the player draws the glow while this is true
+	player.rest_trees = near
+	if not resting:
+		_rest_progress = 0.0
+		_show_rest_progress()
+		return
+	_rest_progress += delta
+	_show_rest_progress()
+	if _rest_progress >= CONFIG.grove_rest_seconds_per_pip:
+		_rest_progress -= CONFIG.grove_rest_seconds_per_pip
+		player.heal(1)
+		Sfx.play(&"grow")  # a small leafy sound for each pip
+		_show_rest_progress()
+
+
+## Hands the Grove rest progress (0 to 1) to the two places that draw it: the
+## arc round Seven and the filling pip on the HUD.
+func _show_rest_progress() -> void:
+	var share: float = clampf(_rest_progress / CONFIG.grove_rest_seconds_per_pip, 0.0, 1.0)
+	player.rest_progress = share
+	_health_pips.rest_progress = share
+
+
+## Where Seven waits while the upgrade cards are up: a random open cell within
+## upgrade_park_cells of the Heart Tree (or of the start cell if there is no
+## Heart Tree). Any open cell is safe: the split guard keeps the whole floor in
+## one piece, so Seven can always walk out again. NO_CELL if none is open.
+func park_cell() -> Vector2i:
+	var centre: Vector2i = HEART_TREE_CELL if is_instance_valid(heart_tree) else PLAYER_START_CELL
+	var open: Array[Vector2i] = []
+	var reach: int = CONFIG.upgrade_park_cells
+	for dy: int in range(-reach, reach + 1):
+		for dx: int in range(-reach, reach + 1):
+			var cell: Vector2i = centre + Vector2i(dx, dy)
+			if not grid.is_solid(cell) and not _trees_by_cell.has(cell):
+				open.append(cell)
+	if open.is_empty():
+		return ArenaGrid.NO_CELL
+	return open[_rng.randi_range(0, open.size() - 1)]
+
+
+## The upgrade cards are going up: move Seven beside the Heart Tree and lock it.
+func _park_player_for_cards() -> void:
+	var cell: Vector2i = park_cell()
+	# With nowhere open, Seven is locked where it stands.
+	player.park(grid.cell_to_world(cell) if cell != ArenaGrid.NO_CELL else player.global_position)
+
+
+## How much healthy forest stands: each grown tree counts as its share of health
+## (1.0 unhurt, 0.5 half cut). Saplings do not count yet.
+func forest_points() -> float:
+	var points: float = 0.0
+	for tree: ForestTree in _trees_by_cell.values():
+		if is_instance_valid(tree) and not tree.is_queued_for_deletion() and tree.stage == ForestTree.Stage.GROWN:
+			points += clampf(float(tree.hp) / float(maxi(tree.max_hp(), 1)), 0.0, 1.0)
+	return points
+
+
+## The share (0 to 1) of the EARNED light that the forest can carry right now.
+## Full when there are light_trees_per_wave tree-points per wave cleared, and
+## always full once the last wave is cleared (winning lights the whole block).
+func forest_share() -> float:
+	if waves_cleared >= waves.total_waves():
+		return 1.0
+	var needed: float = CONFIG.light_trees_per_wave * float(maxi(waves_cleared, 1))
+	return clampf(forest_points() / needed, 0.0, 1.0)
+
+
+## Windows lit right now: the starting few, plus the forest's share of what the
+## cleared waves have earned (lit_windows_after).
+func lit_windows_now() -> int:
+	var start: int = mini(CONFIG.windows_lit_at_start, windows.window_count())
+	return start + roundi(float(lit_windows_after(waves_cleared) - start) * forest_share())
+
+
+## How strongly they shine right now, by the same rule.
+func window_strength_now() -> float:
+	return lerpf(CONFIG.window_strength_at_start, window_strength_after(waves_cleared), forest_share())
+
+
+## Signal handler: Seven's health changed. The first time Seven is hurt in a run,
+## Canopy FM explains Grove rest. (Not _dj_once: this is said in New Game + too,
+## even with the tutorial skipped, because the repair rule is new to everyone.)
+func _on_player_health_changed(current: int, maximum: int) -> void:
+	if current >= maximum or current <= 0 or _dj_said.has(&"grove_rest"):
+		return
+	_dj_said[&"grove_rest"] = true
+	_radio_later([_radio_line(Radio.CANOPY, CONFIG.grove_rest_line)])
 
 
 ## The Heart Tree fell: the block's roots are cut, so the wave starts again (like
@@ -1098,9 +1262,29 @@ func _choose_tap_points(wave_number: int) -> void:
 ## staging; and trees can mature into great sunroots (see mature_trees).
 func apply_ng_plus() -> void:
 	ng_plus = true
+	tutorial_on = false  # until the player asks for the reminder (offer_refresher)
 	waves.count_multiplier = CONFIG.ng_plus_count_multiplier
 	waves.pace_multiplier = CONFIG.ng_plus_pace_multiplier
 	waves.staged_waves = 0
+
+
+## New Game + opening: Canopy FM wakes Seven up and asks whether a reminder is
+## wanted. Wave 1 does not start here; it starts in _on_tutorial_answered.
+## Public so the tests can run the opening without a real New Game + save.
+func offer_refresher() -> void:
+	_hook_shown = true  # this line takes the place of the usual opening hook
+	_show_story_lines([_radio_line(Radio.CANOPY, CONFIG.ng_plus_wakeup_line)])
+	tutorial_offer.offer()
+
+
+## Signal handler: the player answered the New Game + question (or it timed out).
+## "Remind me" switches the tutorial back on: the staged first wave, where
+## machines come one at a time, and Canopy FM's tips as things happen.
+func _on_tutorial_answered(wants_tutorial: bool) -> void:
+	tutorial_on = wants_tutorial
+	if wants_tutorial:
+		waves.staged_waves = -1  # -1 = "use the config's number of staged waves"
+	waves.start_wave(1)
 
 
 ## New Game +: every tree that was already grown when this wave started and is

@@ -35,3 +35,9 @@ One line per asset or system: tool, date, what it did. This feeds the itch page'
 - Great sunroot powers, Trellis, Heart Tree, upgrades, Linebreakers and Arc Spitters (s16): game code by Claude Code from Sasha's design list.
 - Bramble Seed (s17): the third seed type, game code by Claude Code from Sasha's request (design proposed by Claude, see DEVLOG D-036).
 - Tree overlay (s18): Heart Tree ring and label, tree health bars, sapling growth ring and grow pop, drawn in code by Claude Code from Sasha's playtest notes (see DEVLOG D-039).
+
+- Sound round 2 (s18): 16 new ElevenLabs Sound Effects takes (thunk, enemy_down, bind, spit, saw, hurt, wave_clear, unlock) from prompts written by Claude Code to Sasha's notes; windup take 3 is take 2 slowed with ffmpeg. Sasha picks by ear.
+- New Game + opening (s18): wake-up line, Remind me / Skip buttons (scripts/tutorial_offer.gd) and the tougher-drones line; code by Claude Code, wording from Sasha.
+- Sound round 3 (s18): 5 more ElevenLabs Sound Effects takes (bind 5-6, spit 5-7) from prompts by Claude Code; saw take 5 is take 4 slowed with ffmpeg. Picks by Sasha.
+- Grove rest, health cap and Thick Plating change (s18): code by Claude Code to Sasha's design (scripts/arena.gd, player.gd, health_pips.gd).
+- Machines, light and cards (s18): Linebreaker ring and Arc Spitter sparks drawn in code, forest-driven window light, Heart Tree glow, upgrade-card lock; code by Claude Code to Sasha's playtest notes. Spit take 5 and bind take 5 picked by Sasha.

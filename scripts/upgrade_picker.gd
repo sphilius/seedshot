@@ -23,7 +23,7 @@ const CONFIG: GameConfig = preload("res://config/game_config.tres")
 const CATALOG: Dictionary[StringName, Array] = {
 	&"seed_pouch": ["Seed Pouch", "Fire %d%% faster."],
 	&"heavy_seeds": ["Heavy Seeds", "Seed pods hit %d harder."],
-	&"thick_plating": ["Thick Plating", "+%d max health, and a full repair."],
+	&"thick_plating": ["Thick Plating", "+%d max health. No repair: rest by 4 trees."],
 	&"hardwood": ["Hardwood", "Every tree gets +%d hit points."],
 	&"quick_roots": ["Quick Roots", "Saplings root %d%% faster."],
 	&"long_trellis": ["Long Trellis", "Trellis vines last %d s longer."],
@@ -52,9 +52,13 @@ func _ready() -> void:
 	visible = false
 
 
-## Deals `count` different upgrades at random and shows them.
-func offer(count: int) -> void:
-	var ids: Array[StringName] = CATALOG.keys()
+## Deals `count` different upgrades at random and shows them. Ids in `left_out`
+## are not dealt (the arena leaves out Thick Plating once health is at its cap).
+func offer(count: int, left_out: Array[StringName] = []) -> void:
+	var ids: Array[StringName] = []
+	for id: StringName in CATALOG.keys():
+		if not left_out.has(id):
+			ids.append(id)
 	# Shuffle with our own random-number generator (a "Fisher-Yates" shuffle:
 	# swap each entry with a random one at or before it).
 	for i: int in range(ids.size() - 1, 0, -1):
@@ -151,6 +155,8 @@ static func _describe(id: StringName) -> String:
 func _draw() -> void:
 	if not is_open():
 		return
+	# Darken the whole screen behind the cards, so the choice has the player's eye.
+	draw_rect(Rect2(Vector2.ZERO, get_viewport_rect().size), CONFIG.upgrade_dim_color)
 	var font: Font = ThemeDB.fallback_font
 	var heading: String = "The block chips in. Pick one  (1 / 2 / 3, or tap)"
 	draw_string(font, Vector2(0.0, CARDS_TOP - 14.0), heading, HORIZONTAL_ALIGNMENT_CENTER, get_viewport_rect().size.x, 20, TITLE_COLOR)

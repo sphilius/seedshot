@@ -110,6 +110,9 @@ func _ready() -> void:
 	await _test_web_build_has_no_extra_audio_bus()
 	await _test_canopy_line_caps()
 	await _test_readable_trees()
+	await _test_ng_plus_opening()
+	await _test_plating_and_grove_rest()
+	await _test_s18_machines_heart_cards_light()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -708,7 +711,9 @@ func _test_sawbot_takes_three_pods_and_becomes_a_tree() -> void:
 	await _fresh_arena()
 	var player_cell := Vector2i(5, 12)
 	_arena.player.global_position = _arena.grid.cell_to_world(player_cell)
-	var sawbot: Sawbot = _arena.spawn_sawbot_at(player_cell + Vector2i(5, 0))
+	# Three cells away: close enough that the pod lands before the Sawbot (faster
+	# since s18) has walked out of its path.
+	var sawbot: Sawbot = _arena.spawn_sawbot_at(player_cell + Vector2i(3, 0))
 	await get_tree().physics_frame
 	_check(sawbot.hp == CONFIG.sawbot_hp, "a Sawbot starts with %d hit points" % CONFIG.sawbot_hp)
 
@@ -1189,7 +1194,7 @@ func _test_windows_and_night() -> void:
 	# Clearing a wave (here: pretending wave 4 was cleared) updates the windows.
 	_arena.waves_cleared = 4
 	_arena._update_light()
-	_check(windows.lit_count == _arena.lit_windows_after(4), "clearing waves lights more windows")
+	_check(windows.lit_count == _arena.lit_windows_now() + _arena.tap_bonus_windows(), "clearing waves lights more windows")
 	_check(windows.homes_lit() >= 2 and windows.homes_lit() <= windows.home_count(), "spread over several homes (%d)" % windows.homes_lit())
 	_check(_arena.light_level() > dark_level, "and the lot's light level rises")
 
@@ -1692,7 +1697,7 @@ func _test_upgrades() -> void:
 	var player: Player = _arena.player
 	var hp_before: int = player.max_hp
 	_arena.apply_upgrade(&"thick_plating")
-	_check(player.max_hp == hp_before + CONFIG.upgrade_max_hp and player.hp == player.max_hp, "Thick Plating: more max health and a full repair")
+	_check(player.max_hp == hp_before + CONFIG.upgrade_max_hp and player.hp == player.max_hp, "Thick Plating: more max health, and the new pips arrive filled")
 	_arena.apply_upgrade(&"seed_pouch")
 	_check(player.fire_cooldown_scale < 1.0, "Seed Pouch: pods come faster")
 	_arena.apply_upgrade(&"heavy_seeds")
@@ -1934,3 +1939,169 @@ func _test_readable_trees() -> void:
 	_check(await _wait_until(settled, CONFIG.tree_pop_seconds + 1.0) and is_equal_approx(sapling.pop_scale(), 1.0), "then it settles back to normal size")
 	sapling.mature()
 	_check(sapling.is_popping(), "maturing into a great sunroot pops too")
+
+
+## s18: New Game + opens with Canopy FM waking Seven up and offering a reminder
+## of the controls, which can be skipped (and skips itself if left alone).
+func _test_ng_plus_opening() -> void:
+	# All the radio text waiting or showing, as one list, for the checks below.
+	var radio_texts: Callable = func() -> Array[String]:
+		var texts: Array[String] = [_arena.radio.text]
+		for line: Dictionary in _arena._story_queue:
+			texts.append(line.text)
+		return texts
+
+	# The question: the wake-up line is on the radio and wave 1 is waiting.
+	await _fresh_arena()
+	_arena.apply_ng_plus()
+	_arena.offer_refresher()
+	_check(_arena.tutorial_offer.is_open(), "New Game + opens with the 'do you remember?' buttons")
+	_check(_arena.radio.text == CONFIG.ng_plus_wakeup_line, "Canopy FM says the wake-up line")
+	_check(_arena.waves.wave == 0, "wave 1 waits for the answer")
+
+	# "Remind me": the tutorial is back on, with the staged first wave and the tips.
+	_arena.tutorial_offer.choose(true)
+	_check(not _arena.tutorial_offer.is_open() and _arena.waves.wave == 1, "answering starts wave 1")
+	_check(_arena.tutorial_on and _arena.waves.staged_wave_count() == CONFIG.wave_staged_waves, "'Remind me' brings back the staged tutorial wave")
+	var said: Array[String] = radio_texts.call()
+	_check(said.has(CONFIG.ng_plus_threat_line), "Canopy FM warns that Helios sent tougher, faster drones")
+	var intro: Array[String] = CONFIG.dj_intro_touch if Arena._is_touch() else CONFIG.dj_intro
+	_check(said.has(intro[0]), "and the controls are explained again")
+	_check(not said.has(CONFIG.story_hook), "the usual opening hook is not repeated on top")
+
+	# "I remember": no tutorial, but the warning is still given.
+	await _fresh_arena()
+	_arena.apply_ng_plus()
+	_arena.offer_refresher()
+	_arena.tutorial_offer.choose(false)
+	said = radio_texts.call()
+	_check(not _arena.tutorial_on and _arena.waves.staged_wave_count() == 0 and _arena.waves.wave == 1, "'I remember' skips the tutorial and starts wave 1")
+	_check(said.has(CONFIG.ng_plus_threat_line) and not said.has(intro[0]), "skipping still gives the warning, without the controls")
+
+	# Left alone, it skips by itself.
+	await _fresh_arena()
+	_arena.apply_ng_plus()
+	_arena.offer_refresher()
+	_arena.tutorial_offer.time_left = 0.05
+	var started: Callable = func() -> bool: return _arena.waves.wave == 1
+	_check(await _wait_until(started, 2.0) and not _arena.tutorial_on, "with no answer it skips the tutorial by itself")
+
+	# A normal run never shows the question.
+	await _fresh_arena()
+	_check(not _arena.tutorial_offer.is_open() and _arena.tutorial_on, "a normal run has no question and always has the tutorial")
+
+
+## s18 group 4: Thick Plating adds pips without repairing, health has a cap, the
+## pips stay clear of the wave label, and Grove rest is how Seven repairs.
+func _test_plating_and_grove_rest() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	var pips: HealthPips = _arena._health_pips
+
+	# Thick Plating on a hurt Seven: the new pips are filled, the old damage stays.
+	player.take_damage(2)
+	var hp_before: int = player.hp
+	var max_before: int = player.max_hp
+	_arena.apply_upgrade(&"thick_plating")
+	_check(player.max_hp == max_before + CONFIG.upgrade_max_hp, "Thick Plating adds %d max health" % CONFIG.upgrade_max_hp)
+	_check(player.hp == hp_before + CONFIG.upgrade_max_hp, "the new pips arrive filled")
+	_check(player.max_hp - player.hp == 2, "and the damage Seven already had is NOT repaired")
+
+	# The cap: however many are taken, health never passes player_hp_cap.
+	for i: int in 10:
+		_arena.apply_upgrade(&"thick_plating")
+	_check(player.max_hp == CONFIG.player_hp_cap, "max health stops at the cap of %d" % CONFIG.player_hp_cap)
+	_check(_arena.upgrades_left_out().has(&"thick_plating"), "at the cap, Thick Plating is no longer dealt")
+	var dealt_it: bool = false
+	for i: int in 20:
+		_arena.upgrade_picker.offer(CONFIG.upgrade_choices, _arena.upgrades_left_out())
+		dealt_it = dealt_it or _arena.upgrade_picker.offered.has(&"thick_plating")
+	_arena.upgrade_picker.choose(0)  # close the cards again
+	_check(not dealt_it, "20 deals at the cap never show the Thick Plating card")
+
+	# The HUD: with the longest wave label and every pip, the row starts after
+	# the label and ends before the right margin.
+	_arena._wave_label.text = "Wave 10 / 10    Homes lit 40 / 40    Trees 100    Brambles 2 / 2"
+	await _wait_frames(2)  # let the arena's _process hand the label's end to the pips
+	var label_end: float = _arena._wave_label.position.x + _arena._wave_label.get_minimum_size().x
+	var last: Rect2 = pips.pip_rect(pips.maximum - 1)
+	_check(pips.maximum == CONFIG.player_hp_cap and pips.pip_rect(0).position.x >= label_end, "the full row of pips starts after the wave label")
+	_check(last.end.x <= get_viewport().get_visible_rect().size.x - CONFIG.hud_pips_right_margin + 0.5, "and ends before the right margin")
+
+	# Grove rest: no trees nearby, no repair.
+	await _fresh_arena()
+	player = _arena.player
+	player.take_damage(2)
+	var hurt_hp: int = player.hp
+	_arena.tick_grove_rest(CONFIG.grove_rest_seconds_per_pip * 3.0)
+	_check(player.hp == hurt_hp and not player.is_resting, "away from trees, a hurt Seven is not repaired")
+	_check(_arena._dj_said.has(&"grove_rest"), "the first hit makes Canopy FM explain Grove rest")
+
+	# Grow the trees it needs, right around Seven.
+	var here: Vector2i = _arena.grid.world_to_cell(player.global_position)
+	var planted: int = 0
+	for offset: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 1), Vector2i(-1, -1)]:
+		if planted < CONFIG.grove_rest_trees and _arena.spawn_tree(here + offset, true) != null:
+			planted += 1
+	await _wait_frames(2)
+	_check(_arena.grown_trees_near(player.global_position, CONFIG.grove_rest_radius_cells) >= CONFIG.grove_rest_trees, "%d grown trees stand within reach" % CONFIG.grove_rest_trees)
+	_arena.tick_grove_rest(CONFIG.grove_rest_seconds_per_pip * 0.5)
+	_check(player.is_resting and player.hp == hurt_hp, "among them Seven glows, but half the time gives no pip yet")
+	_arena.tick_grove_rest(CONFIG.grove_rest_seconds_per_pip * 0.6)
+	_check(player.hp == hurt_hp + 1, "after grove_rest_seconds_per_pip, one pip is back")
+	_arena.tick_grove_rest(CONFIG.grove_rest_seconds_per_pip)
+	_arena.tick_grove_rest(CONFIG.grove_rest_seconds_per_pip)
+	_check(player.hp == player.max_hp and not player.is_resting, "it stops at full health, and the glow goes out")
+
+## s18 batch 2: tougher and faster machines, the Heart Tree's fading label, Seven
+## parked while the upgrade cards are up, and windows that follow the forest.
+func _test_s18_machines_heart_cards_light() -> void:
+	# Machines: the two heavy kinds have their new hit points and their own speeds.
+	await _fresh_arena(true)
+	var heavy: Scrapper = _arena.spawn_scrapper_at(Vector2i(3, 3), true)
+	var arc: Spitter = _arena.spawn_spitter_at(Vector2i(20, 3), true)
+	await get_tree().physics_frame
+	_check(heavy.hp == CONFIG.linebreaker_hp and heavy.max_hp == heavy.hp, "a Linebreaker starts with %d hit points" % CONFIG.linebreaker_hp)
+	_check(arc.hp == CONFIG.arc_spitter_hp, "an Arc Spitter starts with %d hit points" % CONFIG.arc_spitter_hp)
+	_check(heavy._speed() < CONFIG.scrapper_speed and heavy._speed() > 84.0 * 1.1, "a Linebreaker is faster than it was (84) but still slower than a Scrapper")
+	_check(is_equal_approx(arc._speed(), CONFIG.spitter_speed * CONFIG.arc_spitter_speed_factor), "an Arc Spitter walks at its own speed")
+	heavy.toughen(CONFIG.ng_plus_heavy_hp_multiplier, CONFIG.ng_plus_speed_multiplier)
+	_check(heavy.hp == ceili(CONFIG.linebreaker_hp * CONFIG.ng_plus_heavy_hp_multiplier) and heavy.speed_scale > 1.0, "New Game + makes it tougher and faster still")
+	heavy.queue_free()
+	arc.queue_free()
+
+	# Heart Tree: the ring and label fade once the first wave is cleared, but
+	# come straight back while it is being hit.
+	var heart: ForestTree = _arena.heart_tree
+	_check(is_equal_approx(heart.heart_marker_strength(), 1.0), "the Heart Tree's label shows at the start")
+	_arena.waves_cleared = CONFIG.heart_label_waves
+	var faded: Callable = func() -> bool: return ForestTree.heart_marker_fade <= 0.01
+	_check(await _wait_until(faded, CONFIG.heart_label_fade_seconds + 2.0), "after the first wave the ring and label fade away")
+	heart.take_damage(1)
+	_check(is_equal_approx(heart.heart_marker_strength(), 1.0), "a hit brings the (red) label back for a moment")
+
+	# Upgrade cards: Seven is parked next to the Heart Tree and cannot act.
+	var player: Player = _arena.player
+	_arena._park_player_for_cards()
+	var parked: Vector2i = _arena.grid.world_to_cell(player.global_position)
+	var offset: Vector2i = (parked - Arena.HEART_TREE_CELL).abs()
+	_check(player.locked and maxi(offset.x, offset.y) <= CONFIG.upgrade_park_cells, "the cards park Seven within %d cells of the Heart Tree" % CONFIG.upgrade_park_cells)
+	_check(not _arena.grid.is_solid(parked) and _arena.tree_at(parked) == null, "on an open cell")
+	_check(not player.fire(Vector2.RIGHT) and not player.throw_bramble(), "and Seven cannot shoot or throw while they are up")
+	_arena.apply_upgrade(&"seed_pouch")
+	_check(not player.locked, "picking a card frees Seven again")
+
+	# Light follows the forest: a thin forest carries only part of the earned light.
+	await _fresh_arena()
+	_arena.waves_cleared = 4
+	var earned: int = _arena.lit_windows_after(4)
+	var thin: int = _arena.lit_windows_now()
+	_check(_arena.forest_share() < 1.0 and thin < earned, "with few trees, fewer windows are lit than the waves earned (%d of %d)" % [thin, earned])
+	for x: int in range(3, 23):
+		_arena.spawn_tree(Vector2i(x, 4), true)
+	_check(is_equal_approx(_arena.forest_share(), 1.0) and _arena.lit_windows_now() == earned, "a big healthy forest lights everything the waves earned")
+	var points_before: float = _arena.forest_points()
+	_arena.tree_at(Vector2i(3, 4)).take_damage(3)
+	_check(_arena.forest_points() < points_before, "a damaged tree counts for less light")
+	_arena.waves_cleared = _arena.waves.total_waves()
+	_check(is_equal_approx(_arena.forest_share(), 1.0), "winning lights the whole block whatever the forest")

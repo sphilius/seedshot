@@ -372,3 +372,38 @@ From the kickoff. `config/game_config.tres` holds every speed, cooldown and size
   `tree_pop_*`, `tree_growth_ring_color`).
 - **Seen by eye:** the ring and label, in the web build at 1280 x 720. **Not seen by eye:** the alarm colours, the
   health bar and the pop (covered by headless checks of their state only).
+
+## D-040 (s18): sound round 2
+
+- **Sasha's picks by ear (2026-11-19):** enemy_down, zip, player_down and cat move to take 2. windup is take 2
+  played 16% slower (about 3 semitones lower and a little longer) and set 3 dB softer; it is saved as take 3.
+- **New candidates, waiting for a pick:** thunk (hollow metallic plink), enemy_down (motor winding down), bind
+  (ratchet winding up), spit (soft "pewm" pop), saw (chainsaw), hurt (electric zap, a new direction), wave_clear
+  (louder fanfare; its loudness target went from -20 to -16 dB), unlock (take 3 a soft beep, take 4 two clicks).
+  16 ElevenLabs generations. `audio/SOUNDS.md` holds the new prompts.
+- The thunk and spit candidates came back very quiet (mean below -36 dB) and need a lot of gain; listen for hiss.
+- The listening page now plays every take evened out to its in-game loudness.
+
+## D-045: Light follows the forest; Heart Tree label fades; cards lock Seven (Made, 2026-11-19)
+
+Three of Sasha's playtest notes. (1) Changes D-029: cleared waves now decide how much light the block has earned, and the forest decides how much of it shines. Each grown tree counts as its share of health; the earned windows and strength are fully on at `light_trees_per_wave` (4) tree-points per wave cleared (`Arena.forest_share`, `lit_windows_now`, `window_strength_now`), refreshed every 0.4 s. Winning still lights everything. (2) The Heart Tree's ring and label fade once `heart_label_waves` (1) is cleared; it keeps a soft pink glow, and the red alarm label still shows while it is hit. (3) While the upgrade cards are up the screen is dimmed and Seven is parked on a random open cell within 2 cells of the Heart Tree, locked (`Player.park`, `Arena.park_cell`); any open cell is safe because the split guard keeps the floor in one piece. Grove rest was also made easier to see and use after Sasha could not tell it was working: 3 cells and 2.5 s per pip, a filling arc round Seven, a filling pip on the HUD, and small words under a hurt Seven ("Grove 2 / 4", "Repairing").
+## D-044: Tougher, faster, recoloured machines (Made, 2026-11-19)
+
+Work-order group 5 merged with Sasha's later notes. Linebreaker 15 hit points (was 5), Arc Spitter 6 (was 3), both 15% faster than before; Scrapper, Sawbot and Spitter 20% faster (144, 108, 120). The Linebreaker ends at about 97 px/s, a third slower than a Scrapper, which also fits the work order's "slower than the others". Looks: Linebreaker is hazard gold with a thick ring that shows its hit points; Arc Spitter is cyan with three circling sparks. New sprites are still wanted later. New Game +: every machine 10% faster and the two heavy kinds 1.5 times the hit points (`Enemy.toughen`). No machine may pass 92% of Seven's speed (`enemy_top_speed_share`).
+## D-043: Thick Plating without repair, a health cap, and Grove rest (Made, 2026-11-19)
+
+Work-order group 4, from Sasha's New Game + notes: Thick Plating was the obvious pick every time because it also repaired fully. Now it gives +2 max health (`upgrade_max_hp`) and no repair: the new pips arrive filled, damage already taken stays (`Player.add_plating`). Health stops at `player_hp_cap` = 10; at the cap the card is no longer dealt (`Arena.upgrades_left_out`). The pip row is told where the wave label's text ends and never starts left of it; if it still would not fit before `hud_pips_right_margin` it shrinks (`HealthPips.pip_rect`). Repair moved to Grove rest (`Arena.tick_grove_rest`): a hurt Seven within `grove_rest_radius_cells` (2) of `grove_rest_trees` (4) grown trees of any kind gets 1 pip every `grove_rest_seconds_per_pip` (4 s), with a breathing green glow drawn by the player. It works during a fight and does not need Seven to stand still; stepping out resets the count. Canopy FM explains it the first time Seven is hurt in a run, New Game + included. Tap trees still give a pip. Not seen on screen: the glow and the shifted pip row are covered by headless checks only.
+## D-042: Sound round 3 (Made, 2026-11-19)
+
+Sasha's picks by ear: thunk 5, enemy down 3, hurt 4, wave clear 3, unlock 4. Saw is take 4 at half speed (ffmpeg `atempo=0.5`, same pitch, twice as long, saved as take 5) and 3 dB softer (`pick_sfx.ps1` target -28). Still open: bind (takes 5 and 6 blend the whip crack of take 2 with the ratchet of take 4) and spit (takes 5 and 6 are a toy laser, take 7 a cap-pistol shot; two more gunshot takes came back nearly silent and were deleted).
+## D-041 (s18): New Game + opens with a wake-up and an optional tutorial
+
+- **Sasha's request (2026-11-19).** Before wave 1 of New Game +, Canopy FM says "You're finally back up! Not sure
+  what happened, but we need your help again. Do you remember what to do?" and two buttons appear: Remind me (1) or
+  I remember: skip (2). Wave 1 waits for the answer; with none after 12 s it skips.
+- **Remind me** switches the tutorial back on for that run: the staged first wave (one machine at a time) and
+  Canopy FM's tips. **Skip** is New Game + as before.
+- Either way, as wave 1 starts Canopy FM says Helios has sent tougher, faster drones.
+- The old greeting "Back again?" was cut from the great-sunroot lines so Seven is not greeted twice.
+- New script `scripts/tutorial_offer.gd`; texts and the 12 s are in the config (`ng_plus_*`).
+- **Not seen by eye:** the buttons need a saved win to reach, so only headless checks cover them so far.

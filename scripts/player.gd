@@ -70,6 +70,18 @@ var bramble_charges: int = CONFIG.bramble_max_charges
 var bramble_recharge_left: float = 0.0
 ## True once hp reaches zero: the bot stops moving, firing and zipping.
 var is_dead: bool = false
+## True while the grove is repairing Seven (Grove rest). The arena decides this
+## and writes it every frame ("call down"); the player only draws the glow.
+var is_resting: bool = false
+## How far along the next Grove rest pip is, 0 to 1, and how many grown trees
+## are in reach while Seven is hurt. Both written by the arena, drawn here.
+var rest_progress: float = 0.0
+var rest_trees: int = 0
+## True while the upgrade cards are up: Seven cannot move, shoot or use the vine.
+## The arena sets it with park() and clears it when a card is picked.
+var locked: bool = false
+## The Tween moving Seven along the vine, kept so park() can stop it.
+var _zip_tween: Tween
 
 ## The machine the vine last lashed, and how much longer to draw that vine.
 var _lash_target: Enemy = null
@@ -113,6 +125,9 @@ func _physics_process(delta: float) -> void:
 	_tick_brambles(delta)
 	if is_dead:
 		return  # a downed bot does nothing until the arena restarts
+	if locked:
+		velocity = Vector2.ZERO
+		return  # the upgrade cards are up: stand still
 	_update_aim()
 
 	if not is_zipping:
@@ -140,6 +155,8 @@ func _process(_delta: float) -> void:
 ## _unhandled_input receives input events that no UI element used. The vine is a
 ## single press (not a hold), so it is handled here as an event.
 func _unhandled_input(event: InputEvent) -> void:
+	if locked:
+		return
 	if event.is_action_pressed(&"bramble"):
 		throw_bramble()
 	if event.is_action_pressed(&"vine"):
@@ -149,6 +166,25 @@ func _unhandled_input(event: InputEvent) -> void:
 ## _draw paints, in order: the vine (while zipping), the fallback body square (only
 ## if there is no sprite), and the aiming reticle at the mouse pointer.
 func _draw() -> void:
+	if is_resting:
+		# Grove rest: a soft green glow that breathes in and out. It is drawn here,
+		# before the sprite (a child node), so it sits behind Seven like a halo.
+		# sin() swings between -1 and 1; this turns it into 0.75 to 1.0, about
+		# once a second. Time.get_ticks_msec() is milliseconds since the game began.
+		var breath: float = 0.875 + 0.125 * sin(float(Time.get_ticks_msec()) / 160.0)
+		var radius: float = CONFIG.grove_rest_glow_radius_cells * CONFIG.cell_size * breath
+		draw_circle(Vector2.ZERO, radius, CONFIG.grove_rest_glow_color)
+		# A brighter rim (same colour, fully solid), so it reads against lit floor.
+		draw_arc(Vector2.ZERO, radius, 0.0, TAU, 32, Color(CONFIG.grove_rest_glow_color, 0.9), 2.0)
+		# A thick arc that fills clockwise from 12 o'clock as the next pip gets nearer.
+		draw_arc(Vector2.ZERO, radius + 5.0, -PI / 2.0, -PI / 2.0 + TAU * rest_progress, 32, CONFIG.grove_rest_text_color, 4.0)
+	if rest_trees > 0:
+		# Small words under Seven: how many trees are in reach, or that it is working.
+		var words: String = CONFIG.grove_rest_working_text if is_resting else CONFIG.grove_rest_count_text % [rest_trees, CONFIG.grove_rest_trees]
+		var shade: Color = CONFIG.grove_rest_text_color if is_resting else Color(CONFIG.grove_rest_text_color, 0.6)
+		var at := Vector2(-80.0, CONFIG.cell_size * 1.15)
+		draw_string_outline(ThemeDB.fallback_font, at, words, HORIZONTAL_ALIGNMENT_CENTER, 160.0, 14, 4, Color(0.0, 0.0, 0.0, 0.85))
+		draw_string(ThemeDB.fallback_font, at, words, HORIZONTAL_ALIGNMENT_CENTER, 160.0, 14, shade)
 	if is_zipping:
 		# to_local converts a world position into this node's own coordinates.
 		draw_line(Vector2.ZERO, to_local(_vine_anchor), VINE_COLOR, 4.0)
@@ -175,7 +211,7 @@ func _draw() -> void:
 ## Seven does not make the patch: the arena hears bramble_thrown and grows it
 ## ("signal up"). Returns true if a seed was thrown.
 func throw_bramble() -> bool:
-	if is_dead or bramble_charges <= 0:
+	if is_dead or locked or bramble_charges <= 0:
 		return false
 	bramble_charges -= 1
 	if bramble_recharge_left <= 0.0:
@@ -199,7 +235,7 @@ func _tick_brambles(delta: float) -> void:
 
 ## Fires one seed pod along `direction`, if the cooldown allows. Returns true if fired.
 func fire(direction: Vector2) -> bool:
-	if is_dead or _fire_cooldown_left > 0.0 or direction == Vector2.ZERO:
+	if is_dead or locked or _fire_cooldown_left > 0.0 or direction == Vector2.ZERO:
 		return false
 	_fire_cooldown_left = CONFIG.seed_cooldown * fire_cooldown_scale
 	var unit: Vector2 = direction.normalized()
@@ -217,7 +253,7 @@ func fire(direction: Vector2) -> bool:
 ## `pick_radius_cells` is how close `world_point` must be to a tree's centre. Leave
 ## it out to use the mouse value from the config; touch taps pass a bigger one.
 func try_vine(world_point: Vector2, pick_radius_cells: float = -1.0) -> bool:
-	if is_dead or is_zipping or _vine_cooldown_left > 0.0:
+	if is_dead or locked or is_zipping or _vine_cooldown_left > 0.0:
 		return false
 	# -1.0 is the "not given" marker (a radius can never really be negative).
 	if pick_radius_cells < 0.0:
@@ -301,6 +337,30 @@ func heal(amount: int) -> void:
 		return
 	hp = mini(hp + amount, max_hp)  # mini = the smaller of two whole numbers
 	health_changed.emit(hp, max_hp)
+
+
+## Puts Seven at `world_position` and locks it there (the upgrade cards are up).
+## Any vine zip in progress is stopped first, or it would drag Seven away again.
+func park(world_position: Vector2) -> void:
+	if _zip_tween != null and _zip_tween.is_valid():
+		_zip_tween.kill()  # kill stops a Tween for good
+	is_zipping = false
+	velocity = Vector2.ZERO
+	global_position = world_position
+	locked = true
+
+
+## Thick Plating: raises the maximum by up to `amount`, never past the config's
+## player_hp_cap. The NEW pips arrive filled; damage Seven already had stays
+## (repair is Grove rest's job now). Returns how many pips were really added.
+func add_plating(amount: int) -> int:
+	# clampi keeps a whole number between two bounds: here 0 and the room left under the cap.
+	var added: int = clampi(amount, 0, CONFIG.player_hp_cap - max_hp)
+	max_hp += added
+	if not is_dead:
+		hp += added
+	health_changed.emit(hp, max_hp)
+	return added
 
 
 ## Lucky's gift: the clamp (bind machines with the vine) and a spare fuse.
@@ -427,6 +487,7 @@ func _start_zip(tree: ForestTree) -> bool:
 	# A Tween animates a property over time. This one slides global_position to the
 	# destination; the duration comes from distance / speed.
 	var tween: Tween = create_tween()
+	_zip_tween = tween
 	tween.set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)  # step in time with physics
 	tween.tween_property(
 		self, "global_position", global_position + travel, travel.length() / CONFIG.vine_zip_speed

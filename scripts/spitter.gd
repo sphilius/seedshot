@@ -53,6 +53,32 @@ func _ready() -> void:
 	_cooldown_left = CONFIG.spitter_cooldown * 0.5
 
 
+## How fast this machine walks, in pixels per second.
+func _speed() -> float:
+	return CONFIG.spitter_speed * (CONFIG.arc_spitter_speed_factor if arc else 1.0)
+
+
+## _process runs every drawn frame: the Arc Spitter's sparks keep circling.
+func _process(_delta: float) -> void:
+	if arc:
+		queue_redraw()
+
+
+## Overrides Enemy._draw_marks: an Arc Spitter has three sparks circling it, one
+## for each shot of its fan, joined by a thin ring.
+func _draw_marks() -> void:
+	if not arc:
+		return
+	var radius: float = CONFIG.cell_size * 0.70
+	draw_arc(Vector2.ZERO, radius, 0.0, TAU, 40, Color(CONFIG.arc_spitter_spark_color, 0.35), 2.0, true)
+	# One full turn about every three seconds. Time.get_ticks_msec() is milliseconds.
+	var turn: float = float(Time.get_ticks_msec()) / 1000.0 * 2.0
+	for i: int in 3:
+		# TAU / 3 apart: the three sparks sit evenly round the circle.
+		var angle: float = turn + TAU * float(i) / 3.0
+		draw_circle(Vector2.from_angle(angle) * radius, 5.0, CONFIG.arc_spitter_spark_color)
+
+
 ## Called by the arena: which node to shoot at ("call down").
 func aim_at(target: Node2D) -> void:
 	_target = target
@@ -84,7 +110,7 @@ func _physics_process(delta: float) -> void:
 	if not can_shoot:
 		if _repath_due(delta, CONFIG.spitter_repath_interval):
 			_path_to(_grid.world_to_cell(_target.global_position))
-		_walk_towards(_next_goal(_target.global_position), CONFIG.spitter_speed)
+		_walk_towards(_next_goal(_target.global_position), _speed())
 		return
 
 	# 3. Clear shot and ready: start the warning glow.
@@ -97,7 +123,7 @@ func _physics_process(delta: float) -> void:
 
 	# 4. Player too close: step straight back, still facing the player.
 	if distance < CONFIG.spitter_min_range_cells * CONFIG.cell_size:
-		velocity = -to_target.normalized() * CONFIG.spitter_speed * speed_scale
+		velocity = -to_target.normalized() * _speed() * speed_scale
 		move_and_slide()  # slides along walls and trees if it backs into one
 		_face(to_target)
 		return
