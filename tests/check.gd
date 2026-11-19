@@ -1697,8 +1697,10 @@ func _test_upgrades() -> void:
 	_check(standing.hp == tree_hp_before + CONFIG.upgrade_tree_hp, "Hardwood: trees already standing get more hit points")
 	var planted: ForestTree = _arena.spawn_tree(Vector2i(4, 12), true)
 	_check(planted.max_hp() == CONFIG.tree_hp + _arena.tree_hp_bonus, "and so do new trees")
+	# (Measure the change: the random first pick above may already have been Long Trellis.)
+	var trellis_before: float = _arena.great_powers.trellis_bonus_seconds
 	_arena.apply_upgrade(&"long_trellis")
-	_check(_arena.great_powers.trellis_bonus_seconds == CONFIG.upgrade_trellis_seconds, "Long Trellis: trellis vines last longer")
+	_check(is_equal_approx(_arena.great_powers.trellis_bonus_seconds - trellis_before, CONFIG.upgrade_trellis_seconds), "Long Trellis: trellis vines last longer")
 	_arena.apply_upgrade(&"quick_roots")
 	_check(_arena.sapling_time_scale < 1.0, "Quick Roots: saplings root faster")
 	for id: StringName in UpgradePicker.CATALOG.keys():
