@@ -1,0 +1,84 @@
+{
+  "format": "klad/8",
+  "canvas": {
+    "width": 64,
+    "height": 64
+  },
+  "timeline": {
+    "fps": 12,
+    "frames": 1
+  },
+  "palette": [
+    {
+      "color": "#1b1f1d",
+      "name": "outline",
+      "id": "p3"
+    },
+    {
+      "color": "#2f8f8a",
+      "name": "teal"
+    },
+    {
+      "color": "#efe6c8",
+      "name": "cream",
+      "id": "p4"
+    },
+    {
+      "color": "#2f6b3a",
+      "name": "leaf-dark",
+      "id": "p7"
+    },
+    {
+      "color": "#7fc45a",
+      "name": "leaf-light",
+      "id": "p8"
+    },
+    {
+      "color": "#e8b93a",
+      "name": "gold"
+    },
+    {
+      "color": "#6b3a24",
+      "name": "rust-dark"
+    },
+    {
+      "color": "#a65a2e",
+      "name": "rust-mid"
+    },
+    {
+      "color": "#d08a4a",
+      "name": "rust-light"
+    },
+    {
+      "color": "#4a5257",
+      "name": "steel-dark",
+      "id": "p6"
+    },
+    {
+      "color": "#9aa5a8",
+      "name": "steel-light",
+      "id": "p5"
+    },
+    {
+      "color": "#e0412f",
+      "name": "enemy-red"
+    }
+  ],
+  "layers": [
+    {
+      "id": "l1",
+      "name": "pixel 1",
+      "kind": "paint",
+      "cels": [
+        {
+          "id": "c2",
+          "frame": 0
+        }
+      ],
+      "pixel": true,
+      "opacity": 1.0,
+      "blend": "normal",
+      "visible": true
+    }
+  ]
+}

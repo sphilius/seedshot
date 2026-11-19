@@ -29,7 +29,15 @@ const CATALOG: Dictionary[StringName, Array] = {
 	&"long_trellis": ["Long Trellis", "Trellis vines last %d s longer."],
 }
 
-const CARD_SIZE: Vector2 = Vector2(330.0, 104.0)
+## (Wider and taller since s18, to make room for the picture on the left.)
+const CARD_SIZE: Vector2 = Vector2(372.0, 120.0)
+## Where each card's picture lives: one 64 px PNG per upgrade id, drawn by Klad
+## (art/source/klad/upgrades/make_upgrade_icons.py). %s is the upgrade's id.
+const ICON_PATH: String = "res://art/sprites/upgrades/%s.png"
+## The picture is drawn this big on the card, in screen pixels, with this much
+## space around it.
+const ICON_SIZE: float = 88.0
+const ICON_MARGIN: float = 16.0
 const CARD_GAP: float = 24.0
 ## Top edge of the row of cards, in screen pixels (under the wave-cleared banner).
 const CARDS_TOP: float = 400.0
@@ -42,6 +50,9 @@ const TEXT_COLOR: Color = Color(0.92, 0.94, 0.96)
 var offered: Array[StringName] = []
 
 var _rng := RandomNumberGenerator.new()
+## Upgrade id -> its picture. An upgrade with no picture file is simply left out
+## and its card shows text only.
+var _icons: Dictionary[StringName, Texture2D] = {}
 
 
 ## _ready runs once: hidden until offer() is called.
@@ -50,6 +61,17 @@ func _ready() -> void:
 	# IGNORE: clicks pass through to the game except where _gui_input says otherwise.
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	visible = false
+	# NEAREST keeps pixel art crisp when it is drawn bigger than its 64 px.
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	for id: StringName in CATALOG.keys():
+		var icon_file: String = ICON_PATH % id
+		if ResourceLoader.exists(icon_file):
+			_icons[id] = load(icon_file)
+
+
+## True if upgrade `id` has a picture to show. Public for the tests.
+func has_icon(id: StringName) -> bool:
+	return _icons.has(id)
 
 
 ## Deals `count` different upgrades at random and shows them. Ids in `left_out`
@@ -166,5 +188,13 @@ func _draw() -> void:
 		draw_rect(rect, EDGE_COLOR, false, 2.0)  # false = outline only
 		var id: StringName = offered[i]
 		var title: String = "%d   %s" % [i + 1, CATALOG[id][0]]
-		draw_string(font, rect.position + Vector2(16.0, 36.0), title, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 24, TITLE_COLOR)
-		draw_multiline_string(font, rect.position + Vector2(16.0, 68.0), _describe(id), HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 32.0, 18, 2, TEXT_COLOR)
+		# The picture on the left (if this upgrade has one); the words start to
+		# its right, or at the card's edge when there is no picture.
+		var text_left: float = ICON_MARGIN
+		if _icons.has(id):
+			var icon_rect := Rect2(rect.position + Vector2(ICON_MARGIN, (rect.size.y - ICON_SIZE) / 2.0), Vector2.ONE * ICON_SIZE)
+			draw_texture_rect(_icons[id], icon_rect, false)  # false = stretch, do not tile
+			text_left = ICON_MARGIN + ICON_SIZE + 14.0
+		var text_width: float = rect.size.x - text_left - ICON_MARGIN
+		draw_string(font, rect.position + Vector2(text_left, 38.0), title, HORIZONTAL_ALIGNMENT_LEFT, text_width, 24, TITLE_COLOR)
+		draw_multiline_string(font, rect.position + Vector2(text_left, 66.0), _describe(id), HORIZONTAL_ALIGNMENT_LEFT, text_width, 17, 3, TEXT_COLOR)

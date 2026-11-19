@@ -26,7 +26,7 @@ const ROW_COUNT: int = 2
 const FONT_SIZE: int = 17
 ## Where each row's text sits, measured down from the top of the bottom wall to
 ## the text's baseline (the line the letters stand on), in pixels.
-const ROW_BASELINES: Array[float] = [19.0, 40.0]
+const ROW_BASELINES: Array[float] = [17.0, 35.0]
 ## Spray-can colours, used in turn: teal, amber, pink, pale green.
 const PAINT_COLORS: Array[Color] = [
 	Color(0.35, 0.90, 0.85), Color(1.00, 0.75, 0.25), Color(1.00, 0.45, 0.65), Color(0.70, 0.95, 0.45),
