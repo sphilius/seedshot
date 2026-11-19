@@ -70,6 +70,9 @@ static var light_boost: float = 1.0
 ## How strongly every Heart Tree marker (ring and label) is drawn, 0 to 1. The
 ## arena fades it out after the first wave. Shared, like light_boost.
 static var heart_marker_fade: float = 1.0
+## True while a Sunburst is ready: every great sunroot then wears a gold ring.
+## Shared by all trees and set by the arena each frame, like light_boost.
+static var sunburst_ready: bool = false
 
 ## Seconds this tree has spent as a sapling (fills the growth ring).
 var _sapling_age: float = 0.0
@@ -151,7 +154,7 @@ func take_damage(amount: int) -> void:
 ## sapling's growth ring, a pop, the Heart Tree's pulse, the vine hint). A plain
 ## grown tree does nothing here.
 func _process(delta: float) -> void:
-	var moving: bool = show_vine_hint or is_heart or stage == Stage.SAPLING or _pop_left > 0.0
+	var moving: bool = show_vine_hint or is_heart or is_great or stage == Stage.SAPLING or _pop_left > 0.0
 	if stage == Stage.SAPLING:
 		_sapling_age += delta
 	_pop_left = maxf(_pop_left - delta, 0.0)
@@ -239,6 +242,16 @@ func _draw_overlay() -> void:
 		var at := Vector2(-width / 2.0, -cell_px * 1.0)
 		_overlay.draw_string_outline(font, at, text, HORIZONTAL_ALIGNMENT_CENTER, width, CONFIG.heart_label_font_size, 5, Color(0.0, 0.0, 0.0, 0.9 * heart_marker_strength()))
 		_overlay.draw_string(font, at, text, HORIZONTAL_ALIGNMENT_CENTER, width, CONFIG.heart_label_font_size, color)
+	if is_great and sunburst_ready:
+		# SUNBURST READY: a gold ring that breathes, with eight short rays like a
+		# small sun, so the player can see which trees to zip to.
+		var gold: Color = _lit(CONFIG.sunburst_ready_color)
+		var swell: float = sin(Time.get_ticks_msec() / 1000.0 * 4.0) * 0.03
+		var ring: float = cell_px * (0.66 + swell)
+		_overlay.draw_arc(Vector2.ZERO, ring, 0.0, TAU, 40, gold, 2.5, true)
+		for i: int in 8:
+			var ray: Vector2 = Vector2.from_angle(TAU * float(i) / 8.0)
+			_overlay.draw_line(ray * (ring + 3.0), ray * (ring + 9.0), gold, 2.5)
 	if hp < max_hp():
 		# The health bar: a dark back, and a fill that shortens and reddens.
 		var share: float = clampf(float(hp) / float(max_hp()), 0.0, 1.0)

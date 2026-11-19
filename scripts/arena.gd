@@ -311,6 +311,11 @@ func _process(delta: float) -> void:
 		_wave_label.text = "Wave %d / %d    Homes lit %d / %d    Trees %d    Brambles %d / %d" % [
 			waves.wave, waves.total_waves(), windows.homes_lit(), windows.home_count(), count_grown_trees(),
 			player.bramble_charges, CONFIG.bramble_max_charges]
+		# Sunburst charges, once there is a great sunroot to use them on.
+		if count_great_trees() > 0:
+			_wave_label.text += "    Sunburst %d / %d" % [great_powers.sunburst_charges, CONFIG.sunburst_charges_per_wave]
+	# Great sunroots wear a gold ring while a Sunburst is ready.
+	ForestTree.sunburst_ready = great_powers.is_sunburst_ready()
 	# Glide the lot's tint toward what the current light calls for.
 	var wanted_tint: Color = ambient_tint_for(light_level())
 	if cat_shop != null:
@@ -533,6 +538,15 @@ func spawn_spit_shot(origin: Vector2, direction: Vector2) -> SpitShot:
 
 
 ## How many grown trees are standing right now (the "bloom" count on the HUD).
+## How many great sunroots are standing.
+func count_great_trees() -> int:
+	var count: int = 0
+	for tree: ForestTree in _trees_by_cell.values():
+		if is_instance_valid(tree) and tree.is_great and tree.stage == ForestTree.Stage.GROWN:
+			count += 1
+	return count
+
+
 func count_grown_trees() -> int:
 	var count: int = 0
 	for tree: ForestTree in _trees_by_cell.values():
@@ -864,6 +878,7 @@ func _on_wave_started(number: int, total: int) -> void:
 	# On the radio: Canopy FM's opening line (once only), then Helios's notice,
 	# then whatever Canopy FM has to say about this wave (tips, cat hints).
 	_drop_waiting_helios_lines()  # a notice for an earlier wave is stale now
+	great_powers.sunburst_charges = CONFIG.sunburst_charges_per_wave  # a fresh wave refills them
 	var lines: Array[Dictionary] = []
 	if not _hook_shown:
 		_hook_shown = true
@@ -877,6 +892,11 @@ func _on_wave_started(number: int, total: int) -> void:
 	if number == 1 and is_instance_valid(heart_tree):
 		lines.append(_radio_line(Radio.CANOPY, CONFIG.heart_intro_line))
 	lines.append_array(_dj(dj_lines_for_wave(number)))
+	# The first wave that starts with a great sunroot standing: explain Sunburst.
+	# (Not _dj_once: this is said even when the New Game + tutorial was skipped.)
+	if count_great_trees() > 0 and not _dj_said.has(&"sunburst"):
+		_dj_said[&"sunburst"] = true
+		lines.append(_radio_line(Radio.CANOPY, CONFIG.sunburst_intro_line % CONFIG.sunburst_charges_per_wave))
 	_show_story_lines(lines)
 
 
@@ -1091,7 +1111,7 @@ func _on_player_zip_finished() -> void:
 	# A zip that ends at a great sunroot sets off its Sunburst.
 	if is_instance_valid(tree) and tree.is_great and tree.stage == ForestTree.Stage.GROWN:
 		if great_powers.sunburst(tree.global_position) > 0:
-			_show_banner("Sunburst!", 1.0)
+			_show_banner("Sunburst!  %d left this wave" % great_powers.sunburst_charges, 1.2)
 
 
 ## _unhandled_input receives input that nothing else used. After the last wave,

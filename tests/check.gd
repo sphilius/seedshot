@@ -117,6 +117,7 @@ func _ready() -> void:
 	await _test_banner_radio_and_wave_beat()
 	await _test_pause_menu()
 	await _test_back_wall_and_roof_graffiti()
+	await _test_harder_waves_aim_line_sunburst()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -2279,3 +2280,53 @@ func _test_back_wall_and_roof_graffiti() -> void:
 			all_fit = false
 	_check(all_fit, "every graffiti line fits its slot on the roofs of the bottom wall")
 	_check(graffiti.get_index() > _arena.windows.get_index(), "and is painted over the roofs, not under them")
+
+## s18 groups 6, 8 and 9: more machines per wave, a visible aim line, and
+## Sunburst on visible charges instead of a hidden cooldown.
+func _test_harder_waves_aim_line_sunburst() -> void:
+	# Group 6: about a third more machines over a run; the tutorial wave untouched.
+	var total: int = 0
+	for list: Array[int] in [CONFIG.wave_scrappers, CONFIG.wave_spitters, CONFIG.wave_sawbots]:
+		for count: int in list:
+			total += count
+	_check(total >= 110 and total <= 116, "a run sends about a third more machines than the old 85 (%d)" % total)
+	_check(CONFIG.wave_scrappers[0] == 1 and CONFIG.wave_spitters[0] == 1 and CONFIG.wave_sawbots[0] == 0, "the tutorial wave is unchanged")
+
+	# Group 8: the aim line runs along the aim and stops at the first tree.
+	await _fresh_arena()
+	var player: Player = _arena.player
+	var here := Vector2i(6, 11)
+	player.global_position = _arena.grid.cell_to_world(here)
+	player.touch_mode = true  # so the (absent) mouse does not overwrite the aim
+	player.aim_direction = Vector2.RIGHT
+	await _wait_frames(4)
+	var open_reach: float = player.aim_line_end.x - player.global_position.x
+	_check(open_reach > CONFIG.cell_size * 3.0 and is_equal_approx(player.aim_line_end.y, player.global_position.y), "the aim line runs out along the aim")
+	_arena.spawn_tree(here + Vector2i(3, 0), true)
+	await _wait_frames(4)
+	var blocked_reach: float = player.aim_line_end.x - player.global_position.x
+	_check(blocked_reach < open_reach and blocked_reach <= CONFIG.cell_size * 3.0, "and stops at the first tree in the way")
+	player.aim_direction = Vector2(0.6, 0.8)  # down and to the right
+	await _wait_frames(3)
+	_check(player._sprite.rotation > 0.05, "Seven leans toward the aim")
+	_check(player.is_aim_shown(), "the aim line shows while Seven can act")
+	player.locked = true
+	_check(not player.is_aim_shown(), "and hides while the upgrade cards lock Seven")
+	player.locked = false
+
+	# Group 9: Sunburst runs on charges that the player can see.
+	var powers: GreatPowers = _arena.great_powers
+	var great: ForestTree = _arena.tree_at(here + Vector2i(3, 0))
+	great.mature()
+	await _wait_frames(3)
+	_check(powers.sunburst_charges == CONFIG.sunburst_charges_per_wave and ForestTree.sunburst_ready, "a wave starts with %d Sunbursts, and great sunroots show the gold ring" % CONFIG.sunburst_charges_per_wave)
+	for i: int in CONFIG.sunburst_charges_per_wave:
+		powers.sunburst_cooldown_left = 0.0
+		powers.sunburst(great.global_position)
+	powers.sunburst_cooldown_left = 0.0
+	_check(powers.sunburst_charges == 0 and not powers.is_sunburst_ready(), "using them all leaves none, whatever the cooldown says")
+	await _wait_frames(3)
+	_check(not ForestTree.sunburst_ready, "and the gold rings go out")
+	_arena.waves.start_wave(3)
+	_check(powers.sunburst_charges == CONFIG.sunburst_charges_per_wave, "the next wave refills them")
+	_check(_arena._is_radio_pending(CONFIG.sunburst_intro_line % CONFIG.sunburst_charges_per_wave), "and Canopy FM explains Sunburst the first time a great sunroot is standing")

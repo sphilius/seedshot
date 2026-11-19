@@ -44,3 +44,5 @@ One line per asset or system: tool, date, what it did. This feeds the itch page'
 - Knock-out and fuse-revive animations (s18): tweened in code by Claude Code (scripts/player.gd), no new art.
 - Group 7 (s18): banner wrap, radio queue and wave end slow-down in code by Claude Code; new Helios lines for waves 8 and 9 written by Claude Code.
 - Pause menu (s18): buttons, run stats and controls list drawn in code by Claude Code (scripts/pause_overlay.gd).
+- Back wall fronts and roof graffiti (s18): drawn in code by Claude Code (scripts/back_wall.gd, graffiti.gd), no new art.
+- Aim line, Sunburst charges and wave counts (s18): code and numbers by Claude Code to Sasha's work order.
