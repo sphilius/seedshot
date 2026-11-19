@@ -306,8 +306,55 @@ extends Resource
 ## The end screen: the big headline, and Helios's last word under it.
 @export var end_headline: String = "PASS IT ON"
 @export var helios_end_line: String = "Account closed."
-## Seconds each small story line stays on screen under the banner.
-@export var story_line_seconds: float = 4.5
+## Seconds each radio line stays on the air once it has finished typing.
+@export var story_line_seconds: float = 3.0
+
+@export_group("Radio")
+## THE RADIO PANEL (radio.gd): Helios's broadcasts and Canopy FM's DJ.
+## How fast words "type" onto the panel, in letters per second.
+@export var radio_chars_per_second: float = 40.0
+## Chance (0 to 1) that a letter of Helios's broadcast flickers into static.
+@export var radio_helios_static: float = 0.03
+## Canopy FM's DJ, wave 1 (keyboard and mouse): the tutorial. Feeble signal.
+@export var dj_intro: Array[String] = [
+	"...is this on? Meter-bot. Seven. If you can hear me, move. WASD.",
+	"Point the mouse at a Helios machine. Hold left click. Plant a seed in it.",
+]
+## The same tutorial for touch screens.
+@export var dj_intro_touch: Array[String] = [
+	"...is this on? Meter-bot. Seven. If you can hear me, move. Left thumb.",
+	"Right thumb aims and fires. Plant a seed in that Helios machine.",
+]
+## Canopy FM, the first time a machine goes down (keyboard and mouse).
+@export var dj_first_tree: Array[String] = [
+	"Ha! It rooted. That's a tree now. Spitter shots stop dead on bark: get behind it.",
+	"And kid? Right-click any tree. The vine zips you straight to it.",
+]
+## The same, for touch screens.
+@export var dj_first_tree_touch: Array[String] = [
+	"Ha! It rooted. That's a tree now. Spitter shots stop dead on bark: get behind it.",
+	"And kid? Tap any tree. The vine zips you straight to it.",
+]
+## Canopy FM, the first time a Sawbot is sent in.
+@export var dj_first_sawbot: Array[String] = [
+	"Sawbot on the lot! It doesn't want you. It wants the trees. Drop it first.",
+]
+## Canopy FM, wave 1 of New Game +: what great sunroots do.
+@export var dj_ng_plus_intro: Array[String] = [
+	"Back again? Trees that stand a whole wave grow GREAT now.",
+	"Two great ones in sight of each other string a Canopy line. Machines get tangled.",
+	"Zip to a great one and it bursts with light. Use it when they crowd you.",
+]
+## The waves on which Canopy FM drops a hint about the lucky cat (only while
+## the shop is still shut), and the hints, in the same order.
+@export var dj_cat_hint_waves: Array[int] = [2, 4, 6, 8]
+@export var dj_cat_hints: Array[String] = [
+	"Shout-out to Mrs. Maneki. Her shop on the north wall's been shuttered since Helios came. Her cat never left.",
+	"Funny thing about shutters. They don't blink.",
+	"Lucky cats like a polite knock. Three seeds, if you're asking.",
+	"Still dark up by the north wall. Somebody should knock.",
+]
+
 
 @export_group("Night and windows")
 ## The homes along the bottom wall: one entry per home, saying how many windows

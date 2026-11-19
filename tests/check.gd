@@ -1089,8 +1089,8 @@ func _test_story_words() -> void:
 	_check(CONFIG.graffiti_lines.size() == total, "there is one graffiti line per wave (%d)" % total)
 
 	await _fresh_arena()
-	var story := _arena.get_node("Hud/StoryLine") as Label
-	_check(not story.visible, "no story line shows before a wave starts")
+	var radio: Radio = _arena.radio
+	_check(not radio.is_on(), "the radio is quiet before a wave starts")
 	_check(_arena.graffiti.revealed_count == 0, "the walls start clean")
 	_check(_arena.helios_line_for(1).contains(CONFIG.helios_lines[0]), "wave 1 has Helios's first line")
 	_check(_arena.helios_line_for(99) == "", "a wave with no line gets none")
@@ -1098,10 +1098,12 @@ func _test_story_words() -> void:
 	# Start wave 2 directly. The very first wave start of a run shows the hook.
 	_arena.waves.time_scale = 20.0
 	_arena.waves.start_wave(2)
-	_check(story.visible and story.text == CONFIG.story_hook, "the first wave start shows the opening line")
+	_check(radio.speaker == Radio.CANOPY and radio.text == CONFIG.story_hook, "the first wave start: Canopy FM says the opening line")
 	# Let the opening line run out; Helios's notice follows it.
-	var helios_showing: Callable = func() -> bool: return story.text == _arena.helios_line_for(2)
-	_check(await _wait_until(helios_showing, CONFIG.story_line_seconds + 1.0), "then Helios's line for that wave")
+	var helios_showing: Callable = func() -> bool: return radio.text == _arena.helios_line_for(2)
+	var hook_seconds: float = CONFIG.story_line_seconds + CONFIG.story_hook.length() / CONFIG.radio_chars_per_second
+	_check(await _wait_until(helios_showing, hook_seconds + 1.0), "then Helios's line for that wave")
+	_check(radio.speaker == Radio.HELIOS, "spoken by Helios")
 
 	# Clear the wave: one painted line per wave cleared so far, and Helios goes quiet.
 	var all_sent: Callable = func() -> bool: return _arena.waves.state == WaveDirector.State.FIGHTING
@@ -1110,13 +1112,27 @@ func _test_story_words() -> void:
 		(node as Enemy).take_damage(99)
 	_check(_arena.graffiti.revealed_count == 2, "clearing wave 2 puts two lines on the walls")
 	_check(_arena.graffiti.line_text(1) == CONFIG.graffiti_lines[1], "the second is wave 2's line")
-	_check(not story.visible, "Helios's line is cleared with the wave")
+	_check(not radio.is_on(), "Helios's line is cleared with the wave")
 
 	# Painted lines never come off, and the opening line never repeats.
 	_arena.graffiti.reveal_up_to(1)
 	_check(_arena.graffiti.revealed_count == 2, "revealing an earlier wave removes nothing")
 	_arena.waves.start_wave(1)
-	_check(story.text == _arena.helios_line_for(1), "a later wave start skips the opening line")
+	_check(radio.text == _arena.helios_line_for(1), "a later wave start skips the opening line")
+
+	# Canopy FM teaches: wave 1's tutorial follows Helios; the cat hints come on
+	# their waves only while the shop is shut.
+	var wave_1_dj: Array[String] = _arena.dj_lines_for_wave(1)
+	_check(not wave_1_dj.is_empty() and wave_1_dj[0] == CONFIG.dj_intro[0], "on wave 1 Canopy FM explains the controls")
+	var hint_wave: int = CONFIG.dj_cat_hint_waves[0]
+	_check(_arena.dj_lines_for_wave(hint_wave).has(CONFIG.dj_cat_hints[0]), "on wave %d Canopy FM hints at the cat" % hint_wave)
+	for i: int in CONFIG.cat_hits_needed:
+		_arena.cat_shop.hit_by_seed()
+	_check(_arena.dj_lines_for_wave(hint_wave).is_empty(), "no cat hints once Lucky is found")
+	_arena._dj_once(&"sawbot", CONFIG.dj_first_sawbot)
+	var queued: int = _arena._story_queue.size()
+	_arena._dj_once(&"sawbot", CONFIG.dj_first_sawbot)
+	_check(_arena._story_queue.size() == queued, "each Canopy FM tip plays once per run")
 
 
 ## Story step 2: homes with several windows, lit by waves cleared and shining
@@ -1235,8 +1251,7 @@ func _test_clearing_the_last_wave_ends_the_run() -> void:
 	_check(banner.text.contains("Trees standing: %d" % _arena.count_grown_trees()), "it counts the trees left standing")
 	_check(_arena.windows.lit_count == _arena.windows.window_count(), "every window of the block is lit")
 	_check(is_equal_approx(_arena.windows.strength, 1.0), "at full strength")
-	var last_word := _arena.get_node("Hud/StoryLine") as Label
-	_check(last_word.visible and last_word.text.contains(CONFIG.helios_end_line), "Helios's last line stays under it")
+	_check(_arena.radio.speaker == Radio.HELIOS and _arena.radio.text == CONFIG.helios_end_line, "Helios's last line stays on the radio")
 	_check(_arena.graffiti.revealed_count == CONFIG.graffiti_lines.size(), "every graffiti line is on the walls")
 	_check(_arena.windows.next_block_lit, "and the next block's windows start coming on")
 	_check(_arena.count_grown_trees() > Arena.TEST_TREE_CELLS.size(), "and the forest is left standing (%d trees)" % _arena.count_grown_trees())

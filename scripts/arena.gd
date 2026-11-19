@@ -73,7 +73,11 @@ var tap_points: Array[Vector2i] = []
 ## Seconds the banner stays up. 0 or less means "until replaced".
 var _banner_time_left: float = 0.0
 ## Small story lines still waiting to be shown under the banner, in order.
-var _story_queue: Array[String] = []
+## Lines waiting for the radio, oldest first: each is {speaker = Radio.HELIOS /
+## CANOPY / LUCKY, text = the words}.
+var _story_queue: Array[Dictionary] = []
+## Canopy FM tutorial moments already played this run (so each plays once).
+var _dj_said: Dictionary[StringName, bool] = {}
 ## Seconds the story line on screen has left. 0 or less means "until replaced".
 var _story_time_left: float = 0.0
 ## True once the opening line has been shown, so a restarted wave 1 skips it.
@@ -123,7 +127,9 @@ var is_run_finished: bool = false
 @onready var _wave_label: Label = $Hud/WaveLabel
 @onready var _banner: Label = $Hud/Banner
 ## The smaller line under the banner: Helios's notices and the opening line.
-@onready var _story_line: Label = $Hud/StoryLine
+## The radio panel (see radio.gd): Helios, Canopy FM and Lucky speak here.
+## Public so the tests can read who is on the air.
+var radio: Radio
 ## The controls line along the bottom wall.
 @onready var _hint: Label = $Hud/Hint
 ## The wave timetable. Public (no underscore) so tests can start a wave directly.
@@ -198,7 +204,8 @@ func _ready() -> void:
 	waves.wave_cleared.connect(_on_wave_cleared)
 	waves.all_waves_cleared.connect(_on_all_waves_cleared)
 	_banner.visible = false
-	_story_line.visible = false
+	radio = Radio.new()
+	$Hud.add_child(radio)
 	_wave_label.text = ""
 	if RunState.ng_plus:
 		apply_ng_plus()
@@ -221,6 +228,7 @@ func _process(delta: float) -> void:
 	var boost: float = light_boost_for(light_level())
 	# Canopy FM opens up as the block lights (see canopy_fm.gd).
 	CanopyFM.set_light(light_level())
+	radio.signal_strength = light_level()  # Canopy FM's signal grows with the light
 	windows.light_boost = boost
 	lanterns.light_boost = boost
 	great_powers.light_boost = boost
@@ -554,22 +562,59 @@ func _update_light() -> void:
 	lanterns.set_strings(Lanterns.strings_after(waves_cleared))
 
 
-## Queues small lines to show one after another under the banner, replacing
-## whatever was there. Each stays for `story_line_seconds`.
-func _show_story_lines(lines: Array[String]) -> void:
+## Queues radio lines to play one after another, replacing whatever was on the
+## air. Each line is {speaker, text}; see _radio_line.
+func _show_story_lines(lines: Array[Dictionary]) -> void:
 	_story_queue = lines.duplicate()
 	_show_next_story_line()
 
 
-## Shows the next queued story line, or hides the label when none are left.
+## Adds lines to the END of the radio queue, without cutting off what is playing.
+## Used for Canopy FM's tips, which react to things happening in the fight.
+func _radio_later(lines: Array[Dictionary]) -> void:
+	_story_queue.append_array(lines)
+	if not radio.is_on():
+		_show_next_story_line()
+
+
+## One radio line, as the queue wants it.
+static func _radio_line(speaker: StringName, text: String) -> Dictionary:
+	return {speaker = speaker, text = text}
+
+
+## Canopy FM lines from the config, as radio lines.
+static func _dj(texts: Array[String]) -> Array[Dictionary]:
+	var lines: Array[Dictionary] = []
+	for text: String in texts:
+		lines.append(_radio_line(Radio.CANOPY, text))
+	return lines
+
+
+## Plays a Canopy FM tutorial moment once per run (and never in New Game +,
+## where the player already knows the controls).
+func _dj_once(moment: StringName, texts: Array[String]) -> void:
+	if ng_plus or _dj_said.has(moment):
+		return
+	_dj_said[moment] = true
+	_radio_later(_dj(texts))
+
+
+## True when the player is on a touch screen (phone or tablet), so the tips name
+## thumbs and taps instead of keys and clicks.
+static func _is_touch() -> bool:
+	return DisplayServer.is_touchscreen_available()
+
+
+## Puts the next queued line on the radio, or takes the radio off the air when
+## none are left. A line stays up for story_line_seconds after it finishes typing.
 func _show_next_story_line() -> void:
 	if _story_queue.is_empty():
-		_story_line.visible = false
+		radio.clear()
 		_story_time_left = 0.0
 		return
-	_story_line.text = _story_queue.pop_front()  # pop_front removes and returns the first entry
-	_story_line.visible = true
-	_story_time_left = CONFIG.story_line_seconds
+	var line: Dictionary = _story_queue.pop_front()  # pop_front removes and returns the first entry
+	radio.say(line.speaker, line.text)
+	_story_time_left = CONFIG.story_line_seconds + float(line.text.length()) / CONFIG.radio_chars_per_second
 
 
 ## What Helios says as wave `number` starts, ready to show. Empty if the config
@@ -577,7 +622,24 @@ func _show_next_story_line() -> void:
 func helios_line_for(number: int) -> String:
 	if number < 1 or number > CONFIG.helios_lines.size():
 		return ""
-	return "Helios: \"%s\"" % CONFIG.helios_lines[number - 1]
+	return CONFIG.helios_lines[number - 1]
+
+
+## What Canopy FM says after Helios as wave `number` starts:
+##   wave 1          how to move and shoot (or, in New Game +, what great
+##                   sunroots can do);
+##   cat-hint waves  a hint about the lucky cat, only while the shop is shut.
+func dj_lines_for_wave(number: int) -> Array[String]:
+	var lines: Array[String] = []
+	if number == 1:
+		if ng_plus:
+			lines.append_array(CONFIG.dj_ng_plus_intro)
+		else:
+			lines.append_array(CONFIG.dj_intro_touch if _is_touch() else CONFIG.dj_intro)
+	var hint: int = CONFIG.dj_cat_hint_waves.find(number)
+	if hint >= 0 and hint < CONFIG.dj_cat_hints.size() and cat_shop != null and not cat_shop.is_open:
+		lines.append(CONFIG.dj_cat_hints[hint])
+	return lines
 
 
 ## Signal handler: a wave began. Remember the forest, update the HUD.
@@ -595,14 +657,15 @@ func _on_wave_started(number: int, total: int) -> void:
 	_show_banner("Wave %d" % number, 1.5)
 	# By now the controls are learned; the bottom wall belongs to the windows.
 	_hint.visible = number < CONFIG.hint_hide_wave
-	# Still haven't found the cat by now? The Block paints a hint on the floor.
-	# Under the banner: the opening line (once only), then Helios's notice.
-	var lines: Array[String] = []
+	# On the radio: Canopy FM's opening line (once only), then Helios's notice,
+	# then whatever Canopy FM has to say about this wave (tips, cat hints).
+	var lines: Array[Dictionary] = []
 	if not _hook_shown:
 		_hook_shown = true
-		lines.append(CONFIG.story_hook)
+		lines.append(_radio_line(Radio.CANOPY, CONFIG.story_hook))
 	if helios_line_for(number) != "":
-		lines.append(helios_line_for(number))
+		lines.append(_radio_line(Radio.HELIOS, helios_line_for(number)))
+	lines.append_array(_dj(dj_lines_for_wave(number)))
 	_show_story_lines(lines)
 
 
@@ -619,6 +682,7 @@ func _on_spawn_requested(kind: StringName, wave_number: int) -> void:
 		return
 	if kind == WaveDirector.SAWBOT:
 		spawn_sawbot_at(cell)
+		_dj_once(&"sawbot", CONFIG.dj_first_sawbot)
 	elif kind == WaveDirector.SPITTER:
 		spawn_spitter_at(cell)
 	else:
@@ -668,8 +732,7 @@ func _on_all_waves_cleared() -> void:
 	windows.light_next_block()  # the light jumps the wall
 	# Helios gets the last word, and it stays up with the banner.
 	_story_queue.clear()
-	_story_line.text = "Helios: \"%s\"" % CONFIG.helios_end_line
-	_story_line.visible = true
+	radio.say(Radio.HELIOS, CONFIG.helios_end_line)
 	_story_time_left = 0.0
 
 
@@ -702,8 +765,8 @@ func is_near_lucky() -> bool:
 
 
 ## How a line of Lucky's is shown under the banner.
-func _lucky_says(line: String) -> String:
-	return "Lucky: \"%s\"" % line
+func _lucky_says(line: String) -> Dictionary:
+	return _radio_line(Radio.LUCKY, line)
 
 
 ## Signal handler: the spare fuse saved Seven from going down.
@@ -783,6 +846,8 @@ func _on_enemy_died(enemy: Enemy) -> void:
 		# that moment. call_deferred queues the call for the end of the frame.
 		spawn_tree.call_deferred(cell, false)
 		_last_planted_cell = cell
+		# The first machine to go down: Canopy FM explains cover and the vine.
+		_dj_once(&"first_tree", CONFIG.dj_first_tree_touch if _is_touch() else CONFIG.dj_first_tree)
 	waves.enemy_gone()  # the wave director keeps count of who is still standing
 
 
