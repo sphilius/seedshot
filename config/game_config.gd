@@ -466,9 +466,16 @@ extends Resource
 @export var dj_first_arc_spitter: Array[String] = [
 	"Arc Spitter. Fires a fan of three. One tree won't cover you from all of it: find a thicket.",
 ]
+## NEW GAME + OPENING (s18). Before wave 1, Canopy FM wakes Seven up and asks
+## whether a reminder is wanted (see tutorial_offer.gd). The wave waits for the
+## answer; with no answer after ng_plus_refresher_seconds it skips the tutorial.
+@export var ng_plus_wakeup_line: String = "You're finally back up! Not sure what happened, but we need your help again. Do you remember what to do?"
+@export var ng_plus_refresher_seconds: float = 12.0
+## Said as New Game + wave 1 starts, whatever the answer was.
+@export var ng_plus_threat_line: String = "Heads up: Helios has sent tougher, faster drones after you this time."
 ## Canopy FM, wave 1 of New Game +: what great sunroots do.
 @export var dj_ng_plus_intro: Array[String] = [
-	"Back again? Trees that stand a whole wave grow GREAT now.",
+	"Trees that stand a whole wave grow GREAT now.",
 	"Two great ones in sight of each other string a Canopy line. Machines get tangled.",
 	"Zip to a great one and it bursts with light. Use it when they crowd you.",
 ]

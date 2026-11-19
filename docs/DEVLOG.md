@@ -372,3 +372,26 @@ From the kickoff. `config/game_config.tres` holds every speed, cooldown and size
   `tree_pop_*`, `tree_growth_ring_color`).
 - **Seen by eye:** the ring and label, in the web build at 1280 x 720. **Not seen by eye:** the alarm colours, the
   health bar and the pop (covered by headless checks of their state only).
+
+## D-040 (s18): sound round 2
+
+- **Sasha's picks by ear (2026-11-19):** enemy_down, zip, player_down and cat move to take 2. windup is take 2
+  played 16% slower (about 3 semitones lower and a little longer) and set 3 dB softer; it is saved as take 3.
+- **New candidates, waiting for a pick:** thunk (hollow metallic plink), enemy_down (motor winding down), bind
+  (ratchet winding up), spit (soft "pewm" pop), saw (chainsaw), hurt (electric zap, a new direction), wave_clear
+  (louder fanfare; its loudness target went from -20 to -16 dB), unlock (take 3 a soft beep, take 4 two clicks).
+  16 ElevenLabs generations. `audio/SOUNDS.md` holds the new prompts.
+- The thunk and spit candidates came back very quiet (mean below -36 dB) and need a lot of gain; listen for hiss.
+- The listening page now plays every take evened out to its in-game loudness.
+
+## D-041 (s18): New Game + opens with a wake-up and an optional tutorial
+
+- **Sasha's request (2026-11-19).** Before wave 1 of New Game +, Canopy FM says "You're finally back up! Not sure
+  what happened, but we need your help again. Do you remember what to do?" and two buttons appear: Remind me (1) or
+  I remember: skip (2). Wave 1 waits for the answer; with none after 12 s it skips.
+- **Remind me** switches the tutorial back on for that run: the staged first wave (one machine at a time) and
+  Canopy FM's tips. **Skip** is New Game + as before.
+- Either way, as wave 1 starts Canopy FM says Helios has sent tougher, faster drones.
+- The old greeting "Back again?" was cut from the great-sunroot lines so Seven is not greeted twice.
+- New script `scripts/tutorial_offer.gd`; texts and the 12 s are in the config (`ng_plus_*`).
+- **Not seen by eye:** the buttons need a saved win to reach, so only headless checks cover them so far.

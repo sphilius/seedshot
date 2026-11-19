@@ -110,6 +110,7 @@ func _ready() -> void:
 	await _test_web_build_has_no_extra_audio_bus()
 	await _test_canopy_line_caps()
 	await _test_readable_trees()
+	await _test_ng_plus_opening()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -1934,3 +1935,53 @@ func _test_readable_trees() -> void:
 	_check(await _wait_until(settled, CONFIG.tree_pop_seconds + 1.0) and is_equal_approx(sapling.pop_scale(), 1.0), "then it settles back to normal size")
 	sapling.mature()
 	_check(sapling.is_popping(), "maturing into a great sunroot pops too")
+
+
+## s18: New Game + opens with Canopy FM waking Seven up and offering a reminder
+## of the controls, which can be skipped (and skips itself if left alone).
+func _test_ng_plus_opening() -> void:
+	# All the radio text waiting or showing, as one list, for the checks below.
+	var radio_texts: Callable = func() -> Array[String]:
+		var texts: Array[String] = [_arena.radio.text]
+		for line: Dictionary in _arena._story_queue:
+			texts.append(line.text)
+		return texts
+
+	# The question: the wake-up line is on the radio and wave 1 is waiting.
+	await _fresh_arena()
+	_arena.apply_ng_plus()
+	_arena.offer_refresher()
+	_check(_arena.tutorial_offer.is_open(), "New Game + opens with the 'do you remember?' buttons")
+	_check(_arena.radio.text == CONFIG.ng_plus_wakeup_line, "Canopy FM says the wake-up line")
+	_check(_arena.waves.wave == 0, "wave 1 waits for the answer")
+
+	# "Remind me": the tutorial is back on, with the staged first wave and the tips.
+	_arena.tutorial_offer.choose(true)
+	_check(not _arena.tutorial_offer.is_open() and _arena.waves.wave == 1, "answering starts wave 1")
+	_check(_arena.tutorial_on and _arena.waves.staged_wave_count() == CONFIG.wave_staged_waves, "'Remind me' brings back the staged tutorial wave")
+	var said: Array[String] = radio_texts.call()
+	_check(said.has(CONFIG.ng_plus_threat_line), "Canopy FM warns that Helios sent tougher, faster drones")
+	var intro: Array[String] = CONFIG.dj_intro_touch if Arena._is_touch() else CONFIG.dj_intro
+	_check(said.has(intro[0]), "and the controls are explained again")
+	_check(not said.has(CONFIG.story_hook), "the usual opening hook is not repeated on top")
+
+	# "I remember": no tutorial, but the warning is still given.
+	await _fresh_arena()
+	_arena.apply_ng_plus()
+	_arena.offer_refresher()
+	_arena.tutorial_offer.choose(false)
+	said = radio_texts.call()
+	_check(not _arena.tutorial_on and _arena.waves.staged_wave_count() == 0 and _arena.waves.wave == 1, "'I remember' skips the tutorial and starts wave 1")
+	_check(said.has(CONFIG.ng_plus_threat_line) and not said.has(intro[0]), "skipping still gives the warning, without the controls")
+
+	# Left alone, it skips by itself.
+	await _fresh_arena()
+	_arena.apply_ng_plus()
+	_arena.offer_refresher()
+	_arena.tutorial_offer.time_left = 0.05
+	var started: Callable = func() -> bool: return _arena.waves.wave == 1
+	_check(await _wait_until(started, 2.0) and not _arena.tutorial_on, "with no answer it skips the tutorial by itself")
+
+	# A normal run never shows the question.
+	await _fresh_arena()
+	_check(not _arena.tutorial_offer.is_open() and _arena.tutorial_on, "a normal run has no question and always has the tutorial")

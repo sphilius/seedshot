@@ -122,6 +122,12 @@ var _heart_alarm_left: float = 0.0
 @export var plant_heart_tree: bool = true
 ## The between-wave upgrade cards (see upgrade_picker.gd). Public for tests.
 var upgrade_picker: UpgradePicker
+## New Game +'s "do you remember what to do?" buttons (see tutorial_offer.gd).
+## Public for tests.
+var tutorial_offer: TutorialOffer
+## True while the tutorial plays: the staged first wave and Canopy FM's tips.
+## Always true in a normal run; in New Game + only if the player asks for it.
+var tutorial_on: bool = true
 ## Run-long upgrade effects the arena hands out (see apply_upgrade). Public for tests.
 var seed_damage_bonus: int = 0
 var tree_hp_bonus: int = 0
@@ -248,11 +254,17 @@ func _ready() -> void:
 	upgrade_picker = UpgradePicker.new()
 	upgrade_picker.picked.connect(apply_upgrade)
 	$Hud.add_child(upgrade_picker)
+	tutorial_offer = TutorialOffer.new()
+	tutorial_offer.answered.connect(_on_tutorial_answered)
+	$Hud.add_child(tutorial_offer)
 	_wave_label.text = ""
 	if RunState.ng_plus:
 		apply_ng_plus()
 	if autostart_waves:
-		waves.start_wave(1)
+		if ng_plus:
+			offer_refresher()  # wave 1 starts when the player answers
+		else:
+			waves.start_wave(1)
 
 
 ## _process runs every drawn frame: hide the banner when its time is up.
@@ -692,10 +704,10 @@ static func _dj(texts: Array[String]) -> Array[Dictionary]:
 	return lines
 
 
-## Plays a Canopy FM tutorial moment once per run (and never in New Game +,
-## where the player already knows the controls).
+## Plays a Canopy FM tutorial moment once per run. Not in New Game +, where the
+## player already knows the controls, unless they asked for the reminder.
 func _dj_once(moment: StringName, texts: Array[String]) -> void:
-	if ng_plus or _dj_said.has(moment):
+	if not tutorial_on or _dj_said.has(moment):
 		return
 	_dj_said[moment] = true
 	_radio_later(_dj(texts))
@@ -733,13 +745,14 @@ func helios_line_for(number: int) -> String:
 ##   cat-hint waves  a hint about the lucky cat, only while the shop is shut.
 func dj_lines_for_wave(number: int) -> Array[String]:
 	var lines: Array[String] = []
-	if number == 2 and not ng_plus:
+	if number == 2 and tutorial_on:
 		lines.append_array(CONFIG.dj_bramble_touch if _is_touch() else CONFIG.dj_bramble)
 	if number == 1:
+		# The controls, for a first run or a New Game + player who asked.
+		if tutorial_on:
+			lines.append_array(CONFIG.dj_intro_touch if _is_touch() else CONFIG.dj_intro)
 		if ng_plus:
 			lines.append_array(CONFIG.dj_ng_plus_intro)
-		else:
-			lines.append_array(CONFIG.dj_intro_touch if _is_touch() else CONFIG.dj_intro)
 	var hint: int = CONFIG.dj_cat_hint_waves.find(number)
 	if hint >= 0 and hint < CONFIG.dj_cat_hints.size() and cat_shop != null and not cat_shop.is_open:
 		lines.append(CONFIG.dj_cat_hints[hint])
@@ -767,6 +780,9 @@ func _on_wave_started(number: int, total: int) -> void:
 	if not _hook_shown:
 		_hook_shown = true
 		lines.append(_radio_line(Radio.CANOPY, CONFIG.story_hook))
+	# New Game +: the machines are tougher and faster, and Canopy FM says so.
+	if ng_plus and number == 1:
+		lines.append(_radio_line(Radio.CANOPY, CONFIG.ng_plus_threat_line))
 	if helios_line_for(number) != "":
 		lines.append(_radio_line(Radio.HELIOS, helios_line_for(number)))
 	# Wave 1: point the Heart Tree out, in every run (Sasha forgot it existed).
@@ -1098,9 +1114,29 @@ func _choose_tap_points(wave_number: int) -> void:
 ## staging; and trees can mature into great sunroots (see mature_trees).
 func apply_ng_plus() -> void:
 	ng_plus = true
+	tutorial_on = false  # until the player asks for the reminder (offer_refresher)
 	waves.count_multiplier = CONFIG.ng_plus_count_multiplier
 	waves.pace_multiplier = CONFIG.ng_plus_pace_multiplier
 	waves.staged_waves = 0
+
+
+## New Game + opening: Canopy FM wakes Seven up and asks whether a reminder is
+## wanted. Wave 1 does not start here; it starts in _on_tutorial_answered.
+## Public so the tests can run the opening without a real New Game + save.
+func offer_refresher() -> void:
+	_hook_shown = true  # this line takes the place of the usual opening hook
+	_show_story_lines([_radio_line(Radio.CANOPY, CONFIG.ng_plus_wakeup_line)])
+	tutorial_offer.offer()
+
+
+## Signal handler: the player answered the New Game + question (or it timed out).
+## "Remind me" switches the tutorial back on: the staged first wave, where
+## machines come one at a time, and Canopy FM's tips as things happen.
+func _on_tutorial_answered(wants_tutorial: bool) -> void:
+	tutorial_on = wants_tutorial
+	if wants_tutorial:
+		waves.staged_waves = -1  # -1 = "use the config's number of staged waves"
+	waves.start_wave(1)
 
 
 ## New Game +: every tree that was already grown when this wave started and is
