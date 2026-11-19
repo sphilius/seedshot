@@ -141,8 +141,88 @@ extends Resource
 @export var cat_hits_needed: int = 3
 ## Seconds between glints on the shop's shutter (the hint that it is special).
 @export var cat_glint_interval: float = 3.0
-## Gap in pixels between the two pods once the cat's gift is active.
-@export var cat_pair_spacing: float = 14.0
+## THE CAT'S GIFT (story step 3): the live clamp (right-click a machine to yank
+## and bind it; locked until the cat is found) and a spare fuse. With a fuse
+## fitted, the first time Seven would go down it gets back up instead, with this
+## many hit points.
+@export var fuse_revive_hp: int = 3
+## Seconds Seven cannot be hurt after the fuse saves it (it blinks meanwhile).
+@export var fuse_invulnerable_time: float = 2.0
+## Talking to Lucky: Seven must be within this many cells of the open shop for
+## the E key to work. (A tap on the shop works from anywhere.)
+@export var lucky_talk_range_cells: float = 3.5
+## From this wave on, if the shop is still shut, a spray-painted "KNOCK x3"
+## arrow on the floor points at it (the cat stays a discovery before then).
+@export var knock_hint_wave: int = 3
+## Lucky's greeting when the shutter opens, by the wave the cat was found in.
+## Words only: nothing Lucky says changes the game. (Placeholders, STORY.md.)
+@export_multiline var lucky_greeting_early: String = "Early. I like early. Take the clamp, kid. And a fuse, on the house."
+@export_multiline var lucky_greeting_middle: String = "Thought you'd never knock. Clamp. Fuse. Don't tell Helios."
+@export_multiline var lucky_greeting_late: String = "The whole block's lit and NOW you find me? Take the clamp anyway."
+## Lucky's small talk, by the wave being played. Each talk gives the next line.
+@export var lucky_talk_waves_1_to_3: Array[String] = [
+	"They used to queue down the alley for me.",
+	"That saw-thing's coming. They always send the saw-thing.",
+	"Seven's a lucky number. I'd know.",
+]
+@export var lucky_talk_waves_4_to_7: Array[String] = [
+	"Watch the trees, not yourself. You, I can fix.",
+	"Hear that? Somebody's got the radio going.",
+	"I've sold fuses to worse causes.",
+]
+@export var lucky_talk_wave_8: Array[String] = [
+	"Look at that. Haven't seen my own sign lit in years.",
+	"Don't get soft. They'll want it back.",
+]
+@export var lucky_talk_waves_9_to_10: Array[String] = [
+	"They're not sending notices any more.",
+	"Hold it one more night. Next block's watching.",
+]
+
+@export_group("Tap points")
+## TAP POINTS (story step 5): soil patches on the floor where the old grid can
+## be tapped. A machine downed on one grows a TAP TREE: it lights extra windows
+## while it stands, heals Seven when it grows, and is slow to saw. New patches
+## are picked at the start of every wave from `tap_points_from_wave` on.
+@export var tap_points_per_wave: int = 2
+@export var tap_points_from_wave: int = 2
+## Extra windows each standing tap tree lights.
+@export var tap_tree_bonus_windows: int = 3
+## Hit points (pips) a tap tree gives Seven back when it grows.
+@export var tap_tree_heal: int = 1
+## A tap tree has this many times a normal tree's hit points.
+@export var tap_tree_hp_multiplier: int = 2
+## Tint of a tap tree (warm gold), so it stands out from the others.
+@export var tap_tree_tint: Color = Color(1.15, 1.05, 0.72)
+## The soil patch picture (tools/floor_tiles.ps1 makes it).
+@export var tap_point_texture: Texture2D
+
+@export_group("New Game +")
+## NEW GAME + (unlocked by winning once): every wave sends this many times the
+## machines (rounded up), and sends them this many times faster. 1.5 = 50% more.
+@export var ng_plus_count_multiplier: float = 1.5
+@export var ng_plus_pace_multiplier: float = 1.5
+## In New Game +, a tree that was already grown when a wave started and is still
+## standing when that wave is cleared matures into a GREAT SUNROOT (tree stage 4).
+## Its hit points are this many times a normal tree's.
+@export var great_sunroot_hp_multiplier: int = 3
+## Picture of the great sunroot (tools/tree_sprites.py: tree_big.png).
+@export var tree_great_texture: Texture2D
+
+@export_group("Canopy FM")
+## The block's pirate radio (scripts/canopy_fm.gd). How loud the song is, in
+## decibels (0 = as recorded; every -6 roughly halves it).
+@export var music_volume_db: float = -9.0
+## The radio's muffle filter: its cutoff with the block dark, and fully lit, in
+## Hz. Low = muffled, like a radio through a wall; high = clear.
+@export var music_cutoff_dark_hz: float = 500.0
+@export var music_cutoff_lit_hz: float = 16000.0
+## When a tree is cut down the song drops back to muffled for this many
+## seconds, and this many decibels quieter.
+@export var music_dull_seconds: float = 2.5
+@export var music_dull_drop_db: float = 6.0
+## How quickly the filter and volume glide to a new setting. Higher is snappier.
+@export var music_change_speed: float = 2.0
 
 @export_group("Waves")
 ## The first this-many waves are "staged": the next machine only walks in once
@@ -299,6 +379,9 @@ extends Resource
 ## sapling, a grown tree, and the "cut" look a grown tree takes once a Sawbot
 ## has bitten it. Leave empty for the old circle drawing.
 @export var tree_sapling_texture: Texture2D
+## The graffiti lettering: Permanent Marker (Apache 2.0, art/fonts), a marker /
+## spray-paint hand. Leave empty for Godot's plain built-in font.
+@export var graffiti_font: Font
 @export var tree_grown_texture: Texture2D
 @export var tree_cut_texture: Texture2D
 ## The floor slabs: one row of 48 x 48 tiles (one grid cell each), built from

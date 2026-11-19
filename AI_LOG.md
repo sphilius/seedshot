@@ -26,3 +26,6 @@ One line per asset or system: tool, date, what it did. This feeds the itch page'
 - Floor tiles (s14): 9 slabs pixelized by Klad from Sasha's Gemini concept sheet 02_floor_sheet_final (tools/floor_tiles.ps1), snapped to the game palette plus two floor-only steel steps.
 - Home roofs (s14): six roofs pixelized by Klad from Sasha's Gemini concept 03_wall_and_homes_b (tools/home_roofs.ps1), in narrow and wide versions; the game draws the front walls and windows.
 - Tree sprites (s14): sapling, grown, cut and big, cut out of Sasha's Gemini concept 04_sunroot_f and shrunk to 64 px by tools/tree_sprites.py (palette snap, speckle filter, outline).
+- Canopy FM (s15): three 90 s songs (lofi, dub, chip) generated with the ElevenLabs music API by tools/gen_music.ps1; played by the CanopyFM autoload through a low-pass filter that opens as the block lights.
+- Seven sprite (s15): drawn shape by shape by tools/seven_sprite.py in Sasha's locked design (the robot in her Gemini concept 07_key_art_b); faces the viewer and mirrors to follow the aim.
+- Title screen + New Game + (s15): title art is Sasha's Gemini key art 07_key_art_g, cropped to 1280x720; NG+ unlocks after a win (saved in user://), +50% machines sent 50% faster, great sunroots, Canopy FM station picker.

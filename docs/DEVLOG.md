@@ -246,3 +246,39 @@ From the kickoff. `config/game_config.tres` holds every speed, cooldown and size
 - **Light boost:** the night tint dims lights too, so pools are drawn with colour values above 1. The boost fades
   to 1.0 as the lot reaches full light; without that, the last wave turned the bottom of the screen into glare.
 - Graffiti line 1 is "KEEP THE LIGHTS ON!" (Sasha), matching the chosen key art `07_key_art_g`.
+
+## D-032 (s15): Lucky, story step 3
+
+- **The cat's gift** is now the clamp and a spare fuse (Sasha's redesign); paired pods are gone. The vine zips to
+  trees from the start; binding a machine needs the clamp. The fuse saves Seven once (back up at `fuse_revive_hp`
+  with a long blink) and is refitted only by `revive()`, which runs on a real defeat; clearing a wave never refits it.
+- **Talking to Lucky:** E near the open shop (`lucky_talk_range_cells`) or a tap on the shop. Greeting by the wave
+  the cat was found in; small talk by the wave being played, cycling. Lines live in the config; `lucky_lines.gd`
+  picks them. Words only.
+- **KNOCK x3:** from `knock_hint_wave` (3), a pink floor arrow points at a still-shut shop.
+- Controls line now reads "Right click: zip to a tree" (binding is announced by Lucky's banner).
+
+## D-033 (s15): Canopy FM, story step 4
+
+- Three stations generated with the ElevenLabs music API (`tools/gen_music.ps1`): Rooftop Lo-fi (default), Block Dub,
+  Switch-On Chip. 90 s each, looped. The station picker lives in New Game + (unlocked by a win).
+- `CanopyFM` autoload: its own "Music" bus feeding Master (so M mutes it) with a low-pass filter. The cutoff climbs
+  from 500 Hz to 16 kHz with the light level, on a multiplying scale; a felled tree drops it back to muffled and
+  6 dB quieter for 2.5 s. One recording, filtered: generated tracks would not line up as stems.
+- PowerShell gotcha: two values for a `[string[]]` parameter need the name, `-Names dub,chip`; a second bare word
+  goes to the next parameter.
+
+## D-034 (s15): spray-paint lettering, Seven, tap points, title screen and New Game +
+
+- **Graffiti** uses Permanent Marker (Apache 2.0, already shipped with Klad, so nothing was downloaded) with a soft
+  overspray outline. Sasha rejected pasted-on lettering in the concepts; the built-in font looked exactly like that.
+- **Seven** is drawn by `tools/seven_sprite.py` in the locked design and mirrors left/right with the aim instead of
+  spinning (a standing robot spinning on the spot reads wrong).
+- **Tap points (story step 5):** from wave 2, two soil patches (gold ring, so they read at night) per wave. A tree
+  grown on one is a tap tree: +3 windows while standing, heals 1 pip, 2x HP, gold tint; restarts replant it as one.
+- **Title screen** is now the main scene (07_key_art_g behind it). A finished run returns to it.
+- **New Game +** (`RunState` autoload, saved to `user://seedshot.cfg`): unlocked by any win. 1.5x machines per
+  wave (rounded up), sent 1.5x faster, no staged tutorial. Trees grown at a wave's start that still stand when it is
+  cleared mature into **great sunroots** (stage 4: 3x HP, wider glow, the big tree picture). The Canopy FM station
+  picker appears on the title screen once unlocked.
+- Not yet decided: the New Game + mechanic that makes great sunroots worth planning for (brainstorm sent to Sasha).

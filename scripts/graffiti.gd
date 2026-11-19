@@ -34,6 +34,16 @@ const PAINT_COLORS: Array[Color] = [
 
 ## How many lines are on the walls right now. Public so tests can read it.
 var revealed_count: int = 0
+## While true, "KNOCK x3" and an arrow are painted on the floor under the cat
+## shop, at `knock_at` (the shop's position). The arena switches it on from
+## the config's knock_hint_wave if the shop is still shut, and off once it opens.
+var show_knock: bool = false:
+	set(value):
+		# A setter runs whenever show_knock is assigned: redraw only on a change.
+		if value != show_knock:
+			show_knock = value
+			queue_redraw()
+var knock_at: Vector2 = Vector2.ZERO
 
 ## The arena's outer rectangle (walls included), in pixels. Set by setup().
 var _arena_rect: Rect2
@@ -63,7 +73,8 @@ func line_text(index: int) -> String:
 
 ## _draw paints every revealed line, turned sideways to run along its wall.
 func _draw() -> void:
-	var font: Font = ThemeDB.fallback_font
+	# The marker font from the config, or Godot's plain font if none is set.
+	var font: Font = CONFIG.graffiti_font if CONFIG.graffiti_font != null else ThemeDB.fallback_font
 	# How far along each of the four rows the next line starts.
 	var used: Array[float] = [START_MARGIN, START_MARGIN, START_MARGIN, START_MARGIN]
 	for i: int in revealed_count:
@@ -88,6 +99,26 @@ func _draw() -> void:
 			var y: float = _arena_rect.position.y + _wall_px + along
 			draw_set_transform(Vector2(x, y), PI / 2.0)
 		var color: Color = PAINT_COLORS[i % PAINT_COLORS.size()]
-		draw_string(font, Vector2.ZERO, text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, FONT_SIZE, color)
+		_draw_painted(font, Vector2.ZERO, text, color)
 	# Put the "paper" back, so nothing drawn later is turned by accident.
 	draw_set_transform(Vector2.ZERO, 0.0)
+
+	if show_knock:
+		# An arrow pointing up at the shop, then the words under it, in pink paint.
+		var pink: Color = PAINT_COLORS[2]
+		var tip: Vector2 = knock_at + Vector2(0.0, _wall_px * 0.85)
+		var tail: Vector2 = tip + Vector2(0.0, _wall_px * 0.9)
+		draw_line(tail, tip, pink, 4.0)
+		draw_line(tip, tip + Vector2(-10.0, 12.0), pink, 4.0)
+		draw_line(tip, tip + Vector2(10.0, 12.0), pink, 4.0)
+		var words: String = "KNOCK x3"
+		var width: float = font.get_string_size(words, HORIZONTAL_ALIGNMENT_LEFT, -1.0, FONT_SIZE).x
+		_draw_painted(font, tail + Vector2(-width / 2.0, FONT_SIZE + 2.0), words, pink)
+
+
+## Draws `text` like spray paint: first a soft, see-through halo around the
+## letters (the overspray a can leaves), then the letters themselves.
+## draw_string_outline draws only the outline of each letter, `size` pixels wide.
+func _draw_painted(font: Font, at: Vector2, text: String, color: Color) -> void:
+	draw_string_outline(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, FONT_SIZE, 6, Color(color, 0.18))
+	draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, FONT_SIZE, color)

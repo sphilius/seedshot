@@ -94,6 +94,11 @@ func _ready() -> void:
 	# Layer 2j: the night look and the windows (STORY.md step 2).
 	await _test_windows_and_night()
 	await _test_tree_pictures()
+	await _test_spare_fuse()
+	await _test_talking_to_lucky()
+	await _test_canopy_fm()
+	await _test_tap_points()
+	await _test_new_game_plus()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -930,6 +935,9 @@ func _test_vine_yanks_and_binds_a_machine() -> void:
 	var scrapper: Scrapper = _arena.spawn_scrapper_at(Vector2i(11, 12))  # 6 cells away
 	await get_tree().physics_frame
 
+	# Before Lucky's clamp, the vine cannot bind a machine.
+	_check(not player.try_vine(scrapper.global_position) and not scrapper.is_bound, "no binding before the cat's gift")
+	player.receive_cat_gift()
 	_check(player.try_vine(scrapper.global_position), "the vine lands on a machine in clear view")
 	_check(scrapper.is_bound, "the machine is bound")
 	_check(not player.is_zipping, "the bot itself does not move")
@@ -957,6 +965,7 @@ func _test_vine_yanks_and_binds_a_machine() -> void:
 func _test_vine_bind_needs_a_clear_line() -> void:
 	await _fresh_arena()
 	var player: Player = _arena.player
+	player.receive_cat_gift()  # binding needs Lucky's clamp
 	var tree_cell: Vector2i = Arena.TEST_TREE_CELLS[0]
 	# The tree sits exactly between the bot and the Sawbot.
 	player.global_position = _arena.grid.cell_to_world(tree_cell + Vector2i(-3, 0))
@@ -980,6 +989,7 @@ func _test_vine_bind_needs_a_clear_line() -> void:
 func _test_touch_tap_on_a_machine_binds_it() -> void:
 	await _fresh_arena()
 	var touch: TouchControls = _touch_controls()
+	_arena.player.receive_cat_gift()  # binding needs Lucky's clamp
 	_arena.player.global_position = _arena.grid.cell_to_world(Vector2i(5, 12))
 	var spitter: Spitter = _arena.spawn_spitter_at(Vector2i(10, 12))
 	await get_tree().physics_frame
@@ -999,7 +1009,7 @@ func _test_three_pods_open_the_cat_shop() -> void:
 	var shop: CatShop = _arena.cat_shop
 	var pods: Node = _arena.get_node("Pods")
 	_check(shop != null and not shop.is_open and shop.hits == 0, "the arena has a closed shop")
-	_check(not player.double_shot, "pods are single to begin with")
+	_check(not player.can_bind and not player.has_fuse, "no clamp and no fuse to begin with")
 
 	# A pod on the ordinary wall, well left of the shop, must not count.
 	player.global_position = _arena.grid.cell_to_world(Vector2i(4, 3))
@@ -1017,13 +1027,13 @@ func _test_three_pods_open_the_cat_shop() -> void:
 		if shot < CONFIG.cat_hits_needed - 1:
 			_check(not shop.is_open, "the shop stays shut after %d pod(s)" % (shot + 1))
 	_check(shop.is_open, "the third pod opens the shop")
-	_check(player.double_shot, "the cat's gift: pods now fire in pairs")
+	_check(player.can_bind and player.has_fuse, "the cat's gift: the clamp and a spare fuse")
 	await _wait_until(func() -> bool: return pods.get_child_count() == 0, 1.5)
 
-	# Fire sideways, away from the shop, and count the pods in flight.
+	# Paired pods are gone (Sasha's story redesign): one shot is still one pod.
 	await _wait_until(func() -> bool: return player.fire(Vector2.LEFT), 1.0)
 	await get_tree().physics_frame
-	_check(pods.get_child_count() == 2, "one shot is now two pods")
+	_check(pods.get_child_count() == 1, "one shot is still one pod")
 	shop.hit_by_seed()
 	_check(shop.hits == CONFIG.cat_hits_needed, "an open shop ignores further pods")
 
@@ -1314,6 +1324,18 @@ func _test_tree_pictures() -> void:
 	for picture: Texture2D in pictures:
 		all_sized = all_sized and picture != null and picture.get_size() == Vector2(64.0, 64.0)
 	_check(all_sized, "the three tree pictures are 64 x 64")
+	_check(CONFIG.graffiti_font != null, "the graffiti has its marker font")
+	# Seven in the locked design faces the viewer and mirrors to follow the aim.
+	await _fresh_arena()
+	var seven: Player = _arena.player
+	var seven_sprite: Sprite2D = seven.get_node("Sprite2D")
+	seven.touch_mode = true          # so the aim comes from aim_direction, not the mouse
+	seven.aim_direction = Vector2.LEFT
+	await _wait_frames(3)
+	_check(seven_sprite.flip_h and is_zero_approx(seven_sprite.rotation), "aiming left mirrors Seven without spinning it")
+	seven.aim_direction = Vector2.RIGHT
+	await _wait_frames(3)
+	_check(not seven_sprite.flip_h, "aiming right faces it right again")
 	await _fresh_arena()
 	var tree: ForestTree = _arena.spawn_tree(Vector2i(5, 5), false)
 	_check(tree != null and tree.current_texture() == CONFIG.tree_sapling_texture, "a new tree shows the sapling picture")
@@ -1324,3 +1346,165 @@ func _test_tree_pictures() -> void:
 	tree.take_damage(1)
 	if is_instance_valid(tree) and tree.hp > 0:
 		_check(tree.current_texture() == CONFIG.tree_cut_texture, "a bitten tree shows the cut picture")
+
+
+## Lucky's spare fuse: it saves Seven once, is NOT refitted by clearing a wave,
+## and IS refitted when Seven is really defeated and the wave restarts.
+func _test_spare_fuse() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	player.take_damage(CONFIG.player_max_hp)
+	_check(player.is_dead, "without the cat's gift, a deadly hit downs Seven")
+	player.revive(player.global_position)
+
+	player.receive_cat_gift()
+	await _wait_frames(70)  # let the revive blink run out
+	player.take_damage(CONFIG.player_max_hp)
+	_check(not player.is_dead and player.hp == CONFIG.fuse_revive_hp, "with a fuse, Seven gets back up (%d HP)" % CONFIG.fuse_revive_hp)
+	_check(not player.has_fuse, "and the fuse is used up")
+
+	# Clearing a wave does not refit it.
+	_arena.waves_cleared += 1
+	_arena._update_light()
+	_check(not player.has_fuse, "clearing a wave does not refit the fuse")
+	await _wait_frames(150)  # let the long fuse blink run out
+	player.take_damage(CONFIG.player_max_hp)
+	_check(player.is_dead, "without a fuse the next deadly hit downs Seven")
+
+	# A real defeat restarts the wave and refits it.
+	player.revive(player.global_position)
+	_check(player.has_fuse, "a real defeat (the wave restart) refits the fuse")
+
+
+## Talking to Lucky: words only. The greeting depends on the wave the cat was
+## found in; small talk depends on the wave being played and cycles.
+func _test_talking_to_lucky() -> void:
+	_check(LuckyLines.greeting_for(2) == CONFIG.lucky_greeting_early, "found in wave 2: the early greeting")
+	_check(LuckyLines.greeting_for(5) == CONFIG.lucky_greeting_middle, "found in wave 5: the middle greeting")
+	_check(LuckyLines.greeting_for(9) == CONFIG.lucky_greeting_late, "found in wave 9: the late greeting")
+	_check(LuckyLines.small_talk_for(8, 0) == CONFIG.lucky_talk_wave_8[0], "wave 8 has its own small talk")
+	var set_size: int = CONFIG.lucky_talk_waves_1_to_3.size()
+	_check(LuckyLines.small_talk_for(1, set_size) == LuckyLines.small_talk_for(1, 0), "small talk cycles round its set")
+
+	await _fresh_arena()
+	_check(_arena.talk_to_lucky() == "", "Lucky says nothing while the shop is shut")
+	var shop: CatShop = _arena.cat_shop
+	# The KNOCK x3 hint: hidden early, shown from its wave while the shop is shut.
+	_arena.waves.start_wave(CONFIG.knock_hint_wave - 1)
+	_check(not _arena.graffiti.show_knock, "no KNOCK hint before wave %d" % CONFIG.knock_hint_wave)
+	_arena.waves.start_wave(CONFIG.knock_hint_wave)
+	_check(_arena.graffiti.show_knock, "from wave %d a shut shop gets the KNOCK x3 hint" % CONFIG.knock_hint_wave)
+	for i: int in CONFIG.cat_hits_needed:
+		shop.hit_by_seed()
+	_check(_arena.lucky_found_wave >= 1, "the arena remembers the wave Lucky was found in")
+	_check(not _arena.graffiti.show_knock, "the KNOCK hint goes once the shop is open")
+	var first: String = _arena.talk_to_lucky()
+	var second: String = _arena.talk_to_lucky()
+	_check(first != "" and second != "" and first != second, "talking again gives the next line")
+	var hp_before: int = _arena.player.hp
+	_check(_arena.player.hp == hp_before and _arena.player.can_bind, "talking changes nothing in the game")
+	_arena.player.global_position = shop.global_position + Vector2(0.0, 2.0 * CONFIG.cell_size)
+	_check(_arena.is_near_lucky(), "standing just below the shop is close enough to talk")
+	_arena.player.global_position = _arena.grid.cell_to_world(Vector2i(3, 12))
+	_check(not _arena.is_near_lucky(), "across the lot is too far")
+
+
+## Canopy FM: four stations with real song files; the muffle filter opens as the
+## block lights; a felled tree dulls the radio for a moment.
+func _test_canopy_fm() -> void:
+	for id: StringName in CanopyFM.STATIONS:
+		_check(ResourceLoader.exists(CanopyFM.STATIONS[id]), "the %s station has its song" % id)
+	_check(CanopyFM.STATIONS.size() == 4, "four stations")
+	_check(CanopyFM.cutoff_for(0.0) < CanopyFM.cutoff_for(0.5) and CanopyFM.cutoff_for(0.5) < CanopyFM.cutoff_for(1.0),
+		"the radio sounds clearer as the block lights")
+	_check(is_equal_approx(CanopyFM.cutoff_for(0.0), CONFIG.music_cutoff_dark_hz), "dark block: muffled")
+	_check(is_equal_approx(CanopyFM.cutoff_for(1.0), CONFIG.music_cutoff_lit_hz), "lit block: clear")
+	await _fresh_arena()
+	var tree: ForestTree = _arena.spawn_tree(Vector2i(6, 6), true)
+	tree.take_damage(99)
+	_check(CanopyFM.is_dulled(), "cutting a tree down dulls the radio")
+	var start: StringName = CanopyFM.station
+	CanopyFM.set_station(&"dub")
+	_check(CanopyFM.station == &"dub", "the station can be changed")
+	CanopyFM.set_station(start)
+
+
+## Tap points (story step 5): soil patches from wave 2; a tree grown on one is a
+## tap tree that heals Seven, lights extra windows, has more HP, and survives a
+## wave restart as a tap tree.
+func _test_tap_points() -> void:
+	await _fresh_arena()
+	_arena.waves.start_wave(CONFIG.tap_points_from_wave - 1)
+	_check(_arena.tap_points.is_empty(), "no tap points before wave %d" % CONFIG.tap_points_from_wave)
+	_arena.waves.start_wave(CONFIG.tap_points_from_wave)
+	_check(_arena.tap_points.size() == CONFIG.tap_points_per_wave, "wave %d has %d tap points" % [CONFIG.tap_points_from_wave, CONFIG.tap_points_per_wave])
+	var cell: Vector2i = _arena.tap_points[0]
+	_check(not _arena.grid.is_solid(cell) and _arena.tree_at(cell) == null, "a tap point is open floor")
+
+	var player: Player = _arena.player
+	player.take_damage(2)
+	var hp_before: int = player.hp
+	var lit_before: int = _arena.windows.lit_count
+	var tree: ForestTree = _arena.spawn_tree(cell, false)
+	_check(tree.is_tap and not _arena.tap_points.has(cell), "a tree on a tap point is a tap tree, and the patch is used up")
+	_check(tree.max_hp() == CONFIG.tree_hp * CONFIG.tap_tree_hp_multiplier, "a tap tree is slow to saw (more HP)")
+	player.global_position = _arena.grid.cell_to_world(Vector2i(2, 2))  # stand clear of the cell
+	_arena._on_tree_ready_to_solidify(tree)
+	_check(tree.stage == ForestTree.Stage.GROWN, "the tap tree grows")
+	_check(player.hp == mini(hp_before + CONFIG.tap_tree_heal, CONFIG.player_max_hp), "it heals Seven by %d" % CONFIG.tap_tree_heal)
+	_check(_arena.windows.lit_count == mini(lit_before + CONFIG.tap_tree_bonus_windows, _arena.windows.window_count()),
+		"it lights %d more windows" % CONFIG.tap_tree_bonus_windows)
+
+	# A restart of the wave replants it as a tap tree.
+	_arena.waves.start_wave(_arena.waves.wave)   # snapshot the forest, as a new wave does
+	_arena._restart_current_wave()
+	await _wait_frames(2)
+	var replanted: ForestTree = _arena.tree_at(cell)
+	_check(replanted != null and replanted.is_tap, "a wave restart replants it as a tap tree")
+
+	# Felling it puts its extra windows out again.
+	replanted.take_damage(999)
+	await _wait_frames(3)
+	_check(_arena.tap_bonus_windows() == 0, "felling it takes its extra windows away")
+
+
+## New Game +: locked until a win, then harder waves (50% more machines, rounded
+## up, sent faster, no staged tutorial), great sunroots, and a station picker.
+func _test_new_game_plus() -> void:
+	var was_unlocked: bool = RunState.ng_plus_unlocked
+	# The title screen: New Game + locked, no station picker.
+	RunState.ng_plus_unlocked = false
+	var title: Control = load("res://scenes/title.tscn").instantiate()
+	add_child(title)
+	await _wait_frames(2)
+	_check(title.ng_plus_button.disabled and not title.station_button.visible, "before a win: New Game + locked, no station picker")
+	RunState.ng_plus_unlocked = true
+	title.refresh()
+	_check(not title.ng_plus_button.disabled and title.station_button.visible, "after a win: New Game + and the station picker open")
+	var station_before: StringName = CanopyFM.station
+	title.station_button.pressed.emit()
+	_check(CanopyFM.station != station_before, "the station button changes the station")
+	CanopyFM.set_station(station_before)
+	title.queue_free()
+
+	# A New Game + arena.
+	await _fresh_arena()
+	var normal_wave_3: int = _arena.waves.machines_in_wave(3)
+	_arena.apply_ng_plus()
+	var hard_wave_3: int = _arena.waves.machines_in_wave(3)
+	_check(hard_wave_3 >= ceili(normal_wave_3 * CONFIG.ng_plus_count_multiplier) - 2 and hard_wave_3 > normal_wave_3,
+		"New Game + sends about 50%% more machines (wave 3: %d -> %d)" % [normal_wave_3, hard_wave_3])
+	_check(_arena.waves.staged_wave_count() == 0, "no staged tutorial wave in New Game +")
+
+	# Great sunroots: a tree grown at wave start and standing at wave clear matures.
+	_arena.waves.start_wave(2)  # snapshots the forest: the three hand-placed trees are grown
+	var tree: ForestTree = _arena.tree_at(Arena.TEST_TREE_CELLS[0])
+	_arena._on_wave_cleared(2)
+	_check(tree.is_great, "a tree that stood through the wave matures into a great sunroot")
+	_check(tree.hp == CONFIG.tree_hp * CONFIG.great_sunroot_hp_multiplier, "with %dx the hit points" % CONFIG.great_sunroot_hp_multiplier)
+	_check(tree.current_texture() == CONFIG.tree_great_texture, "and the stage 4 picture")
+	var fresh: ForestTree = _arena.spawn_tree(Vector2i(8, 8), true)
+	_arena._on_wave_cleared(3)
+	_check(not fresh.is_great, "a tree planted after the wave started does not mature yet")
+
+	RunState.ng_plus_unlocked = was_unlocked

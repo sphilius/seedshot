@@ -10,6 +10,7 @@
 #
 # OUT:   art/sprites/floor_tiles.png              one row of 48 x 48 tiles, the file the game loads
 #        art/source/klad/floor_tiles@8x.png       the same row at 8x, only for looking at
+#        art/sprites/tap_point.png                the soil patch that marks a tap point
 #
 # ORDER MATTERS: the game treats the first `floor_plain_count` tiles (see game_config.gd) as
 # plain slabs that fill most of the floor, and the rest as rarer "detail" slabs.
@@ -72,6 +73,20 @@ for ($i = 0; $i -lt $picks.Count; $i++) {
 }
 $sheetImg.Dispose(); $g.Dispose()
 $strip.Save((Join-Path $root "art\sprites\floor_tiles.png"), [System.Drawing.Imaging.ImageFormat]::Png)
+
+# The soil patch (column 3, row 2 of the sheet) is NOT a floor tile: it marks the tap points,
+# so it is saved on its own. Same steps as above: cut, pixelize, export.
+$soilCrop = [System.Drawing.Bitmap]::FromFile($sheet)
+$soilCut = $soilCrop.Clone([System.Drawing.Rectangle]::new(3 * $SLAB, 2 * $SLAB, $SLAB, $SLAB), $soilCrop.PixelFormat)
+$soilPath = Join-Path $work "soil.png"
+$soilCut.Save($soilPath, [System.Drawing.Imaging.ImageFormat]::Png); $soilCut.Dispose(); $soilCrop.Dispose()
+$soilBundle = Join-Path $work "soil.klad"
+if (Test-Path $soilBundle) { Remove-Item $soilBundle -Recurse -Force }
+& $klad new $soilBundle --pixel "$($TILE)x$($TILE)" --wrap | Out-Null
+Get-Content $palette | & $klad apply $soilBundle | Out-Null
+Get-Content $floorPalette | & $klad apply $soilBundle | Out-Null
+& $klad pixelize $soilBundle --image $soilPath --to l1 --size $TILE | Out-Null
+& $klad export $soilBundle --scale 1 -o (Join-Path $root "art\sprites\tap_point.png") | Out-Null
 
 # An 8x copy with hard pixel edges, for checking by eye.
 $big = [System.Drawing.Bitmap]::new($strip.Width * 8, $strip.Height * 8)

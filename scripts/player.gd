@@ -10,6 +10,8 @@ extends CharacterBody2D
 ##          pod itself: it emits seed_fired and the arena spawns it ("signal up").
 ##   Vine   press the "vine" action (right click) on a grown tree to zip to it in
 ##          a straight line, stopping one cell short. Empty space does nothing.
+##          Once Lucky (the hidden cat) has given Seven the clamp, the vine on a
+##          machine yanks it over and binds it instead.
 ##
 ## The scene (player.tscn) puts it on physics layer 2, "player", and it collides
 ## with layer 1, "world" (walls and grown trees).
@@ -22,6 +24,8 @@ signal zip_finished
 signal health_changed(current: int, maximum: int)
 ## Emitted once, when hit points reach zero. The arena restarts the run.
 signal died
+## Emitted when the spare fuse saves Seven from going down.
+signal fuse_used
 
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
 ## Physics layer 1 ("world") as a bit mask, for ray and shape queries.
@@ -41,9 +45,15 @@ var is_zipping: bool = false
 ## and seeds fire while touch_fire_held is true.
 var touch_mode: bool = false
 var touch_fire_held: bool = false
-## True once the hidden lucky cat has been found: every shot is a pair of pods.
-## It lasts for the rest of the run, including wave restarts.
-var double_shot: bool = false
+## THE LUCKY CAT'S GIFT. Both stay for the rest of the run, wave restarts included.
+## can_bind: the vine can yank and bind a machine (before the cat, it only zips).
+var can_bind: bool = false
+## has_fuse_slot: Seven carries a spare fuse from now on (see has_fuse).
+var has_fuse_slot: bool = false
+## has_fuse: a fuse is fitted right now. Used up when it saves Seven; refitted
+## only when Seven is really defeated and the wave restarts (in revive), never
+## by clearing a wave.
+var has_fuse: bool = false
 ## Hit points left. Starts at CONFIG.player_max_hp.
 var hp: int = 0
 ## True once hp reaches zero: the bot stops moving, firing and zipping.
@@ -149,14 +159,7 @@ func fire(direction: Vector2) -> bool:
 	# Start the pod just outside our own hit circle, so it never begins inside us.
 	var muzzle_distance: float = CONFIG.player_radius_cells * CONFIG.cell_size + CONFIG.seed_radius
 	var muzzle: Vector2 = global_position + unit * muzzle_distance
-	if double_shot:
-		# The lucky cat's gift: two pods side by side. orthogonal() gives the
-		# direction at right angles to `unit`, so the pair sits across the aim line.
-		var side: Vector2 = unit.orthogonal() * CONFIG.cat_pair_spacing * 0.5
-		seed_fired.emit(muzzle + side, unit)
-		seed_fired.emit(muzzle - side, unit)
-	else:
-		seed_fired.emit(muzzle, unit)
+	seed_fired.emit(muzzle, unit)
 	Sfx.play(&"fire")
 	return true
 
@@ -174,10 +177,12 @@ func try_vine(world_point: Vector2, pick_radius_cells: float = -1.0) -> bool:
 		pick_radius_cells = CONFIG.vine_pick_radius_cells
 	var pick_radius: float = pick_radius_cells * CONFIG.cell_size
 
-	# A machine under the pointer comes first: yank it over and tie it up.
-	var enemy: Enemy = _pick_enemy(world_point, pick_radius)
-	if enemy != null and _lash_enemy(enemy):
-		return true
+	# A machine under the pointer comes first: yank it over and tie it up. Only
+	# with Lucky's clamp; before that, the vine is for zipping to trees.
+	if can_bind:
+		var enemy: Enemy = _pick_enemy(world_point, pick_radius)
+		if enemy != null and _lash_enemy(enemy):
+			return true
 
 	var picked: ForestTree = _pick_tree(world_point, pick_radius)
 	if picked == null:
@@ -204,6 +209,15 @@ func take_damage(amount: int) -> bool:
 	if is_dead or _invulnerable_left > 0.0 or amount <= 0:
 		return false
 	hp = maxi(hp - amount, 0)  # maxi = the larger of two whole numbers: never below 0
+	if hp == 0 and has_fuse:
+		# The spare fuse blows instead of Seven: back up, with a long blink.
+		has_fuse = false
+		hp = CONFIG.fuse_revive_hp
+		_invulnerable_left = CONFIG.fuse_invulnerable_time
+		health_changed.emit(hp, CONFIG.player_max_hp)
+		Sfx.play(&"cat")
+		fuse_used.emit()
+		return true
 	health_changed.emit(hp, CONFIG.player_max_hp)
 	if hp == 0:
 		is_dead = true
@@ -227,7 +241,24 @@ func revive(world_position: Vector2) -> void:
 	is_zipping = false
 	modulate = Color.WHITE
 	_invulnerable_left = CONFIG.player_hit_invulnerable_time
+	# A real defeat is the only thing that refits a used fuse.
+	has_fuse = has_fuse_slot
 	health_changed.emit(hp, CONFIG.player_max_hp)
+
+
+## Gives back up to `amount` hit points, never above the maximum. (A tap tree does this.)
+func heal(amount: int) -> void:
+	if is_dead or amount <= 0:
+		return
+	hp = mini(hp + amount, CONFIG.player_max_hp)  # mini = the smaller of two whole numbers
+	health_changed.emit(hp, CONFIG.player_max_hp)
+
+
+## Lucky's gift: the clamp (bind machines with the vine) and a spare fuse.
+func receive_cat_gift() -> void:
+	can_bind = true
+	has_fuse_slot = true
+	has_fuse = true
 
 
 ## Counts down the "cannot be hurt" time and blinks the bot while it lasts.
@@ -251,8 +282,11 @@ func _update_aim() -> void:
 		var to_mouse: Vector2 = get_global_mouse_position() - global_position
 		if to_mouse.length() > 1.0:
 			aim_direction = to_mouse.normalized()
-	# The art faces "up", and angle() measures from "right", hence the quarter turn.
-	_sprite.rotation = aim_direction.angle() + PI / 2.0
+	# Seven stands facing the viewer (the locked design, tools/seven_sprite.py),
+	# so it does not spin round: it turns to look left or right with the aim.
+	# flip_h mirrors the picture; the drawing holds its seedling on the right.
+	if absf(aim_direction.x) > 0.1:
+		_sprite.flip_h = aim_direction.x < 0.0
 
 
 ## Returns the machine nearest to `world_point`, if one is within `pick_radius`
