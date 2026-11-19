@@ -184,6 +184,25 @@ extends Resource
 ## fitted, the first time Seven would go down it gets back up instead, with this
 ## many hit points.
 @export var fuse_revive_hp: int = 3
+## HIT FEEDBACK (s18, "make it clear when a shot lands and what is hurting Seven").
+## A machine that takes a hit and survives flashes this colour for this long,
+## with a ring that closes in on it.
+@export var hit_flash_seconds: float = 0.14
+@export var hit_flash_color: Color = Color(1.0, 1.0, 0.9, 0.85)
+## SCREEN SHAKE: the playfield (not the HUD) jitters by up to this many pixels,
+## dying away over shake_seconds. One size for a machine going down, a bigger
+## one for Seven being hurt. Set shake_scale to 0 to switch all shaking off.
+@export var shake_seconds: float = 0.25
+@export var shake_kill_px: float = 3.0
+@export var shake_hurt_px: float = 7.0
+@export var shake_scale: float = 1.0
+## SEVEN IS HURT: the whole screen tints this colour and fades over
+## hurt_flash_seconds, and a red arc on Seven points at whatever did it for
+## hurt_arc_seconds (a full ring if the source is unknown).
+@export var hurt_flash_seconds: float = 0.35
+@export var hurt_flash_color: Color = Color(1.0, 0.12, 0.08, 0.3)
+@export var hurt_arc_seconds: float = 0.6
+@export var hurt_arc_color: Color = Color(1.6, 0.25, 0.2)
 ## KNOCK-OUT animation: Seven jolts, tips over and greys out, throwing sparks,
 ## over this many seconds. (Keep it shorter than death_restart_delay.)
 @export var knockout_seconds: float = 0.9

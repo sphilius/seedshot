@@ -49,3 +49,4 @@ One line per asset or system: tool, date, what it did. This feeds the itch page'
 - Plink (s18): the metallic thunk take 5 (ElevenLabs) reused as a new 'plink' sound for pods hitting machines; thunk is back on take 3. Sasha's call.
 - Itch cover and screenshots (s18): cover cropped from the title art with the logo by tools/make_cover.py; three staged 1280 x 720 screenshots taken in the real arena by tests/capture_shots.gd. Both written by Claude Code.
 - Upgrade card icons (s18): six 64 px icons (seed pouch, heavy seeds, thick plating, hardwood, quick roots, long trellis) drawn with Klad 0.2.0 by a Claude Code subagent from art/source/klad/upgrades/make_upgrade_icons.py, in the game's 12-colour palette. Placeholders until Sasha's own art.
+- Hit flash, screen shake and hurt cue (s18): code and numbers by Claude Code from Sasha's playtest notes (hit-read, impact). No new assets.
