@@ -99,6 +99,7 @@ func _ready() -> void:
 	await _test_canopy_fm()
 	await _test_tap_points()
 	await _test_new_game_plus()
+	await _test_great_powers()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -1515,3 +1516,56 @@ func _test_new_game_plus() -> void:
 	RunState.ng_plus_unlocked = was_unlocked
 	RunState.just_unlocked = false
 	RunState.save()  # put the save file back the way it was
+
+
+## Great sunroots' powers (great_powers.gd): Canopy lines between pairs that can
+## see each other, which bind machines crossing them, and the Sunburst on a zip.
+func _test_great_powers() -> void:
+	await _fresh_arena()
+	var powers: GreatPowers = _arena.great_powers
+	await _wait_frames(2)
+	_check(powers.lines.is_empty(), "no great sunroots, no Canopy lines (a normal run)")
+
+	# Two great trees 6 cells apart with a clear view: one cable.
+	var a: ForestTree = _arena.spawn_tree(Vector2i(3, 12), true)
+	var b: ForestTree = _arena.spawn_tree(Vector2i(9, 12), true)
+	a.mature()
+	b.mature()
+	await _wait_frames(2)
+	_check(powers.lines.size() == 1, "two great sunroots that see each other string a Canopy line")
+	_check(powers.is_charged(powers.lines[0]), "a new line is charged")
+
+	# A machine walking across the cable is caught, and the cable recharges.
+	var scrapper: Scrapper = _arena.spawn_scrapper_at(Vector2i(6, 12))
+	await _wait_frames(2)
+	_check(scrapper.is_bound, "a machine on the Canopy line is bound")
+	_check(not powers.is_charged(powers.lines[0]), "then the line recharges before it catches again")
+
+	# A wall of wood between them: a third (ordinary) tree blocks the view.
+	var c: ForestTree = _arena.spawn_tree(Vector2i(3, 2), true)
+	var d: ForestTree = _arena.spawn_tree(Vector2i(9, 2), true)
+	c.mature()
+	d.mature()
+	_arena.spawn_tree(Vector2i(6, 2), true)
+	await _wait_frames(2)
+	_check(powers.lines.size() == 1, "a tree in between blocks a Canopy line")
+
+	# Too far apart: no line.
+	var far: ForestTree = _arena.spawn_tree(Vector2i(9 + int(CONFIG.canopy_line_range_cells) + 2, 12), true)
+	far.mature()
+	await _wait_frames(2)
+	_check(powers.lines.size() == 1, "great sunroots too far apart make no line")
+
+	# Sunburst: zipping to a great sunroot stuns the machines around it.
+	var near: Scrapper = _arena.spawn_scrapper_at(Vector2i(4, 10))
+	_check(powers.sunburst(a.global_position) >= 1, "a Sunburst stuns the machines near the great tree")
+	_check(not is_instance_valid(near) or near.is_dead or near.is_bound, "the machine in range is stunned (or downed)")
+	_check(powers.sunburst(a.global_position) == 0, "a second Sunburst waits for the cooldown")
+	powers.sunburst_cooldown_left = 0.0
+	_arena.player.zip_tree = b
+	_arena._on_player_zip_finished()
+	_check(powers.sunburst_cooldown_left > 0.0, "a zip that ends at a great sunroot sets off its Sunburst")
+	powers.sunburst_cooldown_left = 0.0
+	_arena.player.zip_tree = _arena.tree_at(Arena.TEST_TREE_CELLS[0])
+	_arena._on_player_zip_finished()
+	_check(powers.sunburst_cooldown_left == 0.0, "a zip to an ordinary tree does not")

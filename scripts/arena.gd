@@ -96,6 +96,8 @@ var lucky_found_wave: int = 0
 var _lucky_talks: int = 0
 ## The lantern strings (see lanterns.gd). Public so tests can read it.
 var lanterns: Lanterns
+## The great sunroots' Canopy lines and Sunburst (see great_powers.gd). Public for tests.
+var great_powers: GreatPowers
 ## The Block's painted lines on the side walls. Public so tests can reach it.
 var graffiti: Graffiti
 ## The hidden lucky cat's shop, in the top wall. Public so tests can reach it.
@@ -149,6 +151,11 @@ func _ready() -> void:
 	lanterns = Lanterns.new()
 	lanterns.setup(Rect2(origin, arena_px).grow(-float(CONFIG.cell_size)))
 	add_child(lanterns)
+	# The great sunroots' cables and Sunburst ring. z_index 1 draws them over the
+	# trees and machines (which use 0), so a cable is never hidden by a canopy.
+	great_powers = GreatPowers.new()
+	great_powers.z_index = 1
+	add_child(great_powers)
 	# CanvasModulate multiplies the colour of everything drawn in this scene
 	# (floor, walls, sprites, trees) by one colour. The HUD is on its own
 	# CanvasLayer, so it is not tinted and stays readable. This is how the
@@ -216,6 +223,7 @@ func _process(delta: float) -> void:
 	CanopyFM.set_light(light_level())
 	windows.light_boost = boost
 	lanterns.light_boost = boost
+	great_powers.light_boost = boost
 	_ambient.color = _ambient.color.lerp(wanted_tint, minf(1.0, CONFIG.ambient_change_speed * delta))
 	# The last machines are still growing into trees when the end screen comes
 	# up, so keep its score current instead of freezing it at the first count.
@@ -709,6 +717,11 @@ func _on_player_zip_finished() -> void:
 	for tree: ForestTree in _trees_by_cell.values():
 		tree.show_vine_hint = false
 	_vine_hint_done = true
+	# A zip that ends at a great sunroot sets off its Sunburst.
+	var tree: ForestTree = player.zip_tree
+	if is_instance_valid(tree) and tree.is_great and tree.stage == ForestTree.Stage.GROWN:
+		if great_powers.sunburst(tree.global_position) > 0:
+			_show_banner("Sunburst!", 1.0)
 
 
 ## _unhandled_input receives input that nothing else used. After the last wave,

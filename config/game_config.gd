@@ -208,6 +208,28 @@ extends Resource
 ## Picture of the great sunroot (tools/tree_sprites.py: tree_big.png).
 @export var tree_great_texture: Texture2D
 
+## CANOPY LINE (great_powers.gd): two great sunroots within this many cells of
+## each other, with nothing between them, string a cable that binds machines.
+@export var canopy_line_range_cells: float = 8.0
+## How close (pixels) a machine's centre must come to the cable to be caught.
+@export var canopy_line_catch_px: float = 16.0
+## Seconds a caught machine stays bound.
+@export var canopy_line_bind_seconds: float = 2.5
+## Seconds a cable needs to recharge after catching a machine.
+@export var canopy_line_recharge: float = 4.0
+## Colour of a charged cable (alpha = how solid it looks).
+@export var canopy_line_color: Color = Color(0.75, 1.0, 0.45, 0.85)
+
+## SUNBURST (great_powers.gd): zip to a great sunroot and it flares.
+## Radius of the flare, in cells.
+@export var sunburst_radius_cells: float = 3.5
+## Seconds every machine in the flare stays stunned.
+@export var sunburst_stun_seconds: float = 3.0
+## Damage the flare deals to each machine in it.
+@export var sunburst_damage: int = 1
+## Seconds before the next Sunburst can go off (shared by all great trees).
+@export var sunburst_cooldown: float = 8.0
+
 @export_group("Canopy FM")
 ## The block's pirate radio (scripts/canopy_fm.gd). How loud the song is, in
 ## decibels (0 = as recorded; every -6 roughly halves it).
