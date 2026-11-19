@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="GameConfig" load_steps=15 format=3]
+[gd_resource type="Resource" script_class="GameConfig" load_steps=17 format=3]
 
 [ext_resource type="Script" path="res://config/game_config.gd" id="1_config"]
 [ext_resource type="Texture2D" path="res://art/sprites/gardener_bot.png" id="2_player"]
@@ -14,6 +14,8 @@
 [ext_resource type="FontFile" path="res://art/fonts/PermanentMarker-Regular.ttf" id="12_graffiti_font"]
 [ext_resource type="Texture2D" path="res://art/sprites/tap_point.png" id="13_tap_point"]
 [ext_resource type="Texture2D" path="res://art/sprites/tree_big.png" id="14_tree_great"]
+[ext_resource type="Texture2D" path="res://art/sprites/props.png" id="15_props"]
+[ext_resource type="Texture2D" path="res://art/sprites/lucky_cat_wave.png" id="16_cat_wave"]
 
 [resource]
 script = ExtResource("1_config")
@@ -29,4 +31,6 @@ graffiti_font = ExtResource("12_graffiti_font")
 tap_point_texture = ExtResource("13_tap_point")
 tree_great_texture = ExtResource("14_tree_great")
 floor_tiles = ExtResource("7_floor")
+props_texture = ExtResource("15_props")
+cat_wave_texture = ExtResource("16_cat_wave")
 home_roofs = ExtResource("8_roofs")

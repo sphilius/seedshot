@@ -98,8 +98,11 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_time += delta
 	if is_open:
-		# sin() swings smoothly between -1 and 1, so the cat rocks side to side.
-		_cat.rotation = sin(_time * 4.0) * 0.18
+		# Lucky beckons: swap between the paw-up and paw-down pictures. int(time /
+		# seconds) counts up by one every cat_wave_seconds; % 2 turns it into 0, 1, 0, 1...
+		var paw_down: bool = int(_time / CONFIG.cat_wave_seconds) % 2 == 1
+		if CONFIG.cat_wave_texture != null:
+			_cat.texture = CONFIG.cat_wave_texture if paw_down else CONFIG.cat_texture
 	else:
 		eyes_left = maxf(eyes_left - delta, 0.0)
 		_eyes_wait -= delta
@@ -128,6 +131,9 @@ func _draw() -> void:
 	var half := Vector2(WIDTH_CELLS * cell_px, cell_px) / 2.0
 	var front := Rect2(-half, half * 2.0)
 	draw_rect(front, FRONT_COLOR)
+	# The same brickwork as the wall around it (props.gd), lined up with the
+	# wall's bricks by passing this node's world position. Camouflage.
+	Props.draw_bricks(self, front, global_position)
 	# The ledge: the part that sticks out of the wall line into the arena.
 	draw_rect(Rect2(-half.x, half.y, half.x * 2.0, STICK_OUT), LEDGE_COLOR)
 	var window: Rect2 = front.grow(-6.0)  # grow(-n) shrinks each side by n

@@ -104,6 +104,7 @@ func _ready() -> void:
 	await _test_heart_tree()
 	await _test_new_machines()
 	await _test_upgrades()
+	await _test_props_and_lucky_art()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -1702,3 +1703,16 @@ func _test_upgrades() -> void:
 	_check(_arena.sapling_time_scale < 1.0, "Quick Roots: saplings root faster")
 	for id: StringName in UpgradePicker.CATALOG.keys():
 		_check(UpgradePicker._describe(id).find("%d") == -1, "the %s card's text is filled in" % id)
+
+
+## The art pass: props from concept 05_props_b (corner props are solid), and
+## Lucky's two-frame wave.
+func _test_props_and_lucky_art() -> void:
+	_check(CONFIG.props_texture != null and CONFIG.props_texture.get_width() == Props.FRAMES.size() * 64, "the props picture holds one 64 px frame per prop")
+	_check(CONFIG.cat_wave_texture != null, "Lucky has a second, paw-down frame")
+	await _fresh_arena()
+	var props: Props = _arena.props
+	_check(props.solid_cells.size() == 4, "four solid props, one per floor corner")
+	for cell: Vector2i in props.solid_cells:
+		_check(_arena.grid.is_solid(cell), "machines path around the prop at %s" % cell)
+	_check(not _arena._spawn_candidates().has(props.solid_cells[0]), "and no machine spawns inside one")

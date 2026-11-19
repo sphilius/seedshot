@@ -106,6 +106,8 @@ var _lucky_talks: int = 0
 var lanterns: Lanterns
 ## The great sunroots' Canopy lines and Sunburst (see great_powers.gd). Public for tests.
 var great_powers: GreatPowers
+## Brick walls and street props (see props.gd). Public so tests can read it.
+var props: Props
 ## The Heart Tree, or null if there is none (felled and not yet replanted, or a
 ## test arena without one). Public so tests can read it.
 var heart_tree: ForestTree
@@ -172,6 +174,12 @@ func _ready() -> void:
 	add_child(windows)
 	# Lantern strings across the lot. Added before the trees and machines, so
 	# they hang underneath them and never hide the action.
+	# The art pass: brick walls and street props (see props.gd). Added first among
+	# the arena's drawn children, so it sits on the floor under everything else.
+	props = Props.new()
+	add_child(props)
+	move_child(props, 0)  # draw right after the floor
+	props.setup(grid, Rect2(grid.origin, Vector2(grid.cols, grid.rows) * float(CONFIG.cell_size)))
 	lanterns = Lanterns.new()
 	lanterns.setup(Rect2(origin, arena_px).grow(-float(CONFIG.cell_size)))
 	add_child(lanterns)

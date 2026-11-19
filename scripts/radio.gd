@@ -111,6 +111,11 @@ func _draw() -> void:
 	draw_rect(Rect2(PANEL_RECT.position, Vector2(4.0, PANEL_RECT.size.y)), TAG_COLORS[speaker])
 
 	var left: float = PANEL_RECT.position.x + 14.0
+	# Lucky gets a little portrait at the left of the panel, and the words move over.
+	if speaker == LUCKY and CONFIG.cat_texture != null:
+		var face := Rect2(PANEL_RECT.position + Vector2(10.0, 6.0), Vector2.ONE * (PANEL_RECT.size.y - 12.0))
+		draw_texture_rect(CONFIG.cat_texture, face, false)
+		left = face.end.x + 10.0
 	var tag_y: float = PANEL_RECT.position.y + 20.0
 	draw_string(font, Vector2(left, tag_y), TAGS[speaker], HORIZONTAL_ALIGNMENT_LEFT, -1.0, TAG_FONT_SIZE, TAG_COLORS[speaker])
 	if speaker == CANOPY:

@@ -424,6 +424,9 @@ extends Resource
 ## roof units side by side, each 52 x 32 (one unit sits over each window).
 ## Leave empty for plain grey roofs.
 @export var home_roofs: Texture2D
+## Street props from concept 05_props_b, one 64 x 64 frame each (tools/prop_sprites.py,
+## frame order in scripts/props.gd).
+@export var props_texture: Texture2D
 ## Windows already lit before any wave is cleared: the block's first two lamps.
 @export var windows_lit_at_start: int = 2
 ## How strongly a lit window shines before any wave is cleared (0 to 1). It
@@ -503,6 +506,10 @@ extends Resource
 @export var sawbot_texture: Texture2D
 @export var spitter_texture: Texture2D
 @export var cat_texture: Texture2D
+## Lucky's second frame, paw dipped (tools/lucky_wave.py). The shop swaps between
+## the two every cat_wave_seconds, so Lucky beckons.
+@export var cat_wave_texture: Texture2D
+@export var cat_wave_seconds: float = 0.35
 ## The sunroot tree, built from the concept art by tools/tree_sprites.py. A
 ## sapling, a grown tree, and the "cut" look a grown tree takes once a Sawbot
 ## has bitten it. Leave empty for the old circle drawing.
