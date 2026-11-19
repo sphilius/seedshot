@@ -179,6 +179,24 @@ extends Resource
 	"Hold it one more night. Next block's watching.",
 ]
 
+@export_group("Tap points")
+## TAP POINTS (story step 5): soil patches on the floor where the old grid can
+## be tapped. A machine downed on one grows a TAP TREE: it lights extra windows
+## while it stands, heals Seven when it grows, and is slow to saw. New patches
+## are picked at the start of every wave from `tap_points_from_wave` on.
+@export var tap_points_per_wave: int = 2
+@export var tap_points_from_wave: int = 2
+## Extra windows each standing tap tree lights.
+@export var tap_tree_bonus_windows: int = 3
+## Hit points (pips) a tap tree gives Seven back when it grows.
+@export var tap_tree_heal: int = 1
+## A tap tree has this many times a normal tree's hit points.
+@export var tap_tree_hp_multiplier: int = 2
+## Tint of a tap tree (warm gold), so it stands out from the others.
+@export var tap_tree_tint: Color = Color(1.15, 1.05, 0.72)
+## The soil patch picture (tools/floor_tiles.ps1 makes it).
+@export var tap_point_texture: Texture2D
+
 @export_group("Canopy FM")
 ## The block's pirate radio (scripts/canopy_fm.gd). How loud the song is, in
 ## decibels (0 = as recorded; every -6 roughly halves it).

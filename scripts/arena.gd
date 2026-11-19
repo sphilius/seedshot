@@ -57,6 +57,11 @@ var _rng := RandomNumberGenerator.new()
 ## The forest as it stood when the current wave began: cell -> was it grown?
 ## If the player goes down, the arena is put back to exactly this.
 var _forest_at_wave_start: Dictionary[Vector2i, bool] = {}
+## The cells holding a tap tree at wave start, so a restart replants them as tap trees.
+var _tap_trees_at_wave_start: Array[Vector2i] = []
+## This wave's tap points: soil patches where a downed machine grows a tap tree.
+## Public so the tests can read it.
+var tap_points: Array[Vector2i] = []
 ## Seconds the banner stays up. 0 or less means "until replaced".
 var _banner_time_left: float = 0.0
 ## Small story lines still waiting to be shown under the banner, in order.
@@ -236,6 +241,10 @@ func _draw() -> void:
 				var target := Rect2(grid.origin + Vector2(x, y) * cell_px, Vector2.ONE * cell_px)
 				# draw_texture_rect_region copies one square of a picture onto the screen.
 				draw_texture_rect_region(CONFIG.floor_tiles, target, source, CONFIG.floor_tint)
+		# This wave's tap points: a soil patch on each.
+		if CONFIG.tap_point_texture != null:
+			for cell: Vector2i in tap_points:
+				draw_texture_rect(CONFIG.tap_point_texture, Rect2(grid.origin + Vector2(cell) * cell_px, Vector2.ONE * cell_px), false)
 		# Each slab already has its own dark edge, so the grid lines below would
 		# only double them up.
 		return
@@ -276,6 +285,11 @@ func spawn_tree(cell: Vector2i, grown: bool) -> ForestTree:
 	var tree: ForestTree = TREE_SCENE.instantiate()
 	tree.cell = cell
 	tree.starts_grown = grown
+	# A tree on a tap point is a tap tree; the patch is used up.
+	if tap_points.has(cell):
+		tree.is_tap = true
+		tap_points.erase(cell)
+		queue_redraw()  # the soil patch disappears from the floor
 	tree.position = grid.cell_to_world(cell)
 	tree.ready_to_solidify.connect(_on_tree_ready_to_solidify)
 	tree.felled.connect(_on_tree_felled)
@@ -461,7 +475,10 @@ func _restart_current_wave() -> void:
 	_trees_by_cell.clear()
 
 	# Replant the forest from the snapshot taken at wave start.
+	tap_points.clear()
 	for cell: Vector2i in _forest_at_wave_start.keys():
+		if _tap_trees_at_wave_start.has(cell):
+			tap_points.append(cell)  # spawn_tree turns this back into a tap tree
 		spawn_tree(cell, _forest_at_wave_start[cell])
 
 	var start_cell: Vector2i = _nearest_free_cell(PLAYER_START_CELL)
@@ -510,7 +527,7 @@ func light_boost_for(level: float) -> float:
 
 ## Tells the windows and lanterns what the waves cleared so far have earned.
 func _update_light() -> void:
-	windows.set_light(lit_windows_after(waves_cleared), window_strength_after(waves_cleared))
+	windows.set_light(lit_windows_after(waves_cleared) + tap_bonus_windows(), window_strength_after(waves_cleared))
 	lanterns.set_strings(Lanterns.strings_after(waves_cleared))
 
 
@@ -543,8 +560,12 @@ func helios_line_for(number: int) -> String:
 ## Signal handler: a wave began. Remember the forest, update the HUD.
 func _on_wave_started(number: int, total: int) -> void:
 	_forest_at_wave_start.clear()
+	_tap_trees_at_wave_start.clear()
 	for cell: Vector2i in _trees_by_cell.keys():
 		_forest_at_wave_start[cell] = _trees_by_cell[cell].stage == ForestTree.Stage.GROWN
+		if _trees_by_cell[cell].is_tap:
+			_tap_trees_at_wave_start.append(cell)
+	_choose_tap_points(number)
 	_show_banner("Wave %d" % number, 1.5)
 	# By now the controls are learned; the bottom wall belongs to the windows.
 	_hint.visible = number < CONFIG.hint_hide_wave
@@ -746,6 +767,10 @@ func _on_tree_ready_to_solidify(tree: ForestTree) -> void:
 	grid.set_solid(tree.cell, true)
 	tree.solidify()
 	Sfx.play(&"grow")
+	if tree.is_tap:
+		# A tap tree: Seven gets a pip back, and the block gets extra windows.
+		player.heal(CONFIG.tap_tree_heal)
+		_update_light()
 	# Teach the vine once: the first tree the player grows pulses until they zip.
 	if not _vine_hint_done and tree.cell == _last_planted_cell:
 		tree.show_vine_hint = true
@@ -757,6 +782,8 @@ func _on_tree_felled(tree: ForestTree) -> void:
 	_trees_by_cell.erase(tree.cell)
 	windows.flicker()  # the block feels it: one lit window drops dark for a moment
 	CanopyFM.dull()    # and the radio dulls for a moment
+	if tree.is_tap:
+		_update_light.call_deferred()  # its extra windows go out (once it is gone)
 
 
 ## True if screen point `screen_point` (as a touch reports it) lands on the cat
@@ -766,3 +793,32 @@ func _is_on_shop(screen_point: Vector2) -> bool:
 	var centre: Vector2 = cat_shop.get_global_transform_with_canvas().origin
 	var half := Vector2(CatShop.WIDTH_CELLS, 1.5) * float(CONFIG.cell_size) / 2.0
 	return Rect2(centre - half, half * 2.0).has_point(screen_point)
+
+
+## Extra windows lit by the tap trees standing right now (grown ones only).
+func tap_bonus_windows() -> int:
+	var count: int = 0
+	for tree: ForestTree in _trees_by_cell.values():
+		if is_instance_valid(tree) and tree.is_tap and tree.stage == ForestTree.Stage.GROWN and not tree.is_queued_for_deletion():
+			count += 1
+	return count * CONFIG.tap_tree_bonus_windows
+
+
+## Picks this wave's tap points: random open floor cells, not hugging a wall,
+## not under Seven, not on a tree. None before `tap_points_from_wave`.
+func _choose_tap_points(wave_number: int) -> void:
+	tap_points.clear()
+	if wave_number >= CONFIG.tap_points_from_wave:
+		var candidates: Array[Vector2i] = []
+		var seven_cell: Vector2i = grid.world_to_cell(player.global_position)
+		# Two cells in from every wall, so a patch is never tucked into a corner.
+		for y: int in range(3, grid.rows - 3):
+			for x: int in range(3, grid.cols - 3):
+				var cell := Vector2i(x, y)
+				if grid.is_solid(cell) or _trees_by_cell.has(cell) or cell == seven_cell:
+					continue
+				candidates.append(cell)
+		candidates.shuffle()  # shuffle puts the list in a random order
+		for i: int in mini(CONFIG.tap_points_per_wave, candidates.size()):
+			tap_points.append(candidates[i])
+	queue_redraw()  # redraw the floor with the new patches

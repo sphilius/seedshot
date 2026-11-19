@@ -246,6 +246,14 @@ func revive(world_position: Vector2) -> void:
 	health_changed.emit(hp, CONFIG.player_max_hp)
 
 
+## Gives back up to `amount` hit points, never above the maximum. (A tap tree does this.)
+func heal(amount: int) -> void:
+	if is_dead or amount <= 0:
+		return
+	hp = mini(hp + amount, CONFIG.player_max_hp)  # mini = the smaller of two whole numbers
+	health_changed.emit(hp, CONFIG.player_max_hp)
+
+
 ## Lucky's gift: the clamp (bind machines with the vine) and a spare fuse.
 func receive_cat_gift() -> void:
 	can_bind = true

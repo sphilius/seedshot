@@ -97,6 +97,7 @@ func _ready() -> void:
 	await _test_spare_fuse()
 	await _test_talking_to_lucky()
 	await _test_canopy_fm()
+	await _test_tap_points()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -1425,3 +1426,42 @@ func _test_canopy_fm() -> void:
 	CanopyFM.set_station(&"dub")
 	_check(CanopyFM.station == &"dub", "the station can be changed")
 	CanopyFM.set_station(start)
+
+
+## Tap points (story step 5): soil patches from wave 2; a tree grown on one is a
+## tap tree that heals Seven, lights extra windows, has more HP, and survives a
+## wave restart as a tap tree.
+func _test_tap_points() -> void:
+	await _fresh_arena()
+	_arena.waves.start_wave(CONFIG.tap_points_from_wave - 1)
+	_check(_arena.tap_points.is_empty(), "no tap points before wave %d" % CONFIG.tap_points_from_wave)
+	_arena.waves.start_wave(CONFIG.tap_points_from_wave)
+	_check(_arena.tap_points.size() == CONFIG.tap_points_per_wave, "wave %d has %d tap points" % [CONFIG.tap_points_from_wave, CONFIG.tap_points_per_wave])
+	var cell: Vector2i = _arena.tap_points[0]
+	_check(not _arena.grid.is_solid(cell) and _arena.tree_at(cell) == null, "a tap point is open floor")
+
+	var player: Player = _arena.player
+	player.take_damage(2)
+	var hp_before: int = player.hp
+	var lit_before: int = _arena.windows.lit_count
+	var tree: ForestTree = _arena.spawn_tree(cell, false)
+	_check(tree.is_tap and not _arena.tap_points.has(cell), "a tree on a tap point is a tap tree, and the patch is used up")
+	_check(tree.max_hp() == CONFIG.tree_hp * CONFIG.tap_tree_hp_multiplier, "a tap tree is slow to saw (more HP)")
+	player.global_position = _arena.grid.cell_to_world(Vector2i(2, 2))  # stand clear of the cell
+	_arena._on_tree_ready_to_solidify(tree)
+	_check(tree.stage == ForestTree.Stage.GROWN, "the tap tree grows")
+	_check(player.hp == mini(hp_before + CONFIG.tap_tree_heal, CONFIG.player_max_hp), "it heals Seven by %d" % CONFIG.tap_tree_heal)
+	_check(_arena.windows.lit_count == mini(lit_before + CONFIG.tap_tree_bonus_windows, _arena.windows.window_count()),
+		"it lights %d more windows" % CONFIG.tap_tree_bonus_windows)
+
+	# A restart of the wave replants it as a tap tree.
+	_arena.waves.start_wave(_arena.waves.wave)   # snapshot the forest, as a new wave does
+	_arena._restart_current_wave()
+	await _wait_frames(2)
+	var replanted: ForestTree = _arena.tree_at(cell)
+	_check(replanted != null and replanted.is_tap, "a wave restart replants it as a tap tree")
+
+	# Felling it puts its extra windows out again.
+	replanted.take_damage(999)
+	await _wait_frames(3)
+	_check(_arena.tap_bonus_windows() == 0, "felling it takes its extra windows away")

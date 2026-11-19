@@ -36,6 +36,9 @@ var cell: Vector2i
 ## Set to true BEFORE adding the tree to the scene to skip the sapling stage
 ## (used for the three hand-placed test trees).
 var starts_grown: bool = false
+## Set to true BEFORE adding the tree to make it a TAP TREE (it grew on a tap
+## point): more hit points and a gold tint. The arena handles its other effects.
+var is_tap: bool = false
 var stage: Stage = Stage.SAPLING
 var hp: int = 0
 ## While true, a ring pulses on the tree: "you can vine to this". The arena
@@ -49,7 +52,7 @@ var show_vine_hint: bool = false
 ## _ready runs once when the tree enters the scene.
 func _ready() -> void:
 	add_to_group(GROUP)
-	hp = CONFIG.tree_hp
+	hp = max_hp()
 	# The collision square is exactly one cell, so pods cannot slip between two
 	# trees standing side by side.
 	(_collision.shape as RectangleShape2D).size = Vector2.ONE * float(CONFIG.cell_size)
@@ -109,7 +112,9 @@ func _draw() -> void:
 	if picture != null:
 		# Drawn at the same size as every other sprite (64 px), centred on the cell.
 		var size: float = CONFIG.sprite_size_cells * cell_px
-		draw_texture_rect(picture, Rect2(-size / 2.0, -size / 2.0, size, size), false)
+		# A tap tree is drawn with a warm gold tint (the last argument multiplies its colours).
+		var tint: Color = CONFIG.tap_tree_tint if is_tap else Color.WHITE
+		draw_texture_rect(picture, Rect2(-size / 2.0, -size / 2.0, size, size), false, tint)
 		_draw_vine_hint(cell_px)
 		return
 	# No pictures in the config: the old shapes (a sprout, or a circle on a square).
@@ -122,9 +127,14 @@ func _draw() -> void:
 		draw_rect(Rect2(-half, -half, cell_px, cell_px), TRUNK_COLOR)
 		# A hurt tree shows it: the canopy shrinks from full size down to 45% as
 		# HP falls, so you can see at a glance which trees a Sawbot has bitten.
-		var health: float = clampf(float(hp) / float(CONFIG.tree_hp), 0.0, 1.0)
+		var health: float = clampf(float(hp) / float(max_hp()), 0.0, 1.0)
 		draw_circle(Vector2.ZERO, cell_px * 0.36 * lerpf(0.45, 1.0, health), CANOPY_COLOR)
 		_draw_vine_hint(cell_px)
+
+
+## A tree's full hit points: a tap tree has more (it is slow to saw).
+func max_hp() -> int:
+	return CONFIG.tree_hp * (CONFIG.tap_tree_hp_multiplier if is_tap else 1)
 
 
 ## The picture this tree shows right now: sapling, grown, or cut (a grown tree
@@ -133,7 +143,7 @@ func _draw() -> void:
 func current_texture() -> Texture2D:
 	if stage == Stage.SAPLING:
 		return CONFIG.tree_sapling_texture
-	if hp < CONFIG.tree_hp:
+	if hp < max_hp():
 		return CONFIG.tree_cut_texture
 	return CONFIG.tree_grown_texture
 
