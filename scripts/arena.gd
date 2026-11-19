@@ -272,6 +272,8 @@ func _process(delta: float) -> void:
 	windows.light_boost = boost
 	lanterns.light_boost = boost
 	great_powers.light_boost = boost
+	# The bright cables showed through the upgrade cards: hide them while it is open.
+	great_powers.cables_hidden = upgrade_picker.is_open()
 	_ambient.color = _ambient.color.lerp(wanted_tint, minf(1.0, CONFIG.ambient_change_speed * delta))
 	# The last machines are still growing into trees when the end screen comes
 	# up, so keep its score current instead of freezing it at the first count.

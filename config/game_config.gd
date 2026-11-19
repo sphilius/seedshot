@@ -231,6 +231,16 @@ extends Resource
 @export var canopy_line_recharge: float = 4.0
 ## Colour of a charged cable (alpha = how solid it looks).
 @export var canopy_line_color: Color = Color(0.75, 1.0, 0.45, 0.85)
+## THE CAPS (s18). A late New Game + run had 70+ great sunroots and a cable
+## between every pair: the screen was a web, the game lagged, and one machine
+## stayed snared for two minutes. So:
+## Each great sunroot holds at most this many cables (it links to its nearest).
+@export var canopy_line_links_per_tree: int = 2
+## The whole lot holds at most this many cables; the shortest ones win.
+@export var canopy_line_max: int = 12
+## After a Canopy line lets a machine go, no Canopy line can catch that machine
+## again for this many seconds, so it can always walk out of the web.
+@export var canopy_line_immunity_seconds: float = 4.0
 
 ## THE HEART TREE (forest_tree.gd is_heart): the big tree in the middle of the
 ## lot. Its hit points are tree_hp times this.

@@ -340,3 +340,19 @@ From the kickoff. `config/game_config.tres` holds every speed, cooldown and size
   with the song alone, back to 0.0 with the speaker button off. Headless checks cannot hear a browser, so re-measure
   like this if another audio bus is ever added.
 - **Not verified:** a real phone. The fix has only been measured in a desktop browser emulating one.
+
+## D-038 (s18): Canopy lines are capped, lazy, and let machines go
+
+- **Found in the 2026-11-19 playtest (New Game +):** every surviving tree matures, so the run had 70+ great
+  sunroots, and every pair in range strung a cable, checked with a physics ray every step. The game lagged, the
+  screen was a web, and one Sawbot was re-snared for two minutes, stalling wave 5.
+- **Caps:** a great sunroot holds at most 2 cables (`canopy_line_links_per_tree`) and the lot at most 12
+  (`canopy_line_max`). Pairs are taken shortest first, so each tree ties to its nearest neighbours.
+- **Lazy:** the cables are worked out only when the forest changes (a tree is planted, grows, is cut, falls or
+  matures), not every physics step. Rays are cast only for pairs that would actually get a cable.
+- **Immunity:** a machine a Canopy line lets go cannot be caught by any Canopy line for 4 s
+  (`canopy_line_immunity_seconds`). Trellis vines and Seven's own bind are not affected.
+- **Cards:** the cables are hidden while the upgrade cards are up (they shone through the cards).
+- **Not changed:** every surviving tree still matures. If New Game + is still too bright (checklist: "washed
+  out"), limiting how many trees mature is the next lever.
+- **Not verified:** on a phone, or by eye in a late New Game + run. The checks cover 60 great sunroots headless.
