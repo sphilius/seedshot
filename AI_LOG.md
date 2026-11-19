@@ -43,3 +43,4 @@ One line per asset or system: tool, date, what it did. This feeds the itch page'
 - Machines, light and cards (s18): Linebreaker ring and Arc Spitter sparks drawn in code, forest-driven window light, Heart Tree glow, upgrade-card lock; code by Claude Code to Sasha's playtest notes. Spit take 5 and bind take 5 picked by Sasha.
 - Knock-out and fuse-revive animations (s18): tweened in code by Claude Code (scripts/player.gd), no new art.
 - Group 7 (s18): banner wrap, radio queue and wave end slow-down in code by Claude Code; new Helios lines for waves 8 and 9 written by Claude Code.
+- Pause menu (s18): buttons, run stats and controls list drawn in code by Claude Code (scripts/pause_overlay.gd).

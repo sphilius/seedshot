@@ -115,6 +115,7 @@ func _ready() -> void:
 	await _test_s18_machines_heart_cards_light()
 	await _test_knockout_and_fuse_animations()
 	await _test_banner_radio_and_wave_beat()
+	await _test_pause_menu()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -2193,3 +2194,54 @@ func _test_banner_radio_and_wave_beat() -> void:
 	_check(await _wait_until(cards_up, 3.0), "then the upgrade cards come up")
 	_check(is_equal_approx(Engine.time_scale, 1.0) and _arena.player.locked, "at normal speed again, with Seven parked")
 	_arena.upgrade_picker.choose(0)
+
+## s18: the pause menu has real options: resume, restart the wave, sound effects,
+## music, and quit; Restart and Quit ask first.
+func _test_pause_menu() -> void:
+	await _fresh_arena()
+	var pause: PauseOverlay = _arena.get_node("Hud/PauseOverlay") as PauseOverlay
+	# A pretend left click, reused for every button below.
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+
+	pause.set_paused(true)
+	# A click on empty space no longer resumes (it used to): only the buttons do.
+	click.position = Vector2(640.0, 700.0)
+	pause._input(click)
+	_check(get_tree().paused, "a click beside the buttons does not un-pause")
+	_check(_arena.pause_stats().size() >= 5 and _arena.pause_stats()[-1].contains(CanopyFM.station_name()), "the menu has this run's numbers and the song playing")
+
+	# Sound effects and music switch off and on separately.
+	click.position = pause.menu_button_rect(PauseOverlay.Item.EFFECTS).get_center()
+	pause._input(click)
+	_check(not Sfx.effects_on and get_tree().paused and pause.menu_label(PauseOverlay.Item.EFFECTS).contains("Off"), "the Sound effects button switches them off, and the menu stays up")
+	pause.choose(PauseOverlay.Item.EFFECTS)
+	_check(Sfx.effects_on, "and on again")
+	pause.choose(PauseOverlay.Item.MUSIC)
+	_check(not CanopyFM.music_on and not Sfx.is_muted, "the Music button switches only the music off")
+	pause.choose(PauseOverlay.Item.MUSIC)
+	_check(CanopyFM.music_on, "and on again")
+
+	# Restart this wave: asks first, then puts the wave back.
+	_arena.waves.start_wave(2)
+	_arena.player.take_damage(1)
+	pause.choose(PauseOverlay.Item.RESTART)
+	_check(get_tree().paused and pause.menu_label(PauseOverlay.Item.RESTART).contains("Sure"), "Restart asks 'Sure?' on the first press")
+	pause.choose(PauseOverlay.Item.RESTART)
+	_check(not get_tree().paused and _arena.player.hp == _arena.player.max_hp and _arena.waves.wave == 2, "the second press restarts the wave with Seven at full health")
+
+	# Quit: asks first; a different button in between disarms it.
+	pause.set_paused(true)
+	pause.choose(PauseOverlay.Item.QUIT)
+	pause.choose(PauseOverlay.Item.EFFECTS)
+	pause.choose(PauseOverlay.Item.EFFECTS)
+	pause.choose(PauseOverlay.Item.QUIT)
+	_check(_arena.quit_requests == 0 and get_tree().paused, "Quit needs two presses in a row")
+	pause.choose(PauseOverlay.Item.QUIT)
+	_check(_arena.quit_requests == 1 and not get_tree().paused, "the second press quits to the main menu")
+
+	# Resume by its button.
+	pause.set_paused(true)
+	pause.choose(PauseOverlay.Item.RESUME)
+	_check(not get_tree().paused, "Resume carries on")

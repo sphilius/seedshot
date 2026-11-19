@@ -146,6 +146,10 @@ var tree_hp_bonus: int = 0
 var sapling_time_scale: float = 1.0
 ## Every upgrade picked this run, in order. Public for tests.
 var upgrades_taken: Array[StringName] = []
+## How many times "Quit to main menu" was confirmed. Public for the tests.
+var quit_requests: int = 0
+## Trees planted this run: one for every machine that went down and took root.
+var trees_planted: int = 0
 ## The Block's painted lines on the side walls. Public so tests can reach it.
 var graffiti: Graffiti
 ## The hidden lucky cat's shop, in the top wall. Public so tests can reach it.
@@ -176,6 +180,7 @@ var is_run_finished: bool = false
 var radio: Radio
 ## The controls line along the bottom wall.
 @onready var _hint: Label = $Hud/Hint
+@onready var _pause: PauseOverlay = $Hud/PauseOverlay
 ## The wave timetable. Public (no underscore) so tests can start a wave directly.
 @onready var waves: WaveDirector = $WaveDirector
 
@@ -226,6 +231,10 @@ func _ready() -> void:
 	_update_light()
 
 	ForestTree.heart_marker_fade = 1.0  # a new run shows the Heart Tree's label again
+	# The pause menu: give it our numbers to show, and listen for its two requests.
+	_pause.stats_provider = pause_stats
+	_pause.restart_wave_requested.connect(_on_pause_restart_wave)
+	_pause.quit_requested.connect(_on_pause_quit)
 	# The banner wraps onto more lines instead of running off the screen edges.
 	# AUTOWRAP_WORD_SMART breaks between words (and inside a word only if it must).
 	_banner.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -951,6 +960,41 @@ func _exit_tree() -> void:
 	Engine.time_scale = 1.0
 
 
+## This run's numbers, as lines of text for the pause menu.
+func pause_stats() -> Array[String]:
+	var mode: String = "New Game +" if ng_plus else "Regular game"
+	return [
+		"%s, wave %d of %d" % [mode, maxi(waves.wave, 1), waves.total_waves()],
+		"Homes lit: %d of %d" % [windows.homes_lit(), windows.home_count()],
+		"Trees standing: %d" % count_grown_trees(),
+		"Trees planted: %d" % trees_planted,
+		"Health: %d of %d" % [player.hp, player.max_hp],
+		"Upgrades taken: %d" % upgrades_taken.size(),
+		"On Canopy FM: %s" % CanopyFM.station_name(),
+	]
+
+
+## Signal handler: the pause menu's "Restart this wave" was confirmed. Same as
+## Seven going down: the forest goes back to how it stood when the wave began.
+func _on_pause_restart_wave() -> void:
+	if waves.wave == 0 or is_run_finished:
+		return  # no wave is running: nothing to restart
+	Engine.time_scale = 1.0  # in case a wave end slow-down was running
+	_beat_left = 0.0
+	player.locked = false
+	_restart_current_wave()
+
+
+## Signal handler: the pause menu's "Quit to main menu" was confirmed. Only
+## when the arena IS the running scene (in the tests it is a child of the test
+## scene, and changing scene would end the tests).
+func _on_pause_quit() -> void:
+	quit_requests += 1
+	if get_tree().current_scene == self:
+		RunState.just_unlocked = false
+		get_tree().change_scene_to_file(TITLE_SCENE)
+
+
 ## The banner text for clearing wave `number`. The marker wave (halfway) adds
 ## a second line telling the player they can stop and rate now.
 func wave_cleared_text(number: int) -> String:
@@ -1265,6 +1309,7 @@ func _on_enemy_died(enemy: Enemy) -> void:
 		# callback caused the death), and Godot forbids adding physics bodies at
 		# that moment. call_deferred queues the call for the end of the frame.
 		spawn_tree.call_deferred(cell, false)
+		trees_planted += 1
 		_last_planted_cell = cell
 		# The first machine to go down: Canopy FM explains cover and the vine.
 		_dj_once(&"first_tree", CONFIG.dj_first_tree_touch if _is_touch() else CONFIG.dj_first_tree)
