@@ -46,6 +46,10 @@ var is_great: bool = false
 ## whole block's roots run through. Lots of hit points, Sawbots go for it first,
 ## and if it falls the wave starts again. Set by the arena before the tree is added.
 var is_heart: bool = false
+## Extra hit points from Hardwood upgrades. Set by the arena.
+var bonus_hp: int = 0
+## Multiplies how long the sapling takes to root (Quick Roots makes it smaller).
+var sapling_time_scale: float = 1.0
 var stage: Stage = Stage.SAPLING
 var hp: int = 0
 ## While true, a ring pulses on the tree: "you can vine to this". The arena
@@ -68,7 +72,7 @@ func _ready() -> void:
 		_add_glow()
 	else:
 		_collision.disabled = true  # saplings can be walked and shot through
-		_start_timer(CONFIG.sapling_time)
+		_start_timer(CONFIG.sapling_time * sapling_time_scale)
 
 
 ## Called by the arena: become solid cover.
@@ -150,7 +154,7 @@ func max_hp() -> int:
 		multiplier *= CONFIG.great_sunroot_hp_multiplier
 	if is_heart:
 		multiplier *= CONFIG.heart_tree_hp_multiplier
-	return CONFIG.tree_hp * multiplier
+	return CONFIG.tree_hp * multiplier + bonus_hp
 
 
 ## Stage 4: a grown tree becomes a great sunroot. It is healed to its new, much

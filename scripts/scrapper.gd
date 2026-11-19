@@ -29,9 +29,27 @@ var _windup_time_left: float = 0.0
 var _melee_cooldown_left: float = 0.0
 
 
+## True for a LINEBREAKER: Helios's heavy repo unit, from wave 6. Same brain as a
+## Scrapper, but big, slow, armoured (more hit points) and hits for more. Set by
+## the arena before the machine is added to the scene.
+var heavy: bool = false
+
+
 ## _ready runs once when the Scrapper enters the scene.
 func _ready() -> void:
-	_configure_body(CONFIG.scrapper_hp, CONFIG.scrapper_radius_cells, CONFIG.scrapper_texture, FALLBACK_COLOR)
+	var start_hp: int = CONFIG.linebreaker_hp if heavy else CONFIG.scrapper_hp
+	_configure_body(start_hp, CONFIG.scrapper_radius_cells, CONFIG.scrapper_texture, FALLBACK_COLOR)
+	if heavy:
+		# Scaling the whole node makes the picture AND the hit circle bigger.
+		scale = Vector2.ONE * CONFIG.linebreaker_scale
+		# self_modulate tints only this node's own drawing; the sprite is a child,
+		# so tint it directly. (modulate is kept free for the windup's red glow.)
+		_sprite.self_modulate = CONFIG.linebreaker_tint
+
+
+## How fast this machine walks, in pixels per second.
+func _speed() -> float:
+	return CONFIG.scrapper_speed * (CONFIG.linebreaker_speed_factor if heavy else 1.0)
 
 
 ## Called by the arena: which node to run at ("call down").
@@ -57,7 +75,7 @@ func _physics_process(delta: float) -> void:
 	if is_winding_up or distance <= CONFIG.scrapper_stop_distance_cells * CONFIG.cell_size:
 		velocity = Vector2.ZERO
 		return
-	_walk_towards(_next_goal(_target.global_position), CONFIG.scrapper_speed)
+	_walk_towards(_next_goal(_target.global_position), _speed())
 
 
 ## Overrides Enemy._on_bound: being tied up cancels a swing that was winding up.
@@ -90,4 +108,4 @@ func _update_melee(delta: float, distance: float) -> void:
 	_melee_cooldown_left = CONFIG.scrapper_melee_cooldown
 	modulate = Color.WHITE  # white = "no tint"
 	if in_range:
-		struck.emit(CONFIG.scrapper_melee_damage)
+		struck.emit(CONFIG.linebreaker_damage if heavy else CONFIG.scrapper_melee_damage)

@@ -54,8 +54,13 @@ var has_fuse_slot: bool = false
 ## only when Seven is really defeated and the wave restarts (in revive), never
 ## by clearing a wave.
 var has_fuse: bool = false
-## Hit points left. Starts at CONFIG.player_max_hp.
+## Hit points left. Starts at max_hp.
 var hp: int = 0
+## Most hit points Seven can have: the config's player_max_hp, plus any
+## Thick Plating upgrades (the arena raises it).
+var max_hp: int = CONFIG.player_max_hp
+## Multiplies the time between seed pods (Seed Pouch upgrades make it smaller).
+var fire_cooldown_scale: float = 1.0
 ## True once hp reaches zero: the bot stops moving, firing and zipping.
 var is_dead: bool = false
 
@@ -84,7 +89,7 @@ var zip_from: Vector2 = Vector2.ZERO
 ## _ready runs once when the player enters the scene: size the hit circle and the
 ## placeholder sprite from the config.
 func _ready() -> void:
-	hp = CONFIG.player_max_hp
+	hp = max_hp
 	(_collision.shape as CircleShape2D).radius = CONFIG.player_radius_cells * CONFIG.cell_size
 	_sprite.texture = CONFIG.player_texture
 	if _sprite.texture != null:
@@ -159,7 +164,7 @@ func _draw() -> void:
 func fire(direction: Vector2) -> bool:
 	if is_dead or _fire_cooldown_left > 0.0 or direction == Vector2.ZERO:
 		return false
-	_fire_cooldown_left = CONFIG.seed_cooldown
+	_fire_cooldown_left = CONFIG.seed_cooldown * fire_cooldown_scale
 	var unit: Vector2 = direction.normalized()
 	# Start the pod just outside our own hit circle, so it never begins inside us.
 	var muzzle_distance: float = CONFIG.player_radius_cells * CONFIG.cell_size + CONFIG.seed_radius
@@ -219,11 +224,11 @@ func take_damage(amount: int) -> bool:
 		has_fuse = false
 		hp = CONFIG.fuse_revive_hp
 		_invulnerable_left = CONFIG.fuse_invulnerable_time
-		health_changed.emit(hp, CONFIG.player_max_hp)
+		health_changed.emit(hp, max_hp)
 		Sfx.play(&"cat")
 		fuse_used.emit()
 		return true
-	health_changed.emit(hp, CONFIG.player_max_hp)
+	health_changed.emit(hp, max_hp)
 	if hp == 0:
 		is_dead = true
 		velocity = Vector2.ZERO
@@ -241,22 +246,22 @@ func take_damage(amount: int) -> bool:
 func revive(world_position: Vector2) -> void:
 	global_position = world_position
 	velocity = Vector2.ZERO
-	hp = CONFIG.player_max_hp
+	hp = max_hp
 	is_dead = false
 	is_zipping = false
 	modulate = Color.WHITE
 	_invulnerable_left = CONFIG.player_hit_invulnerable_time
 	# A real defeat is the only thing that refits a used fuse.
 	has_fuse = has_fuse_slot
-	health_changed.emit(hp, CONFIG.player_max_hp)
+	health_changed.emit(hp, max_hp)
 
 
 ## Gives back up to `amount` hit points, never above the maximum. (A tap tree does this.)
 func heal(amount: int) -> void:
 	if is_dead or amount <= 0:
 		return
-	hp = mini(hp + amount, CONFIG.player_max_hp)  # mini = the smaller of two whole numbers
-	health_changed.emit(hp, CONFIG.player_max_hp)
+	hp = mini(hp + amount, max_hp)  # mini = the smaller of two whole numbers
+	health_changed.emit(hp, max_hp)
 
 
 ## Lucky's gift: the clamp (bind machines with the vine) and a spare fuse.

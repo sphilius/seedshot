@@ -34,6 +34,12 @@ const CONFIG: GameConfig = preload("res://config/game_config.tres")
 const SCRAPPER: StringName = &"scrapper"
 const SPITTER: StringName = &"spitter"
 const SAWBOT: StringName = &"sawbot"
+const LINEBREAKER: StringName = &"linebreaker"
+const ARC_SPITTER: StringName = &"arc_spitter"
+
+## While true, the break between waves does not count down (the arena sets it
+## while the upgrade cards are showing, and clears it once one is picked).
+var hold_break: bool = false
 
 ## Runs the timetable faster or slower. 1.0 is normal. The headless tests set
 ## this to 20 so a wave's worth of spawning takes a blink instead of seconds.
@@ -105,6 +111,8 @@ func _physics_process(delta: float) -> void:
 				state = State.FIGHTING
 				_check_cleared()  # in case it was shot the instant it appeared
 		State.BREAK:
+			if hold_break:
+				return  # the upgrade cards are up: wait for the pick
 			_timer -= delta
 			if _timer <= 0.0:
 				start_wave(wave + 1)
@@ -134,12 +142,19 @@ func _build_queue(number: int) -> Array[StringName]:
 	# The "specials" for this wave, Spitters and Sawbots taking turns.
 	var spitters: int = _scaled(_count_for(CONFIG.wave_spitters, index))
 	var sawbots: int = _scaled(_count_for(CONFIG.wave_sawbots, index))
+	var linebreakers: int = _scaled(_count_for(CONFIG.wave_linebreakers, index))
+	var arc_spitters: int = _scaled(_count_for(CONFIG.wave_arc_spitters, index))
 	var specials: Array[StringName] = []
-	for i: int in maxi(spitters, sawbots):
+	# Deal the specials out like cards, one of each kind per round, so the kinds mix.
+	for i: int in maxi(maxi(spitters, sawbots), maxi(linebreakers, arc_spitters)):
 		if i < spitters:
 			specials.append(SPITTER)
 		if i < sawbots:
 			specials.append(SAWBOT)
+		if i < linebreakers:
+			specials.append(LINEBREAKER)
+		if i < arc_spitters:
+			specials.append(ARC_SPITTER)
 
 	for i: int in specials.size():
 		# Spread them through the queue: with 2 specials, about 1/3 and 2/3 of the

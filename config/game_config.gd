@@ -99,6 +99,18 @@ extends Resource
 
 @export_group("Sawbot")
 ## Slower than a Scrapper (120): you have time to reach it before a tree falls.
+## LINEBREAKER (a heavy Scrapper, scrapper.gd `heavy`): hit points, size (1 =
+## a Scrapper's), speed (share of a Scrapper's), melee damage and colour.
+@export var linebreaker_hp: int = 5
+@export var linebreaker_scale: float = 1.35
+@export var linebreaker_speed_factor: float = 0.7
+@export var linebreaker_damage: int = 2
+@export var linebreaker_tint: Color = Color(1.0, 0.55, 0.45)
+## ARC SPITTER (spitter.gd `arc`): hit points, the angle between the shots of
+## its three-shot fan, and colour.
+@export var arc_spitter_hp: int = 3
+@export var arc_spitter_spread_degrees: float = 18.0
+@export var arc_spitter_tint: Color = Color(0.70, 0.75, 1.30)
 @export var sawbot_speed: float = 90.0
 ## Takes three pods. It ignores you, so the cost of leaving it alone is trees.
 @export var sawbot_hp: int = 3
@@ -276,6 +288,27 @@ extends Resource
 @export var wave_spitters: Array[int] = [1, 1, 2, 2, 2, 2, 3, 3, 4, 4]
 ## How many Sawbots each wave sends, lined up with the list above.
 @export var wave_sawbots: Array[int] = [0, 0, 0, 1, 2, 2, 2, 3, 3, 4]
+## UPGRADES (upgrade_picker.gd): after clearing this wave and each later one
+## (but not the last), the player picks one of `upgrade_choices` cards.
+@export var upgrade_from_wave: int = 1
+@export var upgrade_choices: int = 3
+## Seed Pouch multiplies the time between pods by this (0.8 = 20% faster).
+@export var upgrade_fire_cooldown_factor: float = 0.8
+## Heavy Seeds: extra damage per pod.
+@export var upgrade_seed_damage: int = 1
+## Thick Plating: extra max health.
+@export var upgrade_max_hp: int = 1
+## Hardwood: extra hit points for every tree.
+@export var upgrade_tree_hp: int = 2
+## Quick Roots multiplies the sapling time by this (0.6 = 40% faster).
+@export var upgrade_sapling_time_factor: float = 0.6
+## Long Trellis: extra seconds for every trellis vine.
+@export var upgrade_trellis_seconds: float = 4.0
+## Linebreakers (heavy Scrappers) per wave. They arrive once the player has had
+## a few upgrade picks to answer them with.
+@export var wave_linebreakers: Array[int] = [0, 0, 0, 0, 0, 1, 1, 2, 2, 3]
+## Arc Spitters (three-shot fans) per wave.
+@export var wave_arc_spitters: Array[int] = [0, 0, 0, 0, 0, 0, 1, 1, 2, 2]
 ## Seconds before the first machine of a wave walks in.
 @export var wave_first_delay: float = 1.0
 ## Seconds between one machine walking in and the next.
@@ -358,6 +391,13 @@ extends Resource
 @export var dj_first_sawbot: Array[String] = [
 	"Sawbot on the lot! It doesn't want you. It wants the trees. Drop it first.",
 	"It'll go for the Heart, the big old tree in the middle. Lose the Heart, lose the wave.",
+]
+## Canopy FM, the first time a Linebreaker or an Arc Spitter is sent in.
+@export var dj_first_linebreaker: Array[String] = [
+	"Big one! That's a Linebreaker. Armoured, slow, hits twice as hard. Keep your distance and keep planting.",
+]
+@export var dj_first_arc_spitter: Array[String] = [
+	"Arc Spitter. Fires a fan of three. One tree won't cover you from all of it: find a thicket.",
 ]
 ## Canopy FM, wave 1 of New Game +: what great sunroots do.
 @export var dj_ng_plus_intro: Array[String] = [

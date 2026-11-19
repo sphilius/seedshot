@@ -102,6 +102,8 @@ func _ready() -> void:
 	await _test_great_powers()
 	await _test_trellis()
 	await _test_heart_tree()
+	await _test_new_machines()
+	await _test_upgrades()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -1637,3 +1639,66 @@ func _test_heart_tree() -> void:
 	_check(felled[0], "felling the Heart Tree loses the wave")
 	var replanted: Callable = func() -> bool: return is_instance_valid(_arena.heart_tree) and _arena.heart_tree.is_heart
 	_check(await _wait_until(replanted, CONFIG.death_restart_delay + 1.0), "and the wave restarts with the Heart Tree replanted")
+
+
+## The late-wave machines: Linebreakers (heavy Scrappers) and Arc Spitters
+## (three-shot fans), and the waves that send them.
+func _test_new_machines() -> void:
+	await _fresh_arena()
+	var heavy: Scrapper = _arena.spawn_scrapper_at(Vector2i(20, 12), true)
+	await _wait_frames(1)
+	_check(heavy.hp == CONFIG.linebreaker_hp, "a Linebreaker has %d hit points" % CONFIG.linebreaker_hp)
+	_check(is_equal_approx(heavy.scale.x, CONFIG.linebreaker_scale), "and is bigger than a Scrapper")
+	var arc: Spitter = _arena.spawn_spitter_at(Vector2i(20, 3), true)
+	await _wait_frames(1)
+	var shots: Array[Vector2] = []
+	arc.spat.connect(func(_origin: Vector2, direction: Vector2) -> void: shots.append(direction))
+	arc._fire(Vector2.LEFT * 100.0)
+	_check(shots.size() == 3, "an Arc Spitter fires a fan of three shots")
+	# The waves: none of either early on; both by the last wave.
+	var director: WaveDirector = _arena.waves
+	var last: int = director.total_waves()
+	_check(not director._build_queue(1).has(WaveDirector.LINEBREAKER), "no Linebreakers in wave 1")
+	_check(director._build_queue(last).has(WaveDirector.LINEBREAKER), "Linebreakers in the last wave")
+	_check(director._build_queue(last).has(WaveDirector.ARC_SPITTER), "Arc Spitters in the last wave")
+
+
+## Between-wave upgrades: clearing a wave deals the cards and holds the next
+## wave; picking one applies it and lets the next wave come.
+func _test_upgrades() -> void:
+	await _fresh_arena()
+	var picker: UpgradePicker = _arena.upgrade_picker
+	_check(not picker.is_open(), "no upgrade cards before a wave is cleared")
+	_arena.waves.start_wave(2)  # wave 1 is the staged tutorial: one machine at a time
+	var all_sent: Callable = func() -> bool: return _arena.waves.state == WaveDirector.State.FIGHTING
+	_arena.waves.time_scale = 20.0
+	await _wait_until(all_sent, 4.0)
+	for node: Node in get_tree().get_nodes_in_group(Enemy.GROUP):
+		(node as Enemy).take_damage(99)
+	_check(picker.is_open() and picker.offered.size() == CONFIG.upgrade_choices, "clearing a wave deals %d upgrade cards" % CONFIG.upgrade_choices)
+	_check(_arena.waves.hold_break, "and the next wave waits for a pick")
+	picker.choose(0)
+	_check(not picker.is_open() and not _arena.waves.hold_break, "picking one closes the cards and lets the next wave come")
+	_check(_arena.upgrades_taken.size() == 1, "the pick is recorded")
+
+	# Each upgrade does what its card says.
+	var player: Player = _arena.player
+	var hp_before: int = player.max_hp
+	_arena.apply_upgrade(&"thick_plating")
+	_check(player.max_hp == hp_before + CONFIG.upgrade_max_hp and player.hp == player.max_hp, "Thick Plating: more max health and a full repair")
+	_arena.apply_upgrade(&"seed_pouch")
+	_check(player.fire_cooldown_scale < 1.0, "Seed Pouch: pods come faster")
+	_arena.apply_upgrade(&"heavy_seeds")
+	_check(_arena.seed_damage_bonus >= CONFIG.upgrade_seed_damage, "Heavy Seeds: pods hit harder")
+	var standing: ForestTree = _arena.tree_at(Arena.TEST_TREE_CELLS[0])
+	var tree_hp_before: int = standing.hp
+	_arena.apply_upgrade(&"hardwood")
+	_check(standing.hp == tree_hp_before + CONFIG.upgrade_tree_hp, "Hardwood: trees already standing get more hit points")
+	var planted: ForestTree = _arena.spawn_tree(Vector2i(4, 12), true)
+	_check(planted.max_hp() == CONFIG.tree_hp + _arena.tree_hp_bonus, "and so do new trees")
+	_arena.apply_upgrade(&"long_trellis")
+	_check(_arena.great_powers.trellis_bonus_seconds == CONFIG.upgrade_trellis_seconds, "Long Trellis: trellis vines last longer")
+	_arena.apply_upgrade(&"quick_roots")
+	_check(_arena.sapling_time_scale < 1.0, "Quick Roots: saplings root faster")
+	for id: StringName in UpgradePicker.CATALOG.keys():
+		_check(UpgradePicker._describe(id).find("%d") == -1, "the %s card's text is filled in" % id)

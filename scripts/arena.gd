@@ -112,6 +112,14 @@ var heart_tree: ForestTree
 ## Knob: plant the Heart Tree at the start. The tests switch it off for the
 ## older checks that count trees, since writes to the shared config are ignored.
 @export var plant_heart_tree: bool = true
+## The between-wave upgrade cards (see upgrade_picker.gd). Public for tests.
+var upgrade_picker: UpgradePicker
+## Run-long upgrade effects the arena hands out (see apply_upgrade). Public for tests.
+var seed_damage_bonus: int = 0
+var tree_hp_bonus: int = 0
+var sapling_time_scale: float = 1.0
+## Every upgrade picked this run, in order. Public for tests.
+var upgrades_taken: Array[StringName] = []
 ## The Block's painted lines on the side walls. Public so tests can reach it.
 var graffiti: Graffiti
 ## The hidden lucky cat's shop, in the top wall. Public so tests can reach it.
@@ -191,7 +199,7 @@ func _ready() -> void:
 	player.died.connect(_on_player_died)
 	player.fuse_used.connect(_on_player_fuse_used)
 	add_child(player)
-	_health_pips.show_health(player.hp, CONFIG.player_max_hp)
+	_health_pips.show_health(player.hp, player.max_hp)
 	# Hand the player to the touch controls, if the scene has them.
 	if _touch != null:
 		_touch.setup(player)
@@ -218,6 +226,9 @@ func _ready() -> void:
 	_banner.visible = false
 	radio = Radio.new()
 	$Hud.add_child(radio)
+	upgrade_picker = UpgradePicker.new()
+	upgrade_picker.picked.connect(apply_upgrade)
+	$Hud.add_child(upgrade_picker)
 	_wave_label.text = ""
 	if RunState.ng_plus:
 		apply_ng_plus()
@@ -336,6 +347,8 @@ func spawn_tree(cell: Vector2i, grown: bool) -> ForestTree:
 	tree.is_heart = grown and cell == HEART_TREE_CELL and plant_heart_tree
 	if tree.is_heart:
 		heart_tree = tree
+	tree.bonus_hp = tree_hp_bonus             # Hardwood upgrades
+	tree.sapling_time_scale = sapling_time_scale  # Quick Roots upgrades
 	tree.position = grid.cell_to_world(cell)
 	tree.ready_to_solidify.connect(_on_tree_ready_to_solidify)
 	tree.felled.connect(_on_tree_felled)
@@ -366,8 +379,9 @@ func tree_at(cell: Vector2i) -> ForestTree:
 
 
 ## Creates a Scrapper on a cell and points it at the player.
-func spawn_scrapper_at(cell: Vector2i) -> Scrapper:
+func spawn_scrapper_at(cell: Vector2i, heavy: bool = false) -> Scrapper:
 	var scrapper: Scrapper = SCRAPPER_SCENE.instantiate()
+	scrapper.heavy = heavy  # true = a Linebreaker
 	scrapper.position = grid.cell_to_world(cell)
 	scrapper.setup(grid)
 	scrapper.chase(player)
@@ -390,8 +404,9 @@ func spawn_sawbot_at(cell: Vector2i) -> Sawbot:
 
 
 ## Creates a Spitter on a cell and points it at the player.
-func spawn_spitter_at(cell: Vector2i) -> Spitter:
+func spawn_spitter_at(cell: Vector2i, arc: bool = false) -> Spitter:
 	var spitter: Spitter = SPITTER_SCENE.instantiate()
+	spitter.arc = arc  # true = an Arc Spitter
 	spitter.position = grid.cell_to_world(cell)
 	spitter.setup(grid)
 	spitter.aim_at(player)
@@ -714,10 +729,14 @@ func _on_spawn_requested(kind: StringName, wave_number: int) -> void:
 	if kind == WaveDirector.SAWBOT:
 		spawn_sawbot_at(cell)
 		_dj_once(&"sawbot", CONFIG.dj_first_sawbot)
-	elif kind == WaveDirector.SPITTER:
-		spawn_spitter_at(cell)
+	elif kind == WaveDirector.SPITTER or kind == WaveDirector.ARC_SPITTER:
+		spawn_spitter_at(cell, kind == WaveDirector.ARC_SPITTER)
+		if kind == WaveDirector.ARC_SPITTER:
+			_dj_once(&"arc_spitter", CONFIG.dj_first_arc_spitter)
 	else:
-		var scrapper: Scrapper = spawn_scrapper_at(cell)
+		var scrapper: Scrapper = spawn_scrapper_at(cell, kind == WaveDirector.LINEBREAKER)
+		if kind == WaveDirector.LINEBREAKER:
+			_dj_once(&"linebreaker", CONFIG.dj_first_linebreaker)
 		# Faster every wave: wave 1 is 1.0, wave 2 is 1.12, wave 3 is 1.24, ...
 		scrapper.speed_scale = 1.0 + CONFIG.scrapper_speed_gain_per_wave * (wave_number - 1)
 
@@ -726,6 +745,11 @@ func _on_spawn_requested(kind: StringName, wave_number: int) -> void:
 func _on_wave_cleared(number: int) -> void:
 	Sfx.play(&"wave_clear")
 	_show_banner(wave_cleared_text(number), CONFIG.wave_break_time)
+	# Between waves (not after the last one): deal the upgrade cards. The next
+	# wave waits until one is picked.
+	if number < waves.total_waves() and number >= CONFIG.upgrade_from_wave:
+		waves.hold_break = true
+		upgrade_picker.offer(CONFIG.upgrade_choices)
 	# The Heart Tree heals between waves.
 	if is_instance_valid(heart_tree):
 		heart_tree.hp = heart_tree.max_hp()
@@ -857,7 +881,37 @@ func _on_player_seed_fired(origin: Vector2, direction: Vector2) -> void:
 	var pod: SeedPod = SEED_POD_SCENE.instantiate()
 	pod.position = origin
 	pod.direction = direction
+	pod.damage = CONFIG.seed_damage + seed_damage_bonus  # Heavy Seeds upgrades add to it
 	_pods.add_child(pod)
+
+
+## Applies upgrade `id` for the rest of the run, then lets the next wave come.
+## Connected to the upgrade picker's `picked` signal; public so tests can call it.
+func apply_upgrade(id: StringName) -> void:
+	upgrades_taken.append(id)
+	match id:
+		&"seed_pouch":
+			player.fire_cooldown_scale *= CONFIG.upgrade_fire_cooldown_factor
+		&"heavy_seeds":
+			seed_damage_bonus += CONFIG.upgrade_seed_damage
+		&"thick_plating":
+			player.max_hp += CONFIG.upgrade_max_hp
+			player.heal(player.max_hp)  # a full repair (heal never goes over max_hp)
+		&"hardwood":
+			tree_hp_bonus += CONFIG.upgrade_tree_hp
+			# Trees already standing get it too.
+			for tree: ForestTree in _trees_by_cell.values():
+				if is_instance_valid(tree):
+					tree.bonus_hp = tree_hp_bonus
+					tree.hp += CONFIG.upgrade_tree_hp
+					tree.queue_redraw()
+		&"quick_roots":
+			sapling_time_scale *= CONFIG.upgrade_sapling_time_factor
+		&"long_trellis":
+			great_powers.trellis_bonus_seconds += CONFIG.upgrade_trellis_seconds
+	_show_banner(UpgradePicker.CATALOG[id][0] + "!", 1.2)
+	Sfx.play(&"grow")
+	waves.hold_break = false
 
 
 ## The Heart Tree fell: the block's roots are cut, so the wave starts again (like

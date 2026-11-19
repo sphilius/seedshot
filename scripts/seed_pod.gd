@@ -13,6 +13,8 @@ const POD_COLOR: Color = Color(0.85, 0.95, 0.35)
 
 ## Unit vector (length 1) the pod travels along. Set by the arena when spawning.
 var direction: Vector2 = Vector2.RIGHT
+## Damage this pod does to a machine. Set by the arena when it fires.
+var damage: int = 1
 
 ## Seconds this pod has existed.
 var _age: float = 0.0
@@ -54,7 +56,7 @@ func _on_body_entered(body: Node2D) -> void:
 	# and gives null if it is something else, such as a tree or a wall.
 	var enemy := body as Enemy
 	if enemy != null:
-		enemy.take_damage(CONFIG.seed_damage)
+		enemy.take_damage(damage)
 	elif body is CatShop:
 		(body as CatShop).hit_by_seed()  # the hidden lucky cat's shop counts pods
 	else:

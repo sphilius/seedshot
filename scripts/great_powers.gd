@@ -43,6 +43,8 @@ var lines: Array[Dictionary] = []
 var sunburst_cooldown_left: float = 0.0
 ## How brightly to draw (above 1 shines through the night tint). Set by the arena.
 var light_boost: float = 1.0
+## Extra seconds every trellis lasts (Long Trellis upgrades). Set by the arena.
+var trellis_bonus_seconds: float = 0.0
 
 ## The trellis vines strung right now: {a: Vector2, b: Vector2, time_left: float,
 ## caught: Dictionary of machine ids already snared}. Public for the tests.
@@ -130,7 +132,7 @@ func _catch_on(line: Dictionary) -> void:
 
 ## Strings a trellis vine from `a` to `b` (two tree centres) for trellis_seconds.
 func add_trellis(a: Vector2, b: Vector2) -> void:
-	trellises.append({a = a, b = b, time_left = CONFIG.trellis_seconds, caught = {}})
+	trellises.append({a = a, b = b, time_left = CONFIG.trellis_seconds + trellis_bonus_seconds, caught = {}})
 	Sfx.play(&"grow")
 
 
