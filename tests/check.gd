@@ -114,6 +114,7 @@ func _ready() -> void:
 	await _test_plating_and_grove_rest()
 	await _test_s18_machines_heart_cards_light()
 	await _test_knockout_and_fuse_animations()
+	await _test_banner_radio_and_wave_beat()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -140,6 +141,8 @@ func _fresh_arena(with_heart: bool = false) -> void:
 	# this), so each test controls exactly which enemies exist.
 	_arena.autostart_waves = false
 	_arena.plant_heart_tree = with_heart
+	# No slow-motion beat at the end of a wave: the checks deal the cards at once.
+	_arena.wave_end_beat_seconds = 0.0
 	add_child(_arena)
 	# Give the physics engine two steps to register the new bodies.
 	await get_tree().physics_frame
@@ -1132,13 +1135,13 @@ func _test_story_words() -> void:
 		(node as Enemy).take_damage(99)
 	_check(_arena.graffiti.revealed_count == 2, "clearing wave 2 puts two lines on the walls")
 	_check(_arena.graffiti.line_text(1) == CONFIG.graffiti_lines[1], "the second is wave 2's line")
-	_check(not radio.is_on(), "Helios's line is cleared with the wave")
+	_check(radio.is_on() and radio.text == _arena.helios_line_for(2), "clearing the wave does not cut off the line on the air (s18)")
 
 	# Painted lines never come off, and the opening line never repeats.
 	_arena.graffiti.reveal_up_to(1)
 	_check(_arena.graffiti.revealed_count == 2, "revealing an earlier wave removes nothing")
 	_arena.waves.start_wave(1)
-	_check(radio.text == _arena.helios_line_for(1), "a later wave start skips the opening line")
+	_check(_arena._is_radio_pending(_arena.helios_line_for(1)) and not _arena._is_radio_pending(CONFIG.story_hook), "a later wave start queues its notice and skips the opening line")
 
 	# Canopy FM teaches: wave 1's tutorial follows Helios; the cat hints come on
 	# their waves only while the shop is shut.
@@ -2136,3 +2139,57 @@ func _test_knockout_and_fuse_animations() -> void:
 	await _wait_until(flashed, CONFIG.fuse_flash_seconds + 1.0)
 	await _wait_frames(3)
 	_check(sprite.scale.is_equal_approx(normal_scale), "and settles back to its normal size")
+
+## s18 group 7: the end banner fits the screen, "Final notice" is the last wave's
+## line, radio lines are never cut off, and a wave ends on a slow-motion beat.
+func _test_banner_radio_and_wave_beat() -> void:
+	await _fresh_arena()
+	# The banner: every line of the longest end screen fits inside the label.
+	RunState.just_unlocked = true
+	var banner: Label = _arena._banner
+	var font: Font = banner.get_theme_font(&"font")
+	var font_size: int = banner.get_theme_font_size(&"font_size")
+	var widest: float = 0.0
+	for line: String in _arena.end_banner_text().split("\n"):
+		widest = maxf(widest, font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x)
+	RunState.just_unlocked = false
+	_check(widest <= banner.size.x, "every line of the end banner fits the screen (%d of %d px)" % [roundi(widest), roundi(banner.size.x)])
+	_check(banner.autowrap_mode != TextServer.AUTOWRAP_OFF and banner.size.x < get_viewport().get_visible_rect().size.x, "and any longer banner wraps inside a side margin")
+
+	# Helios: "Final notice" belongs to the last wave now.
+	var last: int = _arena.waves.total_waves()
+	_check(_arena.helios_line_for(last) == "Final notice.", "Helios says 'Final notice' on the last wave")
+	_check(_arena.helios_line_for(8) != "Final notice." and _arena.helios_line_for(8) != _arena.helios_line_for(9), "waves 8 and 9 have their own lines")
+
+	# The radio: new lines wait their turn instead of replacing what is on the air.
+	var first := Arena._radio_line(Radio.CANOPY, "First line.")
+	var second := Arena._radio_line(Radio.CANOPY, "Second line.")
+	_arena._show_story_lines([first])
+	_arena._show_story_lines([second])
+	_check(_arena.radio.text == "First line." and _arena._story_queue.size() == 1, "a new line waits behind the one on the air")
+	_arena._show_story_lines([second])
+	_check(_arena._story_queue.size() == 1, "and the same line is never queued twice")
+	_arena._story_queue.append(Arena._radio_line(Radio.HELIOS, "Old notice."))
+	_arena._drop_waiting_helios_lines()
+	_check(_arena._story_queue.size() == 1 and _arena._story_queue[0].text == "Second line.", "a new wave drops stale Helios notices but keeps Canopy FM's tips")
+	_arena._radio_interrupt(Arena._radio_line(Radio.CANOPY, "Lucky speaks."))
+	_check(_arena.radio.text == "Lucky speaks." and _arena._story_queue[0].text == "First line.", "an interruption plays at once, and the cut-off line is said again after it")
+	var typed_and_held: float = CONFIG.story_line_seconds + "Lucky speaks.".length() / CONFIG.radio_chars_per_second
+	var back_to_first: Callable = func() -> bool: return _arena.radio.text == "First line."
+	_check(not back_to_first.call() and await _wait_until(back_to_first, typed_and_held + 1.0), "each line stays up until it is typed and held")
+
+	# The wave end beat: slow motion first, then the cards.
+	await _fresh_arena()
+	_arena.wave_end_beat_seconds = 0.3
+	_arena.waves.start_wave(2)
+	_arena.waves.time_scale = 20.0
+	var all_sent: Callable = func() -> bool: return _arena.waves.state == WaveDirector.State.FIGHTING
+	await _wait_until(all_sent, 4.0)
+	for node: Node in get_tree().get_nodes_in_group(Enemy.GROUP):
+		(node as Enemy).take_damage(99)
+	_check(_arena.is_wave_end_beat_playing() and Engine.time_scale < 1.0, "the last kill of a wave slows the game down")
+	_check(not _arena.upgrade_picker.is_open() and _arena.waves.hold_break, "the cards wait for the beat, and so does the next wave")
+	var cards_up: Callable = func() -> bool: return _arena.upgrade_picker.is_open()
+	_check(await _wait_until(cards_up, 3.0), "then the upgrade cards come up")
+	_check(is_equal_approx(Engine.time_scale, 1.0) and _arena.player.locked, "at normal speed again, with Seven parked")
+	_arena.upgrade_picker.choose(0)
