@@ -89,6 +89,11 @@ var _fuse_flash_left: float = 0.0
 var _body_tween: Tween
 ## The picture's normal size, remembered so the animations can put it back.
 var _sprite_base_scale: Vector2 = Vector2.ONE
+## Where the aim line stops, in world pixels: the first wall or tree along the
+## aim, or the end of its reach. Public so the tests can read it.
+var aim_line_end: Vector2 = Vector2.ZERO
+## A small node drawn ABOVE the sprite, for the nozzle (see _draw_nozzle).
+var _aim_overlay: Node2D
 
 ## The machine the vine last lashed, and how much longer to draw that vine.
 var _lash_target: Enemy = null
@@ -122,6 +127,13 @@ func _ready() -> void:
 		var wanted_px: float = CONFIG.sprite_size_cells * CONFIG.cell_size
 		_sprite.scale = Vector2.ONE * (wanted_px / float(_sprite.texture.get_width()))
 	_sprite_base_scale = _sprite.scale
+	# The nozzle must show in front of the sprite. A node's own _draw is painted
+	# behind its children, so the nozzle gets a child node of its own, with a
+	# higher z_index, and we connect its `draw` signal to our drawing function.
+	_aim_overlay = Node2D.new()
+	_aim_overlay.z_index = 1
+	add_child(_aim_overlay)
+	_aim_overlay.draw.connect(_draw_nozzle)
 
 
 ## _physics_process runs 60 times per second: cooldowns, aiming, walking, firing.
@@ -139,6 +151,7 @@ func _physics_process(delta: float) -> void:
 		velocity = Vector2.ZERO
 		return  # the upgrade cards are up: stand still
 	_update_aim()
+	_update_aim_line()
 
 	if not is_zipping:
 		# get_vector reads the four move actions and returns a direction of length
@@ -160,6 +173,7 @@ func _physics_process(delta: float) -> void:
 ## _process runs every drawn frame: keep the reticle and vine line up to date.
 func _process(_delta: float) -> void:
 	queue_redraw()
+	_aim_overlay.queue_redraw()
 
 
 ## _unhandled_input receives input events that no UI element used. The vine is a
@@ -208,6 +222,7 @@ func _draw() -> void:
 		var size: float = CONFIG.player_radius_cells * CONFIG.cell_size * 2.0
 		draw_rect(Rect2(-size / 2.0, -size / 2.0, size, size), FALLBACK_COLOR)
 		draw_line(Vector2.ZERO, aim_direction * size * 0.8, FALLBACK_COLOR, 6.0)
+	_draw_aim_line()
 	# The reticle sits on the mouse pointer. On touch there is no pointer, so it
 	# floats a fixed distance in front of the bot instead.
 	var reticle: Vector2 = get_local_mouse_position()
@@ -501,6 +516,61 @@ func _update_aim() -> void:
 	# flip_h mirrors the picture; the drawing holds its seedling on the right.
 	if absf(aim_direction.x) > 0.1:
 		_sprite.flip_h = aim_direction.x < 0.0
+	# ...and it leans a little toward the aim: forward-and-down when aiming down,
+	# back-and-up when aiming up. The sign flips with the facing so the lean
+	# always tips the head toward the target.
+	var facing: float = -1.0 if _sprite.flip_h else 1.0
+	_sprite.rotation = aim_direction.y * CONFIG.aim_lean_radians * facing
+
+
+## True while the aim line and nozzle should show: not when down, and not while
+## the upgrade cards have Seven locked.
+func is_aim_shown() -> bool:
+	return not is_dead and not locked
+
+
+## Finds where the aim line stops: an invisible ray along the aim that only
+## looks at walls and trees. Called from _physics_process, where ray queries
+## are allowed.
+func _update_aim_line() -> void:
+	var reach: Vector2 = global_position + aim_direction * CONFIG.aim_line_cells * CONFIG.cell_size
+	var ray := PhysicsRayQueryParameters2D.create(global_position, reach, WORLD_MASK)
+	var hit: Dictionary = get_world_2d().direct_space_state.intersect_ray(ray)
+	# An empty Dictionary means the ray met nothing: the line runs its full reach.
+	aim_line_end = reach if hit.is_empty() else hit["position"]
+
+
+## Draws the aim line: ten short pieces from Seven's edge to aim_line_end, each
+## fainter than the last, so it reads as a beam that fades with distance. A
+## small dot marks where it stops. Called from _draw.
+func _draw_aim_line() -> void:
+	if not is_aim_shown():
+		return
+	var start: Vector2 = aim_direction * (CONFIG.player_radius_cells * CONFIG.cell_size + 6.0)
+	var end: Vector2 = to_local(aim_line_end)
+	if end.length() <= start.length():
+		return  # standing right against a wall: nothing to draw
+	var pieces: int = 10
+	for i: int in pieces:
+		# lerp(a, b, t) is the point a share t of the way from a to b.
+		var from: Vector2 = start.lerp(end, float(i) / float(pieces))
+		var to: Vector2 = start.lerp(end, float(i + 1) / float(pieces))
+		var fade: float = 1.0 - 0.75 * float(i) / float(pieces)
+		draw_line(from, to, Color(CONFIG.aim_line_color, CONFIG.aim_line_color.a * fade), CONFIG.aim_line_width)
+	draw_circle(end, 3.0, Color(CONFIG.aim_line_color, 0.8))
+
+
+## Draws the nozzle on the overlay node: a short thick barrel pointing along the
+## aim, so Seven visibly points where it shoots. (Every draw call starts with
+## "_aim_overlay." because we are painting on that node, above the sprite.)
+func _draw_nozzle() -> void:
+	if not is_aim_shown():
+		return
+	var base: Vector2 = aim_direction * (CONFIG.player_radius_cells * CONFIG.cell_size - 4.0)
+	var tip: Vector2 = base + aim_direction * CONFIG.aim_nozzle_length
+	_aim_overlay.draw_line(base, tip, Color(0.05, 0.07, 0.09), 8.0)  # dark outline
+	_aim_overlay.draw_line(base, tip, CONFIG.aim_nozzle_color, 4.0)
+	_aim_overlay.draw_circle(tip, 3.0, CONFIG.aim_line_color)
 
 
 ## Returns the machine nearest to `world_point`, if one is within `pick_radius`

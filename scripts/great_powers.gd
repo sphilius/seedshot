@@ -45,6 +45,9 @@ const BURST_SECONDS: float = 0.5
 var lines: Array[Dictionary] = []
 ## Seconds of Sunburst cooldown left (0 = ready). Public for the tests and the HUD.
 var sunburst_cooldown_left: float = 0.0
+## Sunbursts left this wave. The arena refills it when a wave starts and shows
+## it on the HUD.
+var sunburst_charges: int = CONFIG.sunburst_charges_per_wave
 ## How brightly to draw (above 1 shines through the night tint). Set by the arena.
 var light_boost: float = 1.0
 ## Extra seconds every trellis lasts (Long Trellis upgrades). Set by the arena.
@@ -245,11 +248,17 @@ func _tick_trellises(delta: float) -> void:
 				Sfx.play(&"bind")
 
 
+## True when a zip to a great sunroot would set a Sunburst off right now.
+func is_sunburst_ready() -> bool:
+	return sunburst_charges > 0 and sunburst_cooldown_left <= 0.0
+
+
 ## The player's zip ended at a great sunroot standing at `at`: stun and hurt every
 ## machine nearby. Returns how many machines it caught (0 while cooling down).
 func sunburst(at: Vector2) -> int:
-	if sunburst_cooldown_left > 0.0:
+	if sunburst_charges <= 0 or sunburst_cooldown_left > 0.0:
 		return 0
+	sunburst_charges -= 1
 	sunburst_cooldown_left = CONFIG.sunburst_cooldown
 	_burst_at = at
 	_burst_time = 0.0

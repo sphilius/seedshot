@@ -28,6 +28,17 @@ extends Resource
 @export_group("Player")
 ## Walking speed. There is no acceleration curve in v1: full speed or stopped.
 @export var player_speed: float = 260.0
+## THE AIM LINE (s18): a beam from Seven along the aim, stopping at the first
+## wall or tree, so it is clear where pods will go. Length in cells; the colour's
+## values above 1 keep it bright at night, and its last number is see-through-ness.
+@export var aim_line_cells: float = 9.0
+@export var aim_line_color: Color = Color(1.6, 1.5, 0.9, 0.5)
+@export var aim_line_width: float = 2.5
+## The nozzle drawn over Seven, pointing along the aim, and its length in pixels.
+@export var aim_nozzle_color: Color = Color(1.3, 1.25, 1.0)
+@export var aim_nozzle_length: float = 16.0
+## How far Seven's body leans toward the aim, in radians (0.2 is about 11 degrees).
+@export var aim_lean_radians: float = 0.2
 ## Collision circle radius as a fraction of a cell. Under 0.5 so the player fits
 ## through a gap that is one cell wide.
 @export_range(0.1, 0.49) var player_radius_cells: float = 0.33
@@ -356,7 +367,16 @@ extends Resource
 ## Damage the flare deals to each machine in it.
 @export var sunburst_damage: int = 1
 ## Seconds before the next Sunburst can go off (shared by all great trees).
-@export var sunburst_cooldown: float = 8.0
+## s18: now only a short guard against one zip firing two; the real limit is
+## the charges below. (It was a hidden 8 seconds.)
+@export var sunburst_cooldown: float = 1.0
+## Sunbursts Seven gets each wave. Shown on the HUD; refilled when a wave starts.
+@export var sunburst_charges_per_wave: int = 2
+## The gold ring on every great sunroot while a Sunburst is ready.
+@export var sunburst_ready_color: Color = Color(1.7, 1.3, 0.3, 0.9)
+## Canopy FM explains it the first time great sunroots stand at a wave start.
+## %d is the number of charges.
+@export var sunburst_intro_line: String = "See the gold rings? Zip to a great sunroot for a Sunburst: it stuns every machine near it. You get %d each wave."
 
 @export_group("Canopy FM")
 ## The block's pirate radio (scripts/canopy_fm.gd). How loud the song is, in
@@ -379,12 +399,15 @@ extends Resource
 @export var wave_staged_waves: int = 1
 ## How many Scrappers each wave sends. Entry 0 is wave 1. The length of this
 ## list is the number of waves. Wave 1 is the single "teaching" Scrapper.
-@export var wave_scrappers: Array[int] = [1, 3, 3, 4, 4, 5, 5, 6, 6, 7]
+## s18: about a third more Scrappers, Spitters and Sawbots from wave 2 on (85
+## machines over a run became 113). Wave 1 is the tutorial and is unchanged.
+## Linebreakers and Arc Spitters keep their numbers: they got tougher instead.
+@export var wave_scrappers: Array[int] = [1, 4, 4, 5, 5, 7, 7, 8, 8, 9]
 ## How many Spitters each wave sends, lined up with the list above. They arrive
 ## first (wave 2), so cover matters before anything starts cutting it down.
-@export var wave_spitters: Array[int] = [1, 1, 2, 2, 2, 2, 3, 3, 4, 4]
+@export var wave_spitters: Array[int] = [1, 1, 3, 3, 3, 3, 4, 4, 5, 5]
 ## How many Sawbots each wave sends, lined up with the list above.
-@export var wave_sawbots: Array[int] = [0, 0, 0, 1, 2, 2, 2, 3, 3, 4]
+@export var wave_sawbots: Array[int] = [0, 0, 0, 1, 3, 3, 3, 4, 4, 5]
 ## UPGRADES (upgrade_picker.gd): after clearing this wave and each later one
 ## (but not the last), the player picks one of `upgrade_choices` cards.
 @export var upgrade_from_wave: int = 1

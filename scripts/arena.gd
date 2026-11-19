@@ -152,6 +152,8 @@ var quit_requests: int = 0
 var trees_planted: int = 0
 ## The Block's painted lines on the side walls. Public so tests can reach it.
 var graffiti: Graffiti
+## The home and shop fronts along the back wall (back_wall.gd).
+var back_wall: BackWall
 ## The hidden lucky cat's shop, in the top wall. Public so tests can reach it.
 var cat_shop: CatShop
 ## True after the last wave is cleared. Public so tests can read it.
@@ -194,13 +196,19 @@ func _ready() -> void:
 	grid = ArenaGrid.new(CONFIG.grid_cols, CONFIG.grid_rows, CONFIG.cell_size, origin)
 	_build_walls()
 
-	# The Block's graffiti. Added first, so everything else draws on top of it.
-	graffiti = Graffiti.new()
-	graffiti.setup(Rect2(origin, arena_px), float(CONFIG.cell_size))
-	add_child(graffiti)
 	windows = BlockWindows.new()
 	windows.setup(Rect2(origin, arena_px), float(CONFIG.cell_size))
 	add_child(windows)
+	# The Block's graffiti: painted across the roofs of the homes on the bottom
+	# wall, so it is added AFTER the windows (later children draw on top).
+	graffiti = Graffiti.new()
+	graffiti.setup(Rect2(origin, arena_px), float(CONFIG.cell_size))
+	add_child(graffiti)
+	# The back (top) wall: a row of home and shop fronts. Lucky's shop is added
+	# further down and draws itself into the gap this leaves for it.
+	back_wall = BackWall.new()
+	back_wall.setup(Rect2(origin, arena_px), float(CONFIG.cell_size), CAT_SHOP_CELL.x)
+	add_child(back_wall)
 	# Lantern strings across the lot. Added before the trees and machines, so
 	# they hang underneath them and never hide the action.
 	# The art pass: brick walls and street props (see props.gd). Added first among
@@ -303,6 +311,11 @@ func _process(delta: float) -> void:
 		_wave_label.text = "Wave %d / %d    Homes lit %d / %d    Trees %d    Brambles %d / %d" % [
 			waves.wave, waves.total_waves(), windows.homes_lit(), windows.home_count(), count_grown_trees(),
 			player.bramble_charges, CONFIG.bramble_max_charges]
+		# Sunburst charges, once there is a great sunroot to use them on.
+		if count_great_trees() > 0:
+			_wave_label.text += "    Sunburst %d / %d" % [great_powers.sunburst_charges, CONFIG.sunburst_charges_per_wave]
+	# Great sunroots wear a gold ring while a Sunburst is ready.
+	ForestTree.sunburst_ready = great_powers.is_sunburst_ready()
 	# Glide the lot's tint toward what the current light calls for.
 	var wanted_tint: Color = ambient_tint_for(light_level())
 	if cat_shop != null:
@@ -525,6 +538,15 @@ func spawn_spit_shot(origin: Vector2, direction: Vector2) -> SpitShot:
 
 
 ## How many grown trees are standing right now (the "bloom" count on the HUD).
+## How many great sunroots are standing.
+func count_great_trees() -> int:
+	var count: int = 0
+	for tree: ForestTree in _trees_by_cell.values():
+		if is_instance_valid(tree) and tree.is_great and tree.stage == ForestTree.Stage.GROWN:
+			count += 1
+	return count
+
+
 func count_grown_trees() -> int:
 	var count: int = 0
 	for tree: ForestTree in _trees_by_cell.values():
@@ -856,6 +878,7 @@ func _on_wave_started(number: int, total: int) -> void:
 	# On the radio: Canopy FM's opening line (once only), then Helios's notice,
 	# then whatever Canopy FM has to say about this wave (tips, cat hints).
 	_drop_waiting_helios_lines()  # a notice for an earlier wave is stale now
+	great_powers.sunburst_charges = CONFIG.sunburst_charges_per_wave  # a fresh wave refills them
 	var lines: Array[Dictionary] = []
 	if not _hook_shown:
 		_hook_shown = true
@@ -869,6 +892,11 @@ func _on_wave_started(number: int, total: int) -> void:
 	if number == 1 and is_instance_valid(heart_tree):
 		lines.append(_radio_line(Radio.CANOPY, CONFIG.heart_intro_line))
 	lines.append_array(_dj(dj_lines_for_wave(number)))
+	# The first wave that starts with a great sunroot standing: explain Sunburst.
+	# (Not _dj_once: this is said even when the New Game + tutorial was skipped.)
+	if count_great_trees() > 0 and not _dj_said.has(&"sunburst"):
+		_dj_said[&"sunburst"] = true
+		lines.append(_radio_line(Radio.CANOPY, CONFIG.sunburst_intro_line % CONFIG.sunburst_charges_per_wave))
 	_show_story_lines(lines)
 
 
@@ -1034,6 +1062,7 @@ func _on_all_waves_cleared() -> void:
 ## Signal handler: the third pod landed on the hidden shop and the cat is out.
 func _on_cat_shop_opened() -> void:
 	player.receive_cat_gift()
+	_pause.bind_unlocked = true  # the pause menu may now list the bind control
 	lucky_found_wave = maxi(waves.wave, 1)
 
 	_show_banner("Lucky's gift: right-click a machine to bind it. Spare fuse fitted.", 4.0)
@@ -1083,7 +1112,7 @@ func _on_player_zip_finished() -> void:
 	# A zip that ends at a great sunroot sets off its Sunburst.
 	if is_instance_valid(tree) and tree.is_great and tree.stage == ForestTree.Stage.GROWN:
 		if great_powers.sunburst(tree.global_position) > 0:
-			_show_banner("Sunburst!", 1.0)
+			_show_banner("Sunburst!  %d left this wave" % great_powers.sunburst_charges, 1.2)
 
 
 ## _unhandled_input receives input that nothing else used. After the last wave,

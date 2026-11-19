@@ -116,6 +116,8 @@ func _ready() -> void:
 	await _test_knockout_and_fuse_animations()
 	await _test_banner_radio_and_wave_beat()
 	await _test_pause_menu()
+	await _test_back_wall_and_roof_graffiti()
+	await _test_harder_waves_aim_line_sunburst()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -213,7 +215,7 @@ func _test_art_is_the_right_size() -> void:
 ## from a real file in audio/sfx, not from a generated beep. AudioStreamMP3 is
 ## the type Godot gives an imported .mp3; the beeps are AudioStreamWAV.
 func _test_every_sound_is_a_real_file() -> void:
-	var names: Array[StringName] = [&"unlock", &"fire", &"thunk", &"enemy_down", &"zip", &"grow",
+	var names: Array[StringName] = [&"unlock", &"fire", &"thunk", &"plink", &"enemy_down", &"zip", &"grow",
 		&"windup", &"hurt", &"player_down", &"saw", &"cat", &"bind", &"spit", &"wave_clear"]
 	for sound_name: StringName in names:
 		_check(Sfx.stream_for(sound_name) is AudioStreamMP3, "the '%s' sound is a real file" % sound_name)
@@ -2241,7 +2243,95 @@ func _test_pause_menu() -> void:
 	pause.choose(PauseOverlay.Item.QUIT)
 	_check(_arena.quit_requests == 1 and not get_tree().paused, "the second press quits to the main menu")
 
+	# The bind control is listed only after Lucky's gift (it would spoil the secret).
+	_check(not " ".join(pause.controls_lines(false)).contains("bind") and not " ".join(pause.controls_lines(true)).contains("bind"), "before Lucky's gift the controls list does not mention binding")
+	_arena._on_cat_shop_opened()
+	_check(" ".join(pause.controls_lines(false)).contains("bind") and " ".join(pause.controls_lines(true)).contains("bind"), "after the gift it does")
+
 	# Resume by its button.
 	pause.set_paused(true)
 	pause.choose(PauseOverlay.Item.RESUME)
 	_check(not get_tree().paused, "Resume carries on")
+
+## s18: the back wall is a row of home fronts that hides Lucky's shutter among
+## others, and the graffiti is painted level across the roofs.
+func _test_back_wall_and_roof_graffiti() -> void:
+	await _fresh_arena()
+	var wall: BackWall = _arena.back_wall
+	var shop_front: int = Arena.CAT_SHOP_CELL.x / BackWall.FRONT_CELLS
+	_check(wall.front_count() * BackWall.FRONT_CELLS == CONFIG.grid_cols, "the fronts fill the back wall exactly (%d of them)" % wall.front_count())
+	_check(wall.is_shop_front(shop_front), "one front is left empty for Lucky's shop")
+	_check(is_equal_approx(wall.front_rect(shop_front).get_center().x, _arena.cat_shop.global_position.x), "and the shop stands exactly in it")
+	_check(wall.kind_of(shop_front) == BackWall.Kind.SHUTTER, "that front would be a shutter anyway, so the pattern is unbroken")
+	var other_shutters: int = 0
+	for i: int in wall.front_count():
+		if not wall.is_shop_front(i) and wall.kind_of(i) == BackWall.Kind.SHUTTER:
+			other_shutters += 1
+	_check(other_shutters >= 3, "Lucky's shutter hides among %d others" % other_shutters)
+
+	# Graffiti: every line sits level inside the bottom wall, and inside the arena.
+	var graffiti: Graffiti = _arena.graffiti
+	var arena_rect := Rect2(_arena.grid.origin, Vector2(CONFIG.grid_cols, CONFIG.grid_rows) * float(CONFIG.cell_size))
+	var font: Font = CONFIG.graffiti_font
+	var all_fit: bool = true
+	for i: int in CONFIG.graffiti_lines.size():
+		var place: Array = graffiti.line_place(i)
+		var at: Vector2 = place[0]
+		var slot_width: float = place[1]
+		var text_width: float = font.get_string_size(CONFIG.graffiti_lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1.0, Graffiti.FONT_SIZE).x
+		var in_wall: bool = at.y > arena_rect.end.y - CONFIG.cell_size and at.y <= arena_rect.end.y
+		var in_arena: bool = at.x >= arena_rect.position.x and at.x + slot_width <= arena_rect.end.x + 0.5
+		if not in_wall or not in_arena or text_width > slot_width:
+			all_fit = false
+	_check(all_fit, "every graffiti line fits its slot on the roofs of the bottom wall")
+	_check(graffiti.get_index() > _arena.windows.get_index(), "and is painted over the roofs, not under them")
+
+## s18 groups 6, 8 and 9: more machines per wave, a visible aim line, and
+## Sunburst on visible charges instead of a hidden cooldown.
+func _test_harder_waves_aim_line_sunburst() -> void:
+	# Group 6: about a third more machines over a run; the tutorial wave untouched.
+	var total: int = 0
+	for list: Array[int] in [CONFIG.wave_scrappers, CONFIG.wave_spitters, CONFIG.wave_sawbots]:
+		for count: int in list:
+			total += count
+	_check(total >= 110 and total <= 116, "a run sends about a third more machines than the old 85 (%d)" % total)
+	_check(CONFIG.wave_scrappers[0] == 1 and CONFIG.wave_spitters[0] == 1 and CONFIG.wave_sawbots[0] == 0, "the tutorial wave is unchanged")
+
+	# Group 8: the aim line runs along the aim and stops at the first tree.
+	await _fresh_arena()
+	var player: Player = _arena.player
+	var here := Vector2i(6, 11)
+	player.global_position = _arena.grid.cell_to_world(here)
+	player.touch_mode = true  # so the (absent) mouse does not overwrite the aim
+	player.aim_direction = Vector2.RIGHT
+	await _wait_frames(4)
+	var open_reach: float = player.aim_line_end.x - player.global_position.x
+	_check(open_reach > CONFIG.cell_size * 3.0 and is_equal_approx(player.aim_line_end.y, player.global_position.y), "the aim line runs out along the aim")
+	_arena.spawn_tree(here + Vector2i(3, 0), true)
+	await _wait_frames(4)
+	var blocked_reach: float = player.aim_line_end.x - player.global_position.x
+	_check(blocked_reach < open_reach and blocked_reach <= CONFIG.cell_size * 3.0, "and stops at the first tree in the way")
+	player.aim_direction = Vector2(0.6, 0.8)  # down and to the right
+	await _wait_frames(3)
+	_check(player._sprite.rotation > 0.05, "Seven leans toward the aim")
+	_check(player.is_aim_shown(), "the aim line shows while Seven can act")
+	player.locked = true
+	_check(not player.is_aim_shown(), "and hides while the upgrade cards lock Seven")
+	player.locked = false
+
+	# Group 9: Sunburst runs on charges that the player can see.
+	var powers: GreatPowers = _arena.great_powers
+	var great: ForestTree = _arena.tree_at(here + Vector2i(3, 0))
+	great.mature()
+	await _wait_frames(3)
+	_check(powers.sunburst_charges == CONFIG.sunburst_charges_per_wave and ForestTree.sunburst_ready, "a wave starts with %d Sunbursts, and great sunroots show the gold ring" % CONFIG.sunburst_charges_per_wave)
+	for i: int in CONFIG.sunburst_charges_per_wave:
+		powers.sunburst_cooldown_left = 0.0
+		powers.sunburst(great.global_position)
+	powers.sunburst_cooldown_left = 0.0
+	_check(powers.sunburst_charges == 0 and not powers.is_sunburst_ready(), "using them all leaves none, whatever the cooldown says")
+	await _wait_frames(3)
+	_check(not ForestTree.sunburst_ready, "and the gold rings go out")
+	_arena.waves.start_wave(3)
+	_check(powers.sunburst_charges == CONFIG.sunburst_charges_per_wave, "the next wave refills them")
+	_check(_arena._is_radio_pending(CONFIG.sunburst_intro_line % CONFIG.sunburst_charges_per_wave), "and Canopy FM explains Sunburst the first time a great sunroot is standing")
