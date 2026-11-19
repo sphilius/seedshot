@@ -29,3 +29,7 @@ One line per asset or system: tool, date, what it did. This feeds the itch page'
 - Canopy FM (s15): three 90 s songs (lofi, dub, chip) generated with the ElevenLabs music API by tools/gen_music.ps1; played by the CanopyFM autoload through a low-pass filter that opens as the block lights.
 - Seven sprite (s15): drawn shape by shape by tools/seven_sprite.py in Sasha's locked design (the robot in her Gemini concept 07_key_art_b); faces the viewer and mirrors to follow the aim.
 - Title screen + New Game + (s15): title art is Sasha's Gemini key art 07_key_art_g, cropped to 1280x720; NG+ unlocks after a win (saved in user://), +50% machines sent 50% faster, great sunroots, Canopy FM station picker.
+- Radio panel (s16): Helios broadcasts and the Canopy FM DJ tutorial and cat hints; the lines are written in the config with Claude Code from Sasha's direction.
+- Props (s16): nine props cut from Sasha's Gemini concept 05_props_b by tools/prop_sprites.py (palette snap, outline); eight are placed in the lot.
+- Lucky wave frame (s16): tools/lucky_wave.py moves the raised paw of the existing Klad sprite down 5 px for a two-frame beckon.
+- Great sunroot powers, Trellis, Heart Tree, upgrades, Linebreakers and Arc Spitters (s16): game code by Claude Code from Sasha's design list.

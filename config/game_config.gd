@@ -99,6 +99,18 @@ extends Resource
 
 @export_group("Sawbot")
 ## Slower than a Scrapper (120): you have time to reach it before a tree falls.
+## LINEBREAKER (a heavy Scrapper, scrapper.gd `heavy`): hit points, size (1 =
+## a Scrapper's), speed (share of a Scrapper's), melee damage and colour.
+@export var linebreaker_hp: int = 5
+@export var linebreaker_scale: float = 1.35
+@export var linebreaker_speed_factor: float = 0.7
+@export var linebreaker_damage: int = 2
+@export var linebreaker_tint: Color = Color(1.0, 0.55, 0.45)
+## ARC SPITTER (spitter.gd `arc`): hit points, the angle between the shots of
+## its three-shot fan, and colour.
+@export var arc_spitter_hp: int = 3
+@export var arc_spitter_spread_degrees: float = 18.0
+@export var arc_spitter_tint: Color = Color(0.70, 0.75, 1.30)
 @export var sawbot_speed: float = 90.0
 ## Takes three pods. It ignores you, so the cost of leaving it alone is trees.
 @export var sawbot_hp: int = 3
@@ -139,8 +151,9 @@ extends Resource
 @export_group("Lucky cat")
 ## Seed pods that must land on the shuttered shop before it opens.
 @export var cat_hits_needed: int = 3
-## Seconds between glints on the shop's shutter (the hint that it is special).
-@export var cat_glint_interval: float = 3.0
+## Seconds between blinks of the cat's eyes behind the shutter (the only visual
+## hint that the shop is special). Long on purpose: the cat is meant to be hard.
+@export var cat_glint_interval: float = 7.0
 ## THE CAT'S GIFT (story step 3): the live clamp (right-click a machine to yank
 ## and bind it; locked until the cat is found) and a spare fuse. With a fuse
 ## fitted, the first time Seven would go down it gets back up instead, with this
@@ -151,9 +164,7 @@ extends Resource
 ## Talking to Lucky: Seven must be within this many cells of the open shop for
 ## the E key to work. (A tap on the shop works from anywhere.)
 @export var lucky_talk_range_cells: float = 3.5
-## From this wave on, if the shop is still shut, a spray-painted "KNOCK x3"
-## arrow on the floor points at it (the cat stays a discovery before then).
-@export var knock_hint_wave: int = 3
+
 ## Lucky's greeting when the shutter opens, by the wave the cat was found in.
 ## Words only: nothing Lucky says changes the game. (Placeholders, STORY.md.)
 @export_multiline var lucky_greeting_early: String = "Early. I like early. Take the clamp, kid. And a fuse, on the house."
@@ -209,6 +220,47 @@ extends Resource
 ## Picture of the great sunroot (tools/tree_sprites.py: tree_big.png).
 @export var tree_great_texture: Texture2D
 
+## CANOPY LINE (great_powers.gd): two great sunroots within this many cells of
+## each other, with nothing between them, string a cable that binds machines.
+@export var canopy_line_range_cells: float = 8.0
+## How close (pixels) a machine's centre must come to the cable to be caught.
+@export var canopy_line_catch_px: float = 16.0
+## Seconds a caught machine stays bound.
+@export var canopy_line_bind_seconds: float = 2.5
+## Seconds a cable needs to recharge after catching a machine.
+@export var canopy_line_recharge: float = 4.0
+## Colour of a charged cable (alpha = how solid it looks).
+@export var canopy_line_color: Color = Color(0.75, 1.0, 0.45, 0.85)
+
+## THE HEART TREE (forest_tree.gd is_heart): the big tree in the middle of the
+## lot. Its hit points are tree_hp times this.
+@export var heart_tree_hp_multiplier: int = 5
+## Sawbots judge the Heart Tree this many times as far away as it really is, so
+## below 1 means they go for it first (0.4: it "feels" 2.5 times closer).
+@export var heart_tree_lure: float = 0.4
+## Colour multiplied over the Heart Tree's picture (above 1 = brighter).
+@export var heart_tree_tint: Color = Color(1.25, 1.0, 1.1)
+
+## TRELLIS (great_powers.gd): a zip from beside one tree to another leaves the
+## vine strung between them. Seconds it lasts:
+@export var trellis_seconds: float = 6.0
+## Seconds a machine snared by the trellis stays bound.
+@export var trellis_bind_seconds: float = 2.0
+## How close (cells) Seven must start a zip to a tree for it to count as "from" it.
+@export var trellis_start_reach_cells: float = 1.6
+## Colour of a trellis vine.
+@export var trellis_color: Color = Color(0.45, 0.95, 0.40, 0.9)
+
+## SUNBURST (great_powers.gd): zip to a great sunroot and it flares.
+## Radius of the flare, in cells.
+@export var sunburst_radius_cells: float = 3.5
+## Seconds every machine in the flare stays stunned.
+@export var sunburst_stun_seconds: float = 3.0
+## Damage the flare deals to each machine in it.
+@export var sunburst_damage: int = 1
+## Seconds before the next Sunburst can go off (shared by all great trees).
+@export var sunburst_cooldown: float = 8.0
+
 @export_group("Canopy FM")
 ## The block's pirate radio (scripts/canopy_fm.gd). How loud the song is, in
 ## decibels (0 = as recorded; every -6 roughly halves it).
@@ -236,6 +288,27 @@ extends Resource
 @export var wave_spitters: Array[int] = [1, 1, 2, 2, 2, 2, 3, 3, 4, 4]
 ## How many Sawbots each wave sends, lined up with the list above.
 @export var wave_sawbots: Array[int] = [0, 0, 0, 1, 2, 2, 2, 3, 3, 4]
+## UPGRADES (upgrade_picker.gd): after clearing this wave and each later one
+## (but not the last), the player picks one of `upgrade_choices` cards.
+@export var upgrade_from_wave: int = 1
+@export var upgrade_choices: int = 3
+## Seed Pouch multiplies the time between pods by this (0.8 = 20% faster).
+@export var upgrade_fire_cooldown_factor: float = 0.8
+## Heavy Seeds: extra damage per pod.
+@export var upgrade_seed_damage: int = 1
+## Thick Plating: extra max health.
+@export var upgrade_max_hp: int = 1
+## Hardwood: extra hit points for every tree.
+@export var upgrade_tree_hp: int = 2
+## Quick Roots multiplies the sapling time by this (0.6 = 40% faster).
+@export var upgrade_sapling_time_factor: float = 0.6
+## Long Trellis: extra seconds for every trellis vine.
+@export var upgrade_trellis_seconds: float = 4.0
+## Linebreakers (heavy Scrappers) per wave. They arrive once the player has had
+## a few upgrade picks to answer them with.
+@export var wave_linebreakers: Array[int] = [0, 0, 0, 0, 0, 1, 1, 2, 2, 3]
+## Arc Spitters (three-shot fans) per wave.
+@export var wave_arc_spitters: Array[int] = [0, 0, 0, 0, 0, 0, 1, 1, 2, 2]
 ## Seconds before the first machine of a wave walks in.
 @export var wave_first_delay: float = 1.0
 ## Seconds between one machine walking in and the next.
@@ -285,8 +358,63 @@ extends Resource
 ## The end screen: the big headline, and Helios's last word under it.
 @export var end_headline: String = "PASS IT ON"
 @export var helios_end_line: String = "Account closed."
-## Seconds each small story line stays on screen under the banner.
-@export var story_line_seconds: float = 4.5
+## Seconds each radio line stays on the air once it has finished typing.
+@export var story_line_seconds: float = 3.0
+
+@export_group("Radio")
+## THE RADIO PANEL (radio.gd): Helios's broadcasts and Canopy FM's DJ.
+## How fast words "type" onto the panel, in letters per second.
+@export var radio_chars_per_second: float = 40.0
+## Chance (0 to 1) that a letter of Helios's broadcast flickers into static.
+@export var radio_helios_static: float = 0.03
+## Canopy FM's DJ, wave 1 (keyboard and mouse): the tutorial. Feeble signal.
+@export var dj_intro: Array[String] = [
+	"...is this on? Meter-bot. Seven. If you can hear me, move. WASD.",
+	"Point the mouse at a Helios machine. Hold left click. Plant a seed in it.",
+]
+## The same tutorial for touch screens.
+@export var dj_intro_touch: Array[String] = [
+	"...is this on? Meter-bot. Seven. If you can hear me, move. Left thumb.",
+	"Right thumb aims and fires. Plant a seed in that Helios machine.",
+]
+## Canopy FM, the first time a machine goes down (keyboard and mouse).
+@export var dj_first_tree: Array[String] = [
+	"Ha! It rooted. That's a tree now. Spitter shots stop dead on bark: get behind it.",
+	"And kid? Right-click any tree. The vine zips you straight to it.",
+]
+## The same, for touch screens.
+@export var dj_first_tree_touch: Array[String] = [
+	"Ha! It rooted. That's a tree now. Spitter shots stop dead on bark: get behind it.",
+	"And kid? Tap any tree. The vine zips you straight to it.",
+]
+## Canopy FM, the first time a Sawbot is sent in.
+@export var dj_first_sawbot: Array[String] = [
+	"Sawbot on the lot! It doesn't want you. It wants the trees. Drop it first.",
+	"It'll go for the Heart, the big old tree in the middle. Lose the Heart, lose the wave.",
+]
+## Canopy FM, the first time a Linebreaker or an Arc Spitter is sent in.
+@export var dj_first_linebreaker: Array[String] = [
+	"Big one! That's a Linebreaker. Armoured, slow, hits twice as hard. Keep your distance and keep planting.",
+]
+@export var dj_first_arc_spitter: Array[String] = [
+	"Arc Spitter. Fires a fan of three. One tree won't cover you from all of it: find a thicket.",
+]
+## Canopy FM, wave 1 of New Game +: what great sunroots do.
+@export var dj_ng_plus_intro: Array[String] = [
+	"Back again? Trees that stand a whole wave grow GREAT now.",
+	"Two great ones in sight of each other string a Canopy line. Machines get tangled.",
+	"Zip to a great one and it bursts with light. Use it when they crowd you.",
+]
+## The waves on which Canopy FM drops a hint about the lucky cat (only while
+## the shop is still shut), and the hints, in the same order.
+@export var dj_cat_hint_waves: Array[int] = [2, 4, 6, 8]
+@export var dj_cat_hints: Array[String] = [
+	"Shout-out to Mrs. Maneki. Her shop on the north wall's been shuttered since Helios came. Her cat never left.",
+	"Funny thing about shutters. They don't blink.",
+	"Lucky cats like a polite knock. Three seeds, if you're asking.",
+	"Still dark up by the north wall. Somebody should knock.",
+]
+
 
 @export_group("Night and windows")
 ## The homes along the bottom wall: one entry per home, saying how many windows
@@ -296,6 +424,9 @@ extends Resource
 ## roof units side by side, each 52 x 32 (one unit sits over each window).
 ## Leave empty for plain grey roofs.
 @export var home_roofs: Texture2D
+## Street props from concept 05_props_b, one 64 x 64 frame each (tools/prop_sprites.py,
+## frame order in scripts/props.gd).
+@export var props_texture: Texture2D
 ## Windows already lit before any wave is cleared: the block's first two lamps.
 @export var windows_lit_at_start: int = 2
 ## How strongly a lit window shines before any wave is cleared (0 to 1). It
@@ -375,6 +506,10 @@ extends Resource
 @export var sawbot_texture: Texture2D
 @export var spitter_texture: Texture2D
 @export var cat_texture: Texture2D
+## Lucky's second frame, paw dipped (tools/lucky_wave.py). The shop swaps between
+## the two every cat_wave_seconds, so Lucky beckons.
+@export var cat_wave_texture: Texture2D
+@export var cat_wave_seconds: float = 0.35
 ## The sunroot tree, built from the concept art by tools/tree_sprites.py. A
 ## sapling, a grown tree, and the "cut" look a grown tree takes once a Sawbot
 ## has bitten it. Leave empty for the old circle drawing.

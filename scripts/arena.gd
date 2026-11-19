@@ -16,6 +16,8 @@ extends Node2D
 ## Emitted when the player goes down. (Tests listen for this; the game itself
 ## reacts in _on_player_died.)
 signal player_defeated
+## Emitted when the Heart Tree is felled (the wave then starts again).
+signal heart_tree_felled
 
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
 ## preload() loads a scene file once, when the script itself loads. instantiate()
@@ -31,6 +33,8 @@ const SEED_POD_SCENE: PackedScene = preload("res://scenes/seed_pod.tscn")
 ## Level layout for the gray box (grid cells, not tunables).
 const TEST_TREE_CELLS: Array[Vector2i] = [Vector2i(9, 4), Vector2i(13, 10), Vector2i(17, 5)]
 const PLAYER_START_CELL: Vector2i = Vector2i(6, 7)
+## The Heart Tree's cell: the middle of the lot (see forest_tree.gd is_heart).
+const HEART_TREE_CELL: Vector2i = Vector2i(13, 7)
 ## The hidden shop fills this wall cell and the one to its right: top wall, well
 ## to the right, away from where the fight naturally happens.
 const CAT_SHOP_CELL: Vector2i = Vector2i(20, 0)
@@ -73,7 +77,11 @@ var tap_points: Array[Vector2i] = []
 ## Seconds the banner stays up. 0 or less means "until replaced".
 var _banner_time_left: float = 0.0
 ## Small story lines still waiting to be shown under the banner, in order.
-var _story_queue: Array[String] = []
+## Lines waiting for the radio, oldest first: each is {speaker = Radio.HELIOS /
+## CANOPY / LUCKY, text = the words}.
+var _story_queue: Array[Dictionary] = []
+## Canopy FM tutorial moments already played this run (so each plays once).
+var _dj_said: Dictionary[StringName, bool] = {}
 ## Seconds the story line on screen has left. 0 or less means "until replaced".
 var _story_time_left: float = 0.0
 ## True once the opening line has been shown, so a restarted wave 1 skips it.
@@ -96,6 +104,24 @@ var lucky_found_wave: int = 0
 var _lucky_talks: int = 0
 ## The lantern strings (see lanterns.gd). Public so tests can read it.
 var lanterns: Lanterns
+## The great sunroots' Canopy lines and Sunburst (see great_powers.gd). Public for tests.
+var great_powers: GreatPowers
+## Brick walls and street props (see props.gd). Public so tests can read it.
+var props: Props
+## The Heart Tree, or null if there is none (felled and not yet replanted, or a
+## test arena without one). Public so tests can read it.
+var heart_tree: ForestTree
+## Knob: plant the Heart Tree at the start. The tests switch it off for the
+## older checks that count trees, since writes to the shared config are ignored.
+@export var plant_heart_tree: bool = true
+## The between-wave upgrade cards (see upgrade_picker.gd). Public for tests.
+var upgrade_picker: UpgradePicker
+## Run-long upgrade effects the arena hands out (see apply_upgrade). Public for tests.
+var seed_damage_bonus: int = 0
+var tree_hp_bonus: int = 0
+var sapling_time_scale: float = 1.0
+## Every upgrade picked this run, in order. Public for tests.
+var upgrades_taken: Array[StringName] = []
 ## The Block's painted lines on the side walls. Public so tests can reach it.
 var graffiti: Graffiti
 ## The hidden lucky cat's shop, in the top wall. Public so tests can reach it.
@@ -121,7 +147,9 @@ var is_run_finished: bool = false
 @onready var _wave_label: Label = $Hud/WaveLabel
 @onready var _banner: Label = $Hud/Banner
 ## The smaller line under the banner: Helios's notices and the opening line.
-@onready var _story_line: Label = $Hud/StoryLine
+## The radio panel (see radio.gd): Helios, Canopy FM and Lucky speak here.
+## Public so the tests can read who is on the air.
+var radio: Radio
 ## The controls line along the bottom wall.
 @onready var _hint: Label = $Hud/Hint
 ## The wave timetable. Public (no underscore) so tests can start a wave directly.
@@ -146,9 +174,20 @@ func _ready() -> void:
 	add_child(windows)
 	# Lantern strings across the lot. Added before the trees and machines, so
 	# they hang underneath them and never hide the action.
+	# The art pass: brick walls and street props (see props.gd). Added first among
+	# the arena's drawn children, so it sits on the floor under everything else.
+	props = Props.new()
+	add_child(props)
+	move_child(props, 0)  # draw right after the floor
+	props.setup(grid, Rect2(grid.origin, Vector2(grid.cols, grid.rows) * float(CONFIG.cell_size)))
 	lanterns = Lanterns.new()
 	lanterns.setup(Rect2(origin, arena_px).grow(-float(CONFIG.cell_size)))
 	add_child(lanterns)
+	# The great sunroots' cables and Sunburst ring. z_index 1 draws them over the
+	# trees and machines (which use 0), so a cable is never hidden by a canopy.
+	great_powers = GreatPowers.new()
+	great_powers.z_index = 1
+	add_child(great_powers)
 	# CanvasModulate multiplies the colour of everything drawn in this scene
 	# (floor, walls, sprites, trees) by one colour. The HUD is on its own
 	# CanvasLayer, so it is not tinted and stays readable. This is how the
@@ -168,13 +207,15 @@ func _ready() -> void:
 	player.died.connect(_on_player_died)
 	player.fuse_used.connect(_on_player_fuse_used)
 	add_child(player)
-	_health_pips.show_health(player.hp, CONFIG.player_max_hp)
+	_health_pips.show_health(player.hp, player.max_hp)
 	# Hand the player to the touch controls, if the scene has them.
 	if _touch != null:
 		_touch.setup(player)
 
 	for cell: Vector2i in TEST_TREE_CELLS:
 		spawn_tree(cell, true)
+	if plant_heart_tree:
+		heart_tree = spawn_tree(HEART_TREE_CELL, true)
 
 	# The hidden lucky cat's shop. It is two cells wide, so its centre sits on
 	# the line between its two cells: half a cell right of the first one's centre.
@@ -182,7 +223,7 @@ func _ready() -> void:
 	cat_shop.position = grid.cell_to_world(CAT_SHOP_CELL) + Vector2(CONFIG.cell_size / 2.0, 0.0)
 	cat_shop.opened.connect(_on_cat_shop_opened)
 	add_child(cat_shop)
-	graffiti.knock_at = cat_shop.position  # where the "KNOCK x3" hint points
+
 	player.zip_finished.connect(_on_player_zip_finished)
 
 	# Listen to the wave director: it says when, the arena does the spawning.
@@ -191,7 +232,11 @@ func _ready() -> void:
 	waves.wave_cleared.connect(_on_wave_cleared)
 	waves.all_waves_cleared.connect(_on_all_waves_cleared)
 	_banner.visible = false
-	_story_line.visible = false
+	radio = Radio.new()
+	$Hud.add_child(radio)
+	upgrade_picker = UpgradePicker.new()
+	upgrade_picker.picked.connect(apply_upgrade)
+	$Hud.add_child(upgrade_picker)
 	_wave_label.text = ""
 	if RunState.ng_plus:
 		apply_ng_plus()
@@ -214,8 +259,10 @@ func _process(delta: float) -> void:
 	var boost: float = light_boost_for(light_level())
 	# Canopy FM opens up as the block lights (see canopy_fm.gd).
 	CanopyFM.set_light(light_level())
+	radio.signal_strength = light_level()  # Canopy FM's signal grows with the light
 	windows.light_boost = boost
 	lanterns.light_boost = boost
+	great_powers.light_boost = boost
 	_ambient.color = _ambient.color.lerp(wanted_tint, minf(1.0, CONFIG.ambient_change_speed * delta))
 	# The last machines are still growing into trees when the end screen comes
 	# up, so keep its score current instead of freezing it at the first count.
@@ -303,6 +350,13 @@ func spawn_tree(cell: Vector2i, grown: bool) -> ForestTree:
 		tree.is_tap = true
 		tap_points.erase(cell)
 		queue_redraw()  # the soil patch disappears from the floor
+	# The Heart Tree's cell always grows the Heart Tree (also when a restarted
+	# wave replants the forest from its snapshot).
+	tree.is_heart = grown and cell == HEART_TREE_CELL and plant_heart_tree
+	if tree.is_heart:
+		heart_tree = tree
+	tree.bonus_hp = tree_hp_bonus             # Hardwood upgrades
+	tree.sapling_time_scale = sapling_time_scale  # Quick Roots upgrades
 	tree.position = grid.cell_to_world(cell)
 	tree.ready_to_solidify.connect(_on_tree_ready_to_solidify)
 	tree.felled.connect(_on_tree_felled)
@@ -313,14 +367,29 @@ func spawn_tree(cell: Vector2i, grown: bool) -> ForestTree:
 	return tree
 
 
+## The grown tree nearest to `point` within `reach` pixels, or null.
+func _grown_tree_near(point: Vector2, reach: float) -> ForestTree:
+	var best: ForestTree = null
+	var best_distance: float = reach
+	for tree: ForestTree in _trees_by_cell.values():
+		if not is_instance_valid(tree) or tree.stage != ForestTree.Stage.GROWN:
+			continue
+		var distance: float = tree.global_position.distance_to(point)
+		if distance <= best_distance:
+			best = tree
+			best_distance = distance
+	return best
+
+
 ## The tree (sapling or grown) on a cell, or null if there is none.
 func tree_at(cell: Vector2i) -> ForestTree:
 	return _trees_by_cell.get(cell)
 
 
 ## Creates a Scrapper on a cell and points it at the player.
-func spawn_scrapper_at(cell: Vector2i) -> Scrapper:
+func spawn_scrapper_at(cell: Vector2i, heavy: bool = false) -> Scrapper:
 	var scrapper: Scrapper = SCRAPPER_SCENE.instantiate()
+	scrapper.heavy = heavy  # true = a Linebreaker
 	scrapper.position = grid.cell_to_world(cell)
 	scrapper.setup(grid)
 	scrapper.chase(player)
@@ -343,8 +412,9 @@ func spawn_sawbot_at(cell: Vector2i) -> Sawbot:
 
 
 ## Creates a Spitter on a cell and points it at the player.
-func spawn_spitter_at(cell: Vector2i) -> Spitter:
+func spawn_spitter_at(cell: Vector2i, arc: bool = false) -> Spitter:
 	var spitter: Spitter = SPITTER_SCENE.instantiate()
+	spitter.arc = arc  # true = an Arc Spitter
 	spitter.position = grid.cell_to_world(cell)
 	spitter.setup(grid)
 	spitter.aim_at(player)
@@ -546,22 +616,59 @@ func _update_light() -> void:
 	lanterns.set_strings(Lanterns.strings_after(waves_cleared))
 
 
-## Queues small lines to show one after another under the banner, replacing
-## whatever was there. Each stays for `story_line_seconds`.
-func _show_story_lines(lines: Array[String]) -> void:
+## Queues radio lines to play one after another, replacing whatever was on the
+## air. Each line is {speaker, text}; see _radio_line.
+func _show_story_lines(lines: Array[Dictionary]) -> void:
 	_story_queue = lines.duplicate()
 	_show_next_story_line()
 
 
-## Shows the next queued story line, or hides the label when none are left.
+## Adds lines to the END of the radio queue, without cutting off what is playing.
+## Used for Canopy FM's tips, which react to things happening in the fight.
+func _radio_later(lines: Array[Dictionary]) -> void:
+	_story_queue.append_array(lines)
+	if not radio.is_on():
+		_show_next_story_line()
+
+
+## One radio line, as the queue wants it.
+static func _radio_line(speaker: StringName, text: String) -> Dictionary:
+	return {speaker = speaker, text = text}
+
+
+## Canopy FM lines from the config, as radio lines.
+static func _dj(texts: Array[String]) -> Array[Dictionary]:
+	var lines: Array[Dictionary] = []
+	for text: String in texts:
+		lines.append(_radio_line(Radio.CANOPY, text))
+	return lines
+
+
+## Plays a Canopy FM tutorial moment once per run (and never in New Game +,
+## where the player already knows the controls).
+func _dj_once(moment: StringName, texts: Array[String]) -> void:
+	if ng_plus or _dj_said.has(moment):
+		return
+	_dj_said[moment] = true
+	_radio_later(_dj(texts))
+
+
+## True when the player is on a touch screen (phone or tablet), so the tips name
+## thumbs and taps instead of keys and clicks.
+static func _is_touch() -> bool:
+	return DisplayServer.is_touchscreen_available()
+
+
+## Puts the next queued line on the radio, or takes the radio off the air when
+## none are left. A line stays up for story_line_seconds after it finishes typing.
 func _show_next_story_line() -> void:
 	if _story_queue.is_empty():
-		_story_line.visible = false
+		radio.clear()
 		_story_time_left = 0.0
 		return
-	_story_line.text = _story_queue.pop_front()  # pop_front removes and returns the first entry
-	_story_line.visible = true
-	_story_time_left = CONFIG.story_line_seconds
+	var line: Dictionary = _story_queue.pop_front()  # pop_front removes and returns the first entry
+	radio.say(line.speaker, line.text)
+	_story_time_left = CONFIG.story_line_seconds + float(line.text.length()) / CONFIG.radio_chars_per_second
 
 
 ## What Helios says as wave `number` starts, ready to show. Empty if the config
@@ -569,7 +676,24 @@ func _show_next_story_line() -> void:
 func helios_line_for(number: int) -> String:
 	if number < 1 or number > CONFIG.helios_lines.size():
 		return ""
-	return "Helios: \"%s\"" % CONFIG.helios_lines[number - 1]
+	return CONFIG.helios_lines[number - 1]
+
+
+## What Canopy FM says after Helios as wave `number` starts:
+##   wave 1          how to move and shoot (or, in New Game +, what great
+##                   sunroots can do);
+##   cat-hint waves  a hint about the lucky cat, only while the shop is shut.
+func dj_lines_for_wave(number: int) -> Array[String]:
+	var lines: Array[String] = []
+	if number == 1:
+		if ng_plus:
+			lines.append_array(CONFIG.dj_ng_plus_intro)
+		else:
+			lines.append_array(CONFIG.dj_intro_touch if _is_touch() else CONFIG.dj_intro)
+	var hint: int = CONFIG.dj_cat_hint_waves.find(number)
+	if hint >= 0 and hint < CONFIG.dj_cat_hints.size() and cat_shop != null and not cat_shop.is_open:
+		lines.append(CONFIG.dj_cat_hints[hint])
+	return lines
 
 
 ## Signal handler: a wave began. Remember the forest, update the HUD.
@@ -587,15 +711,15 @@ func _on_wave_started(number: int, total: int) -> void:
 	_show_banner("Wave %d" % number, 1.5)
 	# By now the controls are learned; the bottom wall belongs to the windows.
 	_hint.visible = number < CONFIG.hint_hide_wave
-	# Still haven't found the cat by now? The Block paints a hint on the floor.
-	graffiti.show_knock = number >= CONFIG.knock_hint_wave and cat_shop != null and not cat_shop.is_open
-	# Under the banner: the opening line (once only), then Helios's notice.
-	var lines: Array[String] = []
+	# On the radio: Canopy FM's opening line (once only), then Helios's notice,
+	# then whatever Canopy FM has to say about this wave (tips, cat hints).
+	var lines: Array[Dictionary] = []
 	if not _hook_shown:
 		_hook_shown = true
-		lines.append(CONFIG.story_hook)
+		lines.append(_radio_line(Radio.CANOPY, CONFIG.story_hook))
 	if helios_line_for(number) != "":
-		lines.append(helios_line_for(number))
+		lines.append(_radio_line(Radio.HELIOS, helios_line_for(number)))
+	lines.append_array(_dj(dj_lines_for_wave(number)))
 	_show_story_lines(lines)
 
 
@@ -612,10 +736,15 @@ func _on_spawn_requested(kind: StringName, wave_number: int) -> void:
 		return
 	if kind == WaveDirector.SAWBOT:
 		spawn_sawbot_at(cell)
-	elif kind == WaveDirector.SPITTER:
-		spawn_spitter_at(cell)
+		_dj_once(&"sawbot", CONFIG.dj_first_sawbot)
+	elif kind == WaveDirector.SPITTER or kind == WaveDirector.ARC_SPITTER:
+		spawn_spitter_at(cell, kind == WaveDirector.ARC_SPITTER)
+		if kind == WaveDirector.ARC_SPITTER:
+			_dj_once(&"arc_spitter", CONFIG.dj_first_arc_spitter)
 	else:
-		var scrapper: Scrapper = spawn_scrapper_at(cell)
+		var scrapper: Scrapper = spawn_scrapper_at(cell, kind == WaveDirector.LINEBREAKER)
+		if kind == WaveDirector.LINEBREAKER:
+			_dj_once(&"linebreaker", CONFIG.dj_first_linebreaker)
 		# Faster every wave: wave 1 is 1.0, wave 2 is 1.12, wave 3 is 1.24, ...
 		scrapper.speed_scale = 1.0 + CONFIG.scrapper_speed_gain_per_wave * (wave_number - 1)
 
@@ -624,6 +753,15 @@ func _on_spawn_requested(kind: StringName, wave_number: int) -> void:
 func _on_wave_cleared(number: int) -> void:
 	Sfx.play(&"wave_clear")
 	_show_banner(wave_cleared_text(number), CONFIG.wave_break_time)
+	# Between waves (not after the last one): deal the upgrade cards. The next
+	# wave waits until one is picked.
+	if number < waves.total_waves() and number >= CONFIG.upgrade_from_wave:
+		waves.hold_break = true
+		upgrade_picker.offer(CONFIG.upgrade_choices)
+	# The Heart Tree heals between waves.
+	if is_instance_valid(heart_tree):
+		heart_tree.hp = heart_tree.max_hp()
+		heart_tree.queue_redraw()
 	# More of the block comes on, and every lit window shines a little stronger.
 	waves_cleared = maxi(waves_cleared, number)
 	_update_light()
@@ -661,8 +799,7 @@ func _on_all_waves_cleared() -> void:
 	windows.light_next_block()  # the light jumps the wall
 	# Helios gets the last word, and it stays up with the banner.
 	_story_queue.clear()
-	_story_line.text = "Helios: \"%s\"" % CONFIG.helios_end_line
-	_story_line.visible = true
+	radio.say(Radio.HELIOS, CONFIG.helios_end_line)
 	_story_time_left = 0.0
 
 
@@ -670,7 +807,7 @@ func _on_all_waves_cleared() -> void:
 func _on_cat_shop_opened() -> void:
 	player.receive_cat_gift()
 	lucky_found_wave = maxi(waves.wave, 1)
-	graffiti.show_knock = false
+
 	_show_banner("Lucky's gift: right-click a machine to bind it. Spare fuse fitted.", 4.0)
 	_show_story_lines([_lucky_says(LuckyLines.greeting_for(lucky_found_wave))])
 
@@ -695,8 +832,8 @@ func is_near_lucky() -> bool:
 
 
 ## How a line of Lucky's is shown under the banner.
-func _lucky_says(line: String) -> String:
-	return "Lucky: \"%s\"" % line
+func _lucky_says(line: String) -> Dictionary:
+	return _radio_line(Radio.LUCKY, line)
 
 
 ## Signal handler: the spare fuse saved Seven from going down.
@@ -710,6 +847,15 @@ func _on_player_zip_finished() -> void:
 	for tree: ForestTree in _trees_by_cell.values():
 		tree.show_vine_hint = false
 	_vine_hint_done = true
+	var tree: ForestTree = player.zip_tree
+	# TRELLIS: a zip that started beside another tree strings a vine between them.
+	var from_tree: ForestTree = _grown_tree_near(player.zip_from, CONFIG.trellis_start_reach_cells * CONFIG.cell_size)
+	if is_instance_valid(tree) and from_tree != null and from_tree != tree:
+		great_powers.add_trellis(from_tree.global_position, tree.global_position)
+	# A zip that ends at a great sunroot sets off its Sunburst.
+	if is_instance_valid(tree) and tree.is_great and tree.stage == ForestTree.Stage.GROWN:
+		if great_powers.sunburst(tree.global_position) > 0:
+			_show_banner("Sunburst!", 1.0)
 
 
 ## _unhandled_input receives input that nothing else used. After the last wave,
@@ -743,7 +889,51 @@ func _on_player_seed_fired(origin: Vector2, direction: Vector2) -> void:
 	var pod: SeedPod = SEED_POD_SCENE.instantiate()
 	pod.position = origin
 	pod.direction = direction
+	pod.damage = CONFIG.seed_damage + seed_damage_bonus  # Heavy Seeds upgrades add to it
 	_pods.add_child(pod)
+
+
+## Applies upgrade `id` for the rest of the run, then lets the next wave come.
+## Connected to the upgrade picker's `picked` signal; public so tests can call it.
+func apply_upgrade(id: StringName) -> void:
+	upgrades_taken.append(id)
+	match id:
+		&"seed_pouch":
+			player.fire_cooldown_scale *= CONFIG.upgrade_fire_cooldown_factor
+		&"heavy_seeds":
+			seed_damage_bonus += CONFIG.upgrade_seed_damage
+		&"thick_plating":
+			player.max_hp += CONFIG.upgrade_max_hp
+			player.heal(player.max_hp)  # a full repair (heal never goes over max_hp)
+		&"hardwood":
+			tree_hp_bonus += CONFIG.upgrade_tree_hp
+			# Trees already standing get it too.
+			for tree: ForestTree in _trees_by_cell.values():
+				if is_instance_valid(tree):
+					tree.bonus_hp = tree_hp_bonus
+					tree.hp += CONFIG.upgrade_tree_hp
+					tree.queue_redraw()
+		&"quick_roots":
+			sapling_time_scale *= CONFIG.upgrade_sapling_time_factor
+		&"long_trellis":
+			great_powers.trellis_bonus_seconds += CONFIG.upgrade_trellis_seconds
+	_show_banner(UpgradePicker.CATALOG[id][0] + "!", 1.2)
+	Sfx.play(&"grow")
+	waves.hold_break = false
+
+
+## The Heart Tree fell: the block's roots are cut, so the wave starts again (like
+## Seven going down). The restart replants it from the wave-start snapshot.
+func _on_heart_tree_felled() -> void:
+	heart_tree = null
+	if waves.wave == 0 or is_run_finished:
+		return
+	heart_tree_felled.emit()
+	_show_banner("The Heart Tree fell! Wave %d starts again" % waves.wave, CONFIG.death_restart_delay)
+	await get_tree().create_timer(CONFIG.death_restart_delay, false).timeout
+	if not is_inside_tree():
+		return
+	_restart_current_wave()
 
 
 ## Signal handler: the player went down. Wait a moment, then restart the wave.
@@ -771,6 +961,8 @@ func _on_enemy_died(enemy: Enemy) -> void:
 		# that moment. call_deferred queues the call for the end of the frame.
 		spawn_tree.call_deferred(cell, false)
 		_last_planted_cell = cell
+		# The first machine to go down: Canopy FM explains cover and the vine.
+		_dj_once(&"first_tree", CONFIG.dj_first_tree_touch if _is_touch() else CONFIG.dj_first_tree)
 	waves.enemy_gone()  # the wave director keeps count of who is still standing
 
 
@@ -805,6 +997,8 @@ func _on_tree_felled(tree: ForestTree) -> void:
 	_trees_by_cell.erase(tree.cell)
 	windows.flicker()  # the block feels it: one lit window drops dark for a moment
 	CanopyFM.dull()    # and the radio dulls for a moment
+	if tree.is_heart:
+		_on_heart_tree_felled()
 	if tree.is_tap:
 		_update_light.call_deferred()  # its extra windows go out (once it is gone)
 

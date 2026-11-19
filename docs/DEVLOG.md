@@ -282,3 +282,33 @@ From the kickoff. `config/game_config.tres` holds every speed, cooldown and size
   cleared mature into **great sunroots** (stage 4: 3x HP, wider glow, the big tree picture). The Canopy FM station
   picker appears on the title screen once unlocked.
 - Not yet decided: the New Game + mechanic that makes great sunroots worth planning for (brainstorm sent to Sasha).
+
+## D-035 (s16): Sasha's 10-point list of 2026-11-18
+
+- **Hidden cat (item 4):** the KNOCK x3 floor arrow is gone. The shop is painted in the wall's own colours with
+  the wall's bricks across its front; the only tells are amber cat eyes that blink between the slats every 7 s, a
+  faded paw print, and Canopy FM's hints. A win unlocks New Game + whether or not Lucky was found (item 5; it
+  already worked, now it has a check).
+- **Radio (items 2 and 3):** the centred story line is replaced by a radio panel at the top left. Helios's wave
+  notices arrive as a red "HELIOS UTILITIES :: PUBLIC NOTICE" broadcast with static in the letters. Canopy FM's DJ
+  (weak signal, bars grow with the light) is the tutorial: move and shoot on wave 1, cover and the vine when the
+  first machine roots, Sawbots and the Heart Tree on the first Sawbot, the new machines when they first appear,
+  and lucky-cat hints on waves 2, 4, 6 and 8 while the shop is shut. Tips play once per run and are skipped in
+  New Game +, which gets a great-sunroot briefing instead. Keyboard or touch wording is picked by device.
+- **Trellis (item 6, DESIGN.md):** a zip that starts beside one tree and ends at another leaves the vine strung
+  between them for 6 s; each machine crossing it is bound once for 2 s. Always on (it was planned as an upgrade;
+  Long Trellis is now the upgrade).
+- **Heart Tree (item 6, guidebook d4):** a 5x-HP tree in the middle of the lot. Sawbots judge it 2.5x closer than
+  it is, so they go for it first. If it falls the wave restarts; it heals between waves.
+- **Great sunroot powers (item 10, both):** Canopy line: two great sunroots within 8 cells with a clear view
+  string a cable that binds the first machine crossing it for 2.5 s, then recharges for 4 s. Sunburst: zipping to a
+  great sunroot stuns every machine within 3.5 cells for 3 s and deals 1 damage; 8 s shared cooldown.
+- **Upgrades and new machines (item 9):** after every wave but the last, pick 1 of 3 cards (keys 1/2/3 or a
+  click/tap) and the next wave waits for it: Seed Pouch, Heavy Seeds, Thick Plating, Hardwood, Quick Roots, Long
+  Trellis. To answer them: Linebreakers (heavy Scrappers: 5 HP, 1.35x size, 0.7x speed, hit for 2) from wave 6
+  and Arc Spitters (3 HP, three-shot fan) from wave 7. Waves 6 to 10 are longer, as Sasha allowed.
+- **Art pass (items 7 and 8):** faint brick mortar on the three plain walls; props cut from 05_props_b by
+  `tools/prop_sprites.py` (meters and Helios notices on the walls, a broken solar panel flat on the floor, and a
+  barrel, planter, bike and chair as solid props in the four floor corners). Left out: the lantern string (already
+  in), the cable coil (lost its black cable in the cut-out), the glowing-cat shutter and the arrow (both would
+  point at Lucky). Lucky beckons (two frames, `tools/lucky_wave.py`) and shows its face on the radio.

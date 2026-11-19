@@ -31,6 +31,9 @@ const WORLD_MASK: int = 1
 ## True from the start of the warning glow until the shot leaves.
 ## Public (no underscore) so the tests can watch it.
 var is_winding_up: bool = false
+## True for an ARC SPITTER (from wave 7): tougher, and every shot is a fan of
+## three. Set by the arena before the machine is added to the scene.
+var arc: bool = false
 
 ## The node to shoot at. Handed in by aim_at().
 var _target: Node2D
@@ -41,7 +44,10 @@ var _cooldown_left: float = 0.0
 
 ## _ready runs once when the Spitter enters the scene.
 func _ready() -> void:
-	_configure_body(CONFIG.spitter_hp, CONFIG.spitter_radius_cells, CONFIG.spitter_texture, FALLBACK_COLOR)
+	var start_hp: int = CONFIG.arc_spitter_hp if arc else CONFIG.spitter_hp
+	_configure_body(start_hp, CONFIG.spitter_radius_cells, CONFIG.spitter_texture, FALLBACK_COLOR)
+	if arc:
+		_sprite.self_modulate = CONFIG.arc_spitter_tint
 	# A Spitter that has just walked in waits half a cooldown before its first
 	# shot, so nothing fires the instant it appears.
 	_cooldown_left = CONFIG.spitter_cooldown * 0.5
@@ -117,6 +123,12 @@ func _fire(to_target: Vector2) -> void:
 	# Start the shot just outside our own hit circle.
 	var muzzle_distance: float = CONFIG.spitter_radius_cells * CONFIG.cell_size + CONFIG.spit_radius
 	spat.emit(global_position + direction * muzzle_distance, direction)
+	if arc:
+		# An ARC SPITTER fires two more shots, turned a little to each side, in a fan.
+		var spread: float = deg_to_rad(CONFIG.arc_spitter_spread_degrees)
+		for turn: float in [-spread, spread]:
+			var side: Vector2 = direction.rotated(turn)
+			spat.emit(global_position + side * muzzle_distance, side)
 	Sfx.play(&"spit")
 
 

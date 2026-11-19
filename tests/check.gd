@@ -99,6 +99,12 @@ func _ready() -> void:
 	await _test_canopy_fm()
 	await _test_tap_points()
 	await _test_new_game_plus()
+	await _test_great_powers()
+	await _test_trellis()
+	await _test_heart_tree()
+	await _test_new_machines()
+	await _test_upgrades()
+	await _test_props_and_lucky_art()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -114,7 +120,9 @@ func _check(condition: bool, message: String) -> void:
 
 
 ## Throws away the old arena (if any) and starts a fresh one with no enemies.
-func _fresh_arena() -> void:
+## `with_heart`: plant the Heart Tree. Off by default, because the older checks
+## were written before it existed and expect only the three hand-placed trees.
+func _fresh_arena(with_heart: bool = false) -> void:
 	if _arena != null:
 		_arena.queue_free()
 		await get_tree().physics_frame
@@ -122,6 +130,7 @@ func _fresh_arena() -> void:
 	# Switch the waves off BEFORE the arena enters the scene (its _ready reads
 	# this), so each test controls exactly which enemies exist.
 	_arena.autostart_waves = false
+	_arena.plant_heart_tree = with_heart
 	add_child(_arena)
 	# Give the physics engine two steps to register the new bodies.
 	await get_tree().physics_frame
@@ -1088,8 +1097,8 @@ func _test_story_words() -> void:
 	_check(CONFIG.graffiti_lines.size() == total, "there is one graffiti line per wave (%d)" % total)
 
 	await _fresh_arena()
-	var story := _arena.get_node("Hud/StoryLine") as Label
-	_check(not story.visible, "no story line shows before a wave starts")
+	var radio: Radio = _arena.radio
+	_check(not radio.is_on(), "the radio is quiet before a wave starts")
 	_check(_arena.graffiti.revealed_count == 0, "the walls start clean")
 	_check(_arena.helios_line_for(1).contains(CONFIG.helios_lines[0]), "wave 1 has Helios's first line")
 	_check(_arena.helios_line_for(99) == "", "a wave with no line gets none")
@@ -1097,10 +1106,12 @@ func _test_story_words() -> void:
 	# Start wave 2 directly. The very first wave start of a run shows the hook.
 	_arena.waves.time_scale = 20.0
 	_arena.waves.start_wave(2)
-	_check(story.visible and story.text == CONFIG.story_hook, "the first wave start shows the opening line")
+	_check(radio.speaker == Radio.CANOPY and radio.text == CONFIG.story_hook, "the first wave start: Canopy FM says the opening line")
 	# Let the opening line run out; Helios's notice follows it.
-	var helios_showing: Callable = func() -> bool: return story.text == _arena.helios_line_for(2)
-	_check(await _wait_until(helios_showing, CONFIG.story_line_seconds + 1.0), "then Helios's line for that wave")
+	var helios_showing: Callable = func() -> bool: return radio.text == _arena.helios_line_for(2)
+	var hook_seconds: float = CONFIG.story_line_seconds + CONFIG.story_hook.length() / CONFIG.radio_chars_per_second
+	_check(await _wait_until(helios_showing, hook_seconds + 1.0), "then Helios's line for that wave")
+	_check(radio.speaker == Radio.HELIOS, "spoken by Helios")
 
 	# Clear the wave: one painted line per wave cleared so far, and Helios goes quiet.
 	var all_sent: Callable = func() -> bool: return _arena.waves.state == WaveDirector.State.FIGHTING
@@ -1109,13 +1120,27 @@ func _test_story_words() -> void:
 		(node as Enemy).take_damage(99)
 	_check(_arena.graffiti.revealed_count == 2, "clearing wave 2 puts two lines on the walls")
 	_check(_arena.graffiti.line_text(1) == CONFIG.graffiti_lines[1], "the second is wave 2's line")
-	_check(not story.visible, "Helios's line is cleared with the wave")
+	_check(not radio.is_on(), "Helios's line is cleared with the wave")
 
 	# Painted lines never come off, and the opening line never repeats.
 	_arena.graffiti.reveal_up_to(1)
 	_check(_arena.graffiti.revealed_count == 2, "revealing an earlier wave removes nothing")
 	_arena.waves.start_wave(1)
-	_check(story.text == _arena.helios_line_for(1), "a later wave start skips the opening line")
+	_check(radio.text == _arena.helios_line_for(1), "a later wave start skips the opening line")
+
+	# Canopy FM teaches: wave 1's tutorial follows Helios; the cat hints come on
+	# their waves only while the shop is shut.
+	var wave_1_dj: Array[String] = _arena.dj_lines_for_wave(1)
+	_check(not wave_1_dj.is_empty() and wave_1_dj[0] == CONFIG.dj_intro[0], "on wave 1 Canopy FM explains the controls")
+	var hint_wave: int = CONFIG.dj_cat_hint_waves[0]
+	_check(_arena.dj_lines_for_wave(hint_wave).has(CONFIG.dj_cat_hints[0]), "on wave %d Canopy FM hints at the cat" % hint_wave)
+	for i: int in CONFIG.cat_hits_needed:
+		_arena.cat_shop.hit_by_seed()
+	_check(_arena.dj_lines_for_wave(hint_wave).is_empty(), "no cat hints once Lucky is found")
+	_arena._dj_once(&"sawbot", CONFIG.dj_first_sawbot)
+	var queued: int = _arena._story_queue.size()
+	_arena._dj_once(&"sawbot", CONFIG.dj_first_sawbot)
+	_check(_arena._story_queue.size() == queued, "each Canopy FM tip plays once per run")
 
 
 ## Story step 2: homes with several windows, lit by waves cleared and shining
@@ -1234,8 +1259,7 @@ func _test_clearing_the_last_wave_ends_the_run() -> void:
 	_check(banner.text.contains("Trees standing: %d" % _arena.count_grown_trees()), "it counts the trees left standing")
 	_check(_arena.windows.lit_count == _arena.windows.window_count(), "every window of the block is lit")
 	_check(is_equal_approx(_arena.windows.strength, 1.0), "at full strength")
-	var last_word := _arena.get_node("Hud/StoryLine") as Label
-	_check(last_word.visible and last_word.text.contains(CONFIG.helios_end_line), "Helios's last line stays under it")
+	_check(_arena.radio.speaker == Radio.HELIOS and _arena.radio.text == CONFIG.helios_end_line, "Helios's last line stays on the radio")
 	_check(_arena.graffiti.revealed_count == CONFIG.graffiti_lines.size(), "every graffiti line is on the walls")
 	_check(_arena.windows.next_block_lit, "and the next block's windows start coming on")
 	_check(_arena.count_grown_trees() > Arena.TEST_TREE_CELLS.size(), "and the forest is left standing (%d trees)" % _arena.count_grown_trees())
@@ -1389,15 +1413,13 @@ func _test_talking_to_lucky() -> void:
 	await _fresh_arena()
 	_check(_arena.talk_to_lucky() == "", "Lucky says nothing while the shop is shut")
 	var shop: CatShop = _arena.cat_shop
-	# The KNOCK x3 hint: hidden early, shown from its wave while the shop is shut.
-	_arena.waves.start_wave(CONFIG.knock_hint_wave - 1)
-	_check(not _arena.graffiti.show_knock, "no KNOCK hint before wave %d" % CONFIG.knock_hint_wave)
-	_arena.waves.start_wave(CONFIG.knock_hint_wave)
-	_check(_arena.graffiti.show_knock, "from wave %d a shut shop gets the KNOCK x3 hint" % CONFIG.knock_hint_wave)
+	# No floor arrow or words ever point at the shop: finding it is the player's job.
+	_arena.waves.start_wave(5)
+	_check(not ("show_knock" in _arena.graffiti), "nothing is painted on the floor pointing at the shop")
 	for i: int in CONFIG.cat_hits_needed:
 		shop.hit_by_seed()
 	_check(_arena.lucky_found_wave >= 1, "the arena remembers the wave Lucky was found in")
-	_check(not _arena.graffiti.show_knock, "the KNOCK hint goes once the shop is open")
+
 	var first: String = _arena.talk_to_lucky()
 	var second: String = _arena.talk_to_lucky()
 	_check(first != "" and second != "" and first != second, "talking again gives the next line")
@@ -1507,4 +1529,190 @@ func _test_new_game_plus() -> void:
 	_arena._on_wave_cleared(3)
 	_check(not fresh.is_great, "a tree planted after the wave started does not mature yet")
 
+	# Any win unlocks New Game +, even one where the lucky cat was never found.
+	await _fresh_arena()
+	RunState.ng_plus_unlocked = false
+	_check(not _arena.cat_shop.is_open, "(this run never opened Lucky's shop)")
+	_arena._on_all_waves_cleared()
+	_check(RunState.ng_plus_unlocked, "a win without finding Lucky still unlocks New Game +")
+
 	RunState.ng_plus_unlocked = was_unlocked
+	RunState.just_unlocked = false
+	RunState.save()  # put the save file back the way it was
+
+
+## Great sunroots' powers (great_powers.gd): Canopy lines between pairs that can
+## see each other, which bind machines crossing them, and the Sunburst on a zip.
+func _test_great_powers() -> void:
+	await _fresh_arena()
+	var powers: GreatPowers = _arena.great_powers
+	await _wait_frames(2)
+	_check(powers.lines.is_empty(), "no great sunroots, no Canopy lines (a normal run)")
+
+	# Two great trees 6 cells apart with a clear view: one cable.
+	var a: ForestTree = _arena.spawn_tree(Vector2i(3, 12), true)
+	var b: ForestTree = _arena.spawn_tree(Vector2i(9, 12), true)
+	a.mature()
+	b.mature()
+	await _wait_frames(2)
+	_check(powers.lines.size() == 1, "two great sunroots that see each other string a Canopy line")
+	_check(powers.is_charged(powers.lines[0]), "a new line is charged")
+
+	# A machine walking across the cable is caught, and the cable recharges.
+	var scrapper: Scrapper = _arena.spawn_scrapper_at(Vector2i(6, 12))
+	await _wait_frames(2)
+	_check(scrapper.is_bound, "a machine on the Canopy line is bound")
+	_check(not powers.is_charged(powers.lines[0]), "then the line recharges before it catches again")
+
+	# A wall of wood between them: a third (ordinary) tree blocks the view.
+	var c: ForestTree = _arena.spawn_tree(Vector2i(3, 2), true)
+	var d: ForestTree = _arena.spawn_tree(Vector2i(9, 2), true)
+	c.mature()
+	d.mature()
+	_arena.spawn_tree(Vector2i(6, 2), true)
+	await _wait_frames(2)
+	_check(powers.lines.size() == 1, "a tree in between blocks a Canopy line")
+
+	# Too far apart: no line.
+	var far: ForestTree = _arena.spawn_tree(Vector2i(9 + int(CONFIG.canopy_line_range_cells) + 2, 12), true)
+	far.mature()
+	await _wait_frames(2)
+	_check(powers.lines.size() == 1, "great sunroots too far apart make no line")
+
+	# Sunburst: zipping to a great sunroot stuns the machines around it.
+	var near: Scrapper = _arena.spawn_scrapper_at(Vector2i(4, 10))
+	_check(powers.sunburst(a.global_position) >= 1, "a Sunburst stuns the machines near the great tree")
+	_check(not is_instance_valid(near) or near.is_dead or near.is_bound, "the machine in range is stunned (or downed)")
+	_check(powers.sunburst(a.global_position) == 0, "a second Sunburst waits for the cooldown")
+	powers.sunburst_cooldown_left = 0.0
+	_arena.player.zip_tree = b
+	_arena._on_player_zip_finished()
+	_check(powers.sunburst_cooldown_left > 0.0, "a zip that ends at a great sunroot sets off its Sunburst")
+	powers.sunburst_cooldown_left = 0.0
+	_arena.player.zip_tree = _arena.tree_at(Arena.TEST_TREE_CELLS[0])
+	_arena._on_player_zip_finished()
+	_check(powers.sunburst_cooldown_left == 0.0, "a zip to an ordinary tree does not")
+
+
+## The Trellis: a zip from beside one tree to another leaves a vine between them
+## for a few seconds, which snares each machine crossing it once.
+func _test_trellis() -> void:
+	await _fresh_arena()
+	var powers: GreatPowers = _arena.great_powers
+	var a: ForestTree = _arena.spawn_tree(Vector2i(3, 12), true)
+	var b: ForestTree = _arena.spawn_tree(Vector2i(9, 12), true)
+	# Pretend Seven zipped from right beside tree a to tree b.
+	_arena.player.zip_from = a.global_position + Vector2(CONFIG.cell_size, 0.0)
+	_arena.player.zip_tree = b
+	_arena._on_player_zip_finished()
+	_check(powers.trellises.size() == 1, "a zip from one tree to another strings a trellis")
+	var scrapper: Scrapper = _arena.spawn_scrapper_at(Vector2i(6, 12))
+	await _wait_frames(2)
+	_check(scrapper.is_bound, "a machine crossing the trellis is snared")
+	# A zip that did not start beside a tree strings nothing.
+	_arena.player.zip_from = _arena.grid.cell_to_world(Vector2i(20, 7))
+	_arena._on_player_zip_finished()
+	_check(powers.trellises.size() == 1, "a zip from open ground strings no trellis")
+	var gone: Callable = func() -> bool: return powers.trellises.is_empty()
+	_check(await _wait_until(gone, CONFIG.trellis_seconds + 1.0), "the trellis withers after %d seconds" % CONFIG.trellis_seconds)
+
+
+## The Heart Tree: a tough tree in the middle that Sawbots go for first; if it
+## falls the wave starts again, and it heals between waves.
+func _test_heart_tree() -> void:
+	await _fresh_arena(true)
+	var heart: ForestTree = _arena.heart_tree
+	_check(heart != null and heart.is_heart and heart.cell == Arena.HEART_TREE_CELL, "the Heart Tree stands in the middle of the lot")
+	_check(heart.hp == CONFIG.tree_hp * CONFIG.heart_tree_hp_multiplier, "with %dx a tree's hit points" % CONFIG.heart_tree_hp_multiplier)
+	# A Sawbot a little nearer to an ordinary tree still heads for the Heart.
+	var sawbot: Sawbot = _arena.spawn_sawbot_at(Vector2i(13, 9))  # 1 cell from (13, 10), 2 from the Heart
+	_check(sawbot._nearest_tree(ForestTree.Stage.GROWN, INF) == heart, "a Sawbot goes for the Heart Tree first")
+	sawbot.take_damage(99)
+	# Hurt it, then clear a wave: it heals.
+	heart.take_damage(3)
+	_arena._on_wave_cleared(1)
+	_check(heart.hp == heart.max_hp(), "the Heart Tree heals between waves")
+	# Fell it during a wave: the wave starts again, with the Heart replanted.
+	_arena.waves.start_wave(2)
+	var felled: Array[bool] = [false]
+	_arena.heart_tree_felled.connect(func() -> void: felled[0] = true)
+	heart.take_damage(heart.hp)
+	_check(felled[0], "felling the Heart Tree loses the wave")
+	var replanted: Callable = func() -> bool: return is_instance_valid(_arena.heart_tree) and _arena.heart_tree.is_heart
+	_check(await _wait_until(replanted, CONFIG.death_restart_delay + 1.0), "and the wave restarts with the Heart Tree replanted")
+
+
+## The late-wave machines: Linebreakers (heavy Scrappers) and Arc Spitters
+## (three-shot fans), and the waves that send them.
+func _test_new_machines() -> void:
+	await _fresh_arena()
+	var heavy: Scrapper = _arena.spawn_scrapper_at(Vector2i(20, 12), true)
+	await _wait_frames(1)
+	_check(heavy.hp == CONFIG.linebreaker_hp, "a Linebreaker has %d hit points" % CONFIG.linebreaker_hp)
+	_check(is_equal_approx(heavy.scale.x, CONFIG.linebreaker_scale), "and is bigger than a Scrapper")
+	var arc: Spitter = _arena.spawn_spitter_at(Vector2i(20, 3), true)
+	await _wait_frames(1)
+	var shots: Array[Vector2] = []
+	arc.spat.connect(func(_origin: Vector2, direction: Vector2) -> void: shots.append(direction))
+	arc._fire(Vector2.LEFT * 100.0)
+	_check(shots.size() == 3, "an Arc Spitter fires a fan of three shots")
+	# The waves: none of either early on; both by the last wave.
+	var director: WaveDirector = _arena.waves
+	var last: int = director.total_waves()
+	_check(not director._build_queue(1).has(WaveDirector.LINEBREAKER), "no Linebreakers in wave 1")
+	_check(director._build_queue(last).has(WaveDirector.LINEBREAKER), "Linebreakers in the last wave")
+	_check(director._build_queue(last).has(WaveDirector.ARC_SPITTER), "Arc Spitters in the last wave")
+
+
+## Between-wave upgrades: clearing a wave deals the cards and holds the next
+## wave; picking one applies it and lets the next wave come.
+func _test_upgrades() -> void:
+	await _fresh_arena()
+	var picker: UpgradePicker = _arena.upgrade_picker
+	_check(not picker.is_open(), "no upgrade cards before a wave is cleared")
+	_arena.waves.start_wave(2)  # wave 1 is the staged tutorial: one machine at a time
+	var all_sent: Callable = func() -> bool: return _arena.waves.state == WaveDirector.State.FIGHTING
+	_arena.waves.time_scale = 20.0
+	await _wait_until(all_sent, 4.0)
+	for node: Node in get_tree().get_nodes_in_group(Enemy.GROUP):
+		(node as Enemy).take_damage(99)
+	_check(picker.is_open() and picker.offered.size() == CONFIG.upgrade_choices, "clearing a wave deals %d upgrade cards" % CONFIG.upgrade_choices)
+	_check(_arena.waves.hold_break, "and the next wave waits for a pick")
+	picker.choose(0)
+	_check(not picker.is_open() and not _arena.waves.hold_break, "picking one closes the cards and lets the next wave come")
+	_check(_arena.upgrades_taken.size() == 1, "the pick is recorded")
+
+	# Each upgrade does what its card says.
+	var player: Player = _arena.player
+	var hp_before: int = player.max_hp
+	_arena.apply_upgrade(&"thick_plating")
+	_check(player.max_hp == hp_before + CONFIG.upgrade_max_hp and player.hp == player.max_hp, "Thick Plating: more max health and a full repair")
+	_arena.apply_upgrade(&"seed_pouch")
+	_check(player.fire_cooldown_scale < 1.0, "Seed Pouch: pods come faster")
+	_arena.apply_upgrade(&"heavy_seeds")
+	_check(_arena.seed_damage_bonus >= CONFIG.upgrade_seed_damage, "Heavy Seeds: pods hit harder")
+	var standing: ForestTree = _arena.tree_at(Arena.TEST_TREE_CELLS[0])
+	var tree_hp_before: int = standing.hp
+	_arena.apply_upgrade(&"hardwood")
+	_check(standing.hp == tree_hp_before + CONFIG.upgrade_tree_hp, "Hardwood: trees already standing get more hit points")
+	var planted: ForestTree = _arena.spawn_tree(Vector2i(4, 12), true)
+	_check(planted.max_hp() == CONFIG.tree_hp + _arena.tree_hp_bonus, "and so do new trees")
+	_arena.apply_upgrade(&"long_trellis")
+	_check(_arena.great_powers.trellis_bonus_seconds == CONFIG.upgrade_trellis_seconds, "Long Trellis: trellis vines last longer")
+	_arena.apply_upgrade(&"quick_roots")
+	_check(_arena.sapling_time_scale < 1.0, "Quick Roots: saplings root faster")
+	for id: StringName in UpgradePicker.CATALOG.keys():
+		_check(UpgradePicker._describe(id).find("%d") == -1, "the %s card's text is filled in" % id)
+
+
+## The art pass: props from concept 05_props_b (corner props are solid), and
+## Lucky's two-frame wave.
+func _test_props_and_lucky_art() -> void:
+	_check(CONFIG.props_texture != null and CONFIG.props_texture.get_width() == Props.FRAMES.size() * 64, "the props picture holds one 64 px frame per prop")
+	_check(CONFIG.cat_wave_texture != null, "Lucky has a second, paw-down frame")
+	await _fresh_arena()
+	var props: Props = _arena.props
+	_check(props.solid_cells.size() == 4, "four solid props, one per floor corner")
+	for cell: Vector2i in props.solid_cells:
+		_check(_arena.grid.is_solid(cell), "machines path around the prop at %s" % cell)
+	_check(not _arena._spawn_candidates().has(props.solid_cells[0]), "and no machine spawns inside one")

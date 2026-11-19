@@ -106,6 +106,9 @@ func _nearest_tree(stage: ForestTree.Stage, max_distance: float) -> ForestTree:
 		if tree == null or tree.stage != stage:
 			continue
 		var distance: float = global_position.distance_to(tree.global_position)
+		# The Heart Tree LURES Sawbots: it counts as nearer than it really is.
+		if tree.is_heart:
+			distance *= CONFIG.heart_tree_lure
 		if distance <= best_distance:
 			best = tree
 			best_distance = distance
