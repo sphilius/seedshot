@@ -267,3 +267,18 @@ From the kickoff. `config/game_config.tres` holds every speed, cooldown and size
   6 dB quieter for 2.5 s. One recording, filtered: generated tracks would not line up as stems.
 - PowerShell gotcha: two values for a `[string[]]` parameter need the name, `-Names dub,chip`; a second bare word
   goes to the next parameter.
+
+## D-034 (s15): spray-paint lettering, Seven, tap points, title screen and New Game +
+
+- **Graffiti** uses Permanent Marker (Apache 2.0, already shipped with Klad, so nothing was downloaded) with a soft
+  overspray outline. Sasha rejected pasted-on lettering in the concepts; the built-in font looked exactly like that.
+- **Seven** is drawn by `tools/seven_sprite.py` in the locked design and mirrors left/right with the aim instead of
+  spinning (a standing robot spinning on the spot reads wrong).
+- **Tap points (story step 5):** from wave 2, two soil patches (gold ring, so they read at night) per wave. A tree
+  grown on one is a tap tree: +3 windows while standing, heals 1 pip, 2x HP, gold tint; restarts replant it as one.
+- **Title screen** is now the main scene (07_key_art_g behind it). A finished run returns to it.
+- **New Game +** (`RunState` autoload, saved to `user://seedshot.cfg`): unlocked by any win. 1.5x machines per
+  wave (rounded up), sent 1.5x faster, no staged tutorial. Trees grown at a wave's start that still stand when it is
+  cleared mature into **great sunroots** (stage 4: 3x HP, wider glow, the big tree picture). The Canopy FM station
+  picker appears on the title screen once unlocked.
+- Not yet decided: the New Game + mechanic that makes great sunroots worth planning for (brainstorm sent to Sasha).

@@ -45,6 +45,8 @@ const BACKDROP_COLOR: Color = Color(0.05, 0.05, 0.07)
 const WALL_COLOR: Color = Color(0.19, 0.19, 0.22)
 const FLOOR_COLOR: Color = Color(0.29, 0.29, 0.31)
 const GRID_LINE_COLOR: Color = Color(0.0, 0.0, 0.0, 0.10)
+## The title screen, where a finished run returns to (and New Game + is picked).
+const TITLE_SCENE: String = "res://scenes/title.tscn"
 ## The ring round a tap point's soil patch (brighter than white on purpose).
 const TAP_RING_COLOR: Color = Color(2.2, 1.7, 0.6, 0.85)
 
@@ -59,6 +61,10 @@ var _rng := RandomNumberGenerator.new()
 ## The forest as it stood when the current wave began: cell -> was it grown?
 ## If the player goes down, the arena is put back to exactly this.
 var _forest_at_wave_start: Dictionary[Vector2i, bool] = {}
+## The cells holding a great sunroot at wave start (New Game +), for restarts.
+var _great_trees_at_wave_start: Array[Vector2i] = []
+## True for a New Game + run: harder waves, and trees mature into great sunroots.
+var ng_plus: bool = false
 ## The cells holding a tap tree at wave start, so a restart replants them as tap trees.
 var _tap_trees_at_wave_start: Array[Vector2i] = []
 ## This wave's tap points: soil patches where a downed machine grows a tap tree.
@@ -187,6 +193,8 @@ func _ready() -> void:
 	_banner.visible = false
 	_story_line.visible = false
 	_wave_label.text = ""
+	if RunState.ng_plus:
+		apply_ng_plus()
 	if autostart_waves:
 		waves.start_wave(1)
 
@@ -484,7 +492,9 @@ func _restart_current_wave() -> void:
 	for cell: Vector2i in _forest_at_wave_start.keys():
 		if _tap_trees_at_wave_start.has(cell):
 			tap_points.append(cell)  # spawn_tree turns this back into a tap tree
-		spawn_tree(cell, _forest_at_wave_start[cell])
+		var replanted: ForestTree = spawn_tree(cell, _forest_at_wave_start[cell])
+		if replanted != null and _great_trees_at_wave_start.has(cell):
+			replanted.mature()
 
 	var start_cell: Vector2i = _nearest_free_cell(PLAYER_START_CELL)
 	if start_cell == ArenaGrid.NO_CELL:
@@ -566,10 +576,13 @@ func helios_line_for(number: int) -> String:
 func _on_wave_started(number: int, total: int) -> void:
 	_forest_at_wave_start.clear()
 	_tap_trees_at_wave_start.clear()
+	_great_trees_at_wave_start.clear()
 	for cell: Vector2i in _trees_by_cell.keys():
 		_forest_at_wave_start[cell] = _trees_by_cell[cell].stage == ForestTree.Stage.GROWN
 		if _trees_by_cell[cell].is_tap:
 			_tap_trees_at_wave_start.append(cell)
+		if _trees_by_cell[cell].is_great:
+			_great_trees_at_wave_start.append(cell)
 	_choose_tap_points(number)
 	_show_banner("Wave %d" % number, 1.5)
 	# By now the controls are learned; the bottom wall belongs to the windows.
@@ -591,7 +604,7 @@ func _on_spawn_requested(kind: StringName, wave_number: int) -> void:
 	var cell: Vector2i = _pick_spawn_cell()
 	# STAGED WAVE 1: the Spitter arrives after the Scrapper has become a tree, and
 	# walks in from behind that tree, so its first shot visibly stops on it.
-	var is_staged: bool = wave_number <= CONFIG.wave_staged_waves
+	var is_staged: bool = wave_number <= waves.staged_wave_count()
 	if is_staged and kind == WaveDirector.SPITTER and tree_at(_last_planted_cell) != null:
 		cell = _pick_spawn_cell_behind(grid.cell_to_world(_last_planted_cell))
 	if cell == ArenaGrid.NO_CELL:
@@ -614,6 +627,8 @@ func _on_wave_cleared(number: int) -> void:
 	# More of the block comes on, and every lit window shines a little stronger.
 	waves_cleared = maxi(waves_cleared, number)
 	_update_light()
+	if ng_plus:
+		mature_trees()
 	# The Block answers Helios: one more painted line on the walls.
 	graffiti.reveal_up_to(number)
 	_show_story_lines([])  # clear any Helios line still showing
@@ -632,12 +647,14 @@ func wave_cleared_text(number: int) -> String:
 
 ## The end screen's banner text: the headline and the final score.
 func end_banner_text() -> String:
-	return "%s\nTrees standing: %d    Press R or tap here to go again" % [CONFIG.end_headline, count_grown_trees()]
+	var unlocked: String = "\nNew Game + unlocked! " if RunState.just_unlocked else "\n"
+	return "%s\nTrees standing: %d%sPress R or tap here for the title screen" % [CONFIG.end_headline, count_grown_trees(), unlocked]
 
 
 ## Signal handler: the last wave is cleared. Show the end screen over the forest.
 func _on_all_waves_cleared() -> void:
 	is_run_finished = true
+	RunState.record_win()  # winning once unlocks New Game + (saved)
 	Sfx.play(&"cat")
 	# The arena is left exactly as it is: the end screen IS your forest.
 	_show_banner(end_banner_text(), 0.0)
@@ -717,7 +734,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Only reload when the arena IS the running scene. In the headless tests it
 	# is a child of the test scene, and reloading would restart the tests.
 	if wants_restart and get_tree().current_scene == self:
-		get_tree().reload_current_scene()
+		RunState.just_unlocked = false
+		get_tree().change_scene_to_file(TITLE_SCENE)  # back to the title screen
 
 
 ## Signal handler: the player fired. Spawn the pod where the signal says.
@@ -827,3 +845,21 @@ func _choose_tap_points(wave_number: int) -> void:
 		for i: int in mini(CONFIG.tap_points_per_wave, candidates.size()):
 			tap_points.append(candidates[i])
 	queue_redraw()  # redraw the floor with the new patches
+
+
+## Switches this run to NEW GAME +: more machines, sent faster, no tutorial
+## staging; and trees can mature into great sunroots (see mature_trees).
+func apply_ng_plus() -> void:
+	ng_plus = true
+	waves.count_multiplier = CONFIG.ng_plus_count_multiplier
+	waves.pace_multiplier = CONFIG.ng_plus_pace_multiplier
+	waves.staged_waves = 0
+
+
+## New Game +: every tree that was already grown when this wave started and is
+## still standing now matures into a great sunroot (tree stage 4).
+func mature_trees() -> void:
+	for cell: Vector2i in _trees_by_cell.keys():
+		var tree: ForestTree = _trees_by_cell[cell]
+		if _forest_at_wave_start.get(cell, false) and tree.stage == ForestTree.Stage.GROWN and not tree.is_great:
+			tree.mature()

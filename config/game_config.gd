@@ -197,6 +197,18 @@ extends Resource
 ## The soil patch picture (tools/floor_tiles.ps1 makes it).
 @export var tap_point_texture: Texture2D
 
+@export_group("New Game +")
+## NEW GAME + (unlocked by winning once): every wave sends this many times the
+## machines (rounded up), and sends them this many times faster. 1.5 = 50% more.
+@export var ng_plus_count_multiplier: float = 1.5
+@export var ng_plus_pace_multiplier: float = 1.5
+## In New Game +, a tree that was already grown when a wave started and is still
+## standing when that wave is cleared matures into a GREAT SUNROOT (tree stage 4).
+## Its hit points are this many times a normal tree's.
+@export var great_sunroot_hp_multiplier: int = 3
+## Picture of the great sunroot (tools/tree_sprites.py: tree_big.png).
+@export var tree_great_texture: Texture2D
+
 @export_group("Canopy FM")
 ## The block's pirate radio (scripts/canopy_fm.gd). How loud the song is, in
 ## decibels (0 = as recorded; every -6 roughly halves it).

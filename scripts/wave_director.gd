@@ -38,6 +38,14 @@ const SAWBOT: StringName = &"sawbot"
 ## Runs the timetable faster or slower. 1.0 is normal. The headless tests set
 ## this to 20 so a wave's worth of spawning takes a blink instead of seconds.
 var time_scale: float = 1.0
+## NEW GAME + knobs, set by the arena before the first wave. 1.0 = the normal game.
+## count_multiplier: machines per wave are multiplied by this (rounded up).
+var count_multiplier: float = 1.0
+## pace_multiplier: machines arrive this many times faster.
+var pace_multiplier: float = 1.0
+## staged_waves: how many opening waves send one machine at a time (the tutorial).
+## -1 means "use the config"; New Game + sets 0, since the player knows the game.
+var staged_waves: int = -1
 ## The current wave, counting from 1. 0 means no wave has started yet.
 var wave: int = 0
 var state: State = State.IDLE
@@ -84,12 +92,12 @@ func _physics_process(delta: float) -> void:
 		State.SPAWNING:
 			# A staged wave (wave 1) sends one machine at a time: the next one
 			# waits until the one before it is down.
-			if wave <= CONFIG.wave_staged_waves and _alive > 0:
+			if wave <= staged_wave_count() and _alive > 0:
 				return
 			_timer -= delta
 			if _timer > 0.0:
 				return
-			_timer = CONFIG.wave_spawn_interval
+			_timer = CONFIG.wave_spawn_interval / pace_multiplier
 			var kind: StringName = _queue.pop_front()  # take the next machine off the list
 			_alive += 1
 			spawn_requested.emit(kind, wave)
@@ -120,12 +128,12 @@ func _check_cleared() -> void:
 func _build_queue(number: int) -> Array[StringName]:
 	var index: int = clampi(number - 1, 0, total_waves() - 1)  # lists count from 0
 	var queue: Array[StringName] = []
-	for i: int in CONFIG.wave_scrappers[index]:
+	for i: int in _scaled(CONFIG.wave_scrappers[index]):
 		queue.append(SCRAPPER)
 
 	# The "specials" for this wave, Spitters and Sawbots taking turns.
-	var spitters: int = _count_for(CONFIG.wave_spitters, index)
-	var sawbots: int = _count_for(CONFIG.wave_sawbots, index)
+	var spitters: int = _scaled(_count_for(CONFIG.wave_spitters, index))
+	var sawbots: int = _scaled(_count_for(CONFIG.wave_sawbots, index))
 	var specials: Array[StringName] = []
 	for i: int in maxi(spitters, sawbots):
 		if i < spitters:
@@ -148,3 +156,19 @@ func _build_queue(number: int) -> Array[StringName]:
 ## Scrapper list; a missing entry means none.
 func _count_for(list: Array[int], index: int) -> int:
 	return list[index] if index < list.size() else 0
+
+
+## A machine count scaled by count_multiplier, rounded UP (ceili), so New Game +
+## always adds at least one machine wherever there was one. Zero stays zero.
+func _scaled(count: int) -> int:
+	return ceili(count * count_multiplier)
+
+
+## How many opening waves are staged (one machine at a time).
+func staged_wave_count() -> int:
+	return CONFIG.wave_staged_waves if staged_waves < 0 else staged_waves
+
+
+## How many machines wave `number` sends in all. Used by the tests.
+func machines_in_wave(number: int) -> int:
+	return _build_queue(number).size()

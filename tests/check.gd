@@ -98,6 +98,7 @@ func _ready() -> void:
 	await _test_talking_to_lucky()
 	await _test_canopy_fm()
 	await _test_tap_points()
+	await _test_new_game_plus()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -1465,3 +1466,45 @@ func _test_tap_points() -> void:
 	replanted.take_damage(999)
 	await _wait_frames(3)
 	_check(_arena.tap_bonus_windows() == 0, "felling it takes its extra windows away")
+
+
+## New Game +: locked until a win, then harder waves (50% more machines, rounded
+## up, sent faster, no staged tutorial), great sunroots, and a station picker.
+func _test_new_game_plus() -> void:
+	var was_unlocked: bool = RunState.ng_plus_unlocked
+	# The title screen: New Game + locked, no station picker.
+	RunState.ng_plus_unlocked = false
+	var title: Control = load("res://scenes/title.tscn").instantiate()
+	add_child(title)
+	await _wait_frames(2)
+	_check(title.ng_plus_button.disabled and not title.station_button.visible, "before a win: New Game + locked, no station picker")
+	RunState.ng_plus_unlocked = true
+	title.refresh()
+	_check(not title.ng_plus_button.disabled and title.station_button.visible, "after a win: New Game + and the station picker open")
+	var station_before: StringName = CanopyFM.station
+	title.station_button.pressed.emit()
+	_check(CanopyFM.station != station_before, "the station button changes the station")
+	CanopyFM.set_station(station_before)
+	title.queue_free()
+
+	# A New Game + arena.
+	await _fresh_arena()
+	var normal_wave_3: int = _arena.waves.machines_in_wave(3)
+	_arena.apply_ng_plus()
+	var hard_wave_3: int = _arena.waves.machines_in_wave(3)
+	_check(hard_wave_3 >= ceili(normal_wave_3 * CONFIG.ng_plus_count_multiplier) - 2 and hard_wave_3 > normal_wave_3,
+		"New Game + sends about 50%% more machines (wave 3: %d -> %d)" % [normal_wave_3, hard_wave_3])
+	_check(_arena.waves.staged_wave_count() == 0, "no staged tutorial wave in New Game +")
+
+	# Great sunroots: a tree grown at wave start and standing at wave clear matures.
+	_arena.waves.start_wave(2)  # snapshots the forest: the three hand-placed trees are grown
+	var tree: ForestTree = _arena.tree_at(Arena.TEST_TREE_CELLS[0])
+	_arena._on_wave_cleared(2)
+	_check(tree.is_great, "a tree that stood through the wave matures into a great sunroot")
+	_check(tree.hp == CONFIG.tree_hp * CONFIG.great_sunroot_hp_multiplier, "with %dx the hit points" % CONFIG.great_sunroot_hp_multiplier)
+	_check(tree.current_texture() == CONFIG.tree_great_texture, "and the stage 4 picture")
+	var fresh: ForestTree = _arena.spawn_tree(Vector2i(8, 8), true)
+	_arena._on_wave_cleared(3)
+	_check(not fresh.is_great, "a tree planted after the wave started does not mature yet")
+
+	RunState.ng_plus_unlocked = was_unlocked

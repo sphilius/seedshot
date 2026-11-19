@@ -28,3 +28,4 @@ One line per asset or system: tool, date, what it did. This feeds the itch page'
 - Tree sprites (s14): sapling, grown, cut and big, cut out of Sasha's Gemini concept 04_sunroot_f and shrunk to 64 px by tools/tree_sprites.py (palette snap, speckle filter, outline).
 - Canopy FM (s15): three 90 s songs (lofi, dub, chip) generated with the ElevenLabs music API by tools/gen_music.ps1; played by the CanopyFM autoload through a low-pass filter that opens as the block lights.
 - Seven sprite (s15): drawn shape by shape by tools/seven_sprite.py in Sasha's locked design (the robot in her Gemini concept 07_key_art_b); faces the viewer and mirrors to follow the aim.
+- Title screen + New Game + (s15): title art is Sasha's Gemini key art 07_key_art_g, cropped to 1280x720; NG+ unlocks after a win (saved in user://), +50% machines sent 50% faster, great sunroots, Canopy FM station picker.

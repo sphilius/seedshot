@@ -39,6 +39,9 @@ var starts_grown: bool = false
 ## Set to true BEFORE adding the tree to make it a TAP TREE (it grew on a tap
 ## point): more hit points and a gold tint. The arena handles its other effects.
 var is_tap: bool = false
+## True once the tree has matured into a GREAT SUNROOT (tree stage 4, New Game +
+## only): a bigger picture, a wider glow, and far more hit points. See mature().
+var is_great: bool = false
 var stage: Stage = Stage.SAPLING
 var hp: int = 0
 ## While true, a ring pulses on the tree: "you can vine to this". The arena
@@ -111,7 +114,9 @@ func _draw() -> void:
 	var picture: Texture2D = current_texture()
 	if picture != null:
 		# Drawn at the same size as every other sprite (64 px), centred on the cell.
-		var size: float = CONFIG.sprite_size_cells * cell_px
+		# 64 px pictures are drawn at sprite size; a bigger picture (the great
+		# sunroot is 72 px) is drawn bigger by the same proportion.
+		var size: float = CONFIG.sprite_size_cells * cell_px * float(picture.get_width()) / 64.0
 		# A tap tree is drawn with a warm gold tint (the last argument multiplies its colours).
 		var tint: Color = CONFIG.tap_tree_tint if is_tap else Color.WHITE
 		draw_texture_rect(picture, Rect2(-size / 2.0, -size / 2.0, size, size), false, tint)
@@ -134,7 +139,23 @@ func _draw() -> void:
 
 ## A tree's full hit points: a tap tree has more (it is slow to saw).
 func max_hp() -> int:
-	return CONFIG.tree_hp * (CONFIG.tap_tree_hp_multiplier if is_tap else 1)
+	var multiplier: int = CONFIG.tap_tree_hp_multiplier if is_tap else 1
+	if is_great:
+		multiplier *= CONFIG.great_sunroot_hp_multiplier
+	return CONFIG.tree_hp * multiplier
+
+
+## Stage 4: a grown tree becomes a great sunroot. It is healed to its new, much
+## higher hit points, and its pool of light widens. The arena decides when.
+func mature() -> void:
+	if stage != Stage.GROWN or is_great:
+		return
+	is_great = true
+	hp = max_hp()
+	var glow: Node2D = get_node_or_null(Glow.NODE_NAME)
+	if glow != null:
+		glow.scale *= 1.6
+	queue_redraw()
 
 
 ## The picture this tree shows right now: sapling, grown, or cut (a grown tree
@@ -143,6 +164,9 @@ func max_hp() -> int:
 func current_texture() -> Texture2D:
 	if stage == Stage.SAPLING:
 		return CONFIG.tree_sapling_texture
+	if is_great and CONFIG.tree_great_texture != null:
+		# A great sunroot only shows the cut picture once it is down to half.
+		return CONFIG.tree_great_texture if hp * 2 > max_hp() else CONFIG.tree_cut_texture
 	if hp < max_hp():
 		return CONFIG.tree_cut_texture
 	return CONFIG.tree_grown_texture

@@ -14,13 +14,14 @@ config_version=5
 
 config/name="Seedshot"
 config/description="A gardener-bot plants a forest out of the machines it shoots down."
-run/main_scene="res://scenes/arena.tscn"
+run/main_scene="res://scenes/title.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 
 [autoload]
 
 Sfx="*res://scripts/sfx.gd"
 CanopyFM="*res://scripts/canopy_fm.gd"
+RunState="*res://scripts/run_state.gd"
 
 [display]
 

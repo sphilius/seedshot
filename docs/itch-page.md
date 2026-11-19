@@ -67,8 +67,9 @@ spare fuse that gets you back up once when you'd go down.** Talk to Lucky as oft
 
 **Short on time?** After wave 5 the game tells you it's a good place to stop and rate. Play on for the ending.
 
-UPDATE: **New Game +**: beat the game once to unlock it: harder waves, the great sunroot, and your pick of Canopy FM
-station. **[add the final description of the New Game + mechanics here]**
+**New Game +**: beat the game once to unlock it on the title screen: 50% more machines, sent faster, and trees that
+survive a whole wave grow into **great sunroots**. You also get to pick your Canopy FM station (lo-fi, dub or
+chiptune). **[add the New Game + mechanic once it is chosen]**
 
 ### Made for Jamference AI Game Jam Hack 4
 
