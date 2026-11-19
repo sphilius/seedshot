@@ -1323,6 +1323,17 @@ func _test_tree_pictures() -> void:
 		all_sized = all_sized and picture != null and picture.get_size() == Vector2(64.0, 64.0)
 	_check(all_sized, "the three tree pictures are 64 x 64")
 	_check(CONFIG.graffiti_font != null, "the graffiti has its marker font")
+	# Seven in the locked design faces the viewer and mirrors to follow the aim.
+	await _fresh_arena()
+	var seven: Player = _arena.player
+	var seven_sprite: Sprite2D = seven.get_node("Sprite2D")
+	seven.touch_mode = true          # so the aim comes from aim_direction, not the mouse
+	seven.aim_direction = Vector2.LEFT
+	await _wait_frames(3)
+	_check(seven_sprite.flip_h and is_zero_approx(seven_sprite.rotation), "aiming left mirrors Seven without spinning it")
+	seven.aim_direction = Vector2.RIGHT
+	await _wait_frames(3)
+	_check(not seven_sprite.flip_h, "aiming right faces it right again")
 	await _fresh_arena()
 	var tree: ForestTree = _arena.spawn_tree(Vector2i(5, 5), false)
 	_check(tree != null and tree.current_texture() == CONFIG.tree_sapling_texture, "a new tree shows the sapling picture")

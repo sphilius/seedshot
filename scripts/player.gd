@@ -274,8 +274,11 @@ func _update_aim() -> void:
 		var to_mouse: Vector2 = get_global_mouse_position() - global_position
 		if to_mouse.length() > 1.0:
 			aim_direction = to_mouse.normalized()
-	# The art faces "up", and angle() measures from "right", hence the quarter turn.
-	_sprite.rotation = aim_direction.angle() + PI / 2.0
+	# Seven stands facing the viewer (the locked design, tools/seven_sprite.py),
+	# so it does not spin round: it turns to look left or right with the aim.
+	# flip_h mirrors the picture; the drawing holds its seedling on the right.
+	if absf(aim_direction.x) > 0.1:
+		_sprite.flip_h = aim_direction.x < 0.0
 
 
 ## Returns the machine nearest to `world_point`, if one is within `pick_radius`
