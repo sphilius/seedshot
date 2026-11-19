@@ -23,6 +23,13 @@ const EMPTY_COLOR: Color = Color(1.0, 1.0, 1.0, 0.30)
 ## What is currently shown. Public so the tests can read them.
 var current: int = 0
 var maximum: int = 0
+## Grove rest: how far along the next pip is, 0 to 1. The first empty pip fills
+## from the bottom as this rises. Written by the arena every frame.
+var rest_progress: float = 0.0:
+	set(value):
+		if not is_equal_approx(value, rest_progress):
+			rest_progress = value
+			queue_redraw()
 ## The row may not start left of this screen x (the arena sets it to just past
 ## the end of the wave label). 0 = no limit.
 var left_limit: float = 0.0:
@@ -73,3 +80,7 @@ func _draw() -> void:
 		else:
 			# filled = false draws only the outline, 2 px wide.
 			draw_rect(pip, EMPTY_COLOR, false, 2.0)
+			if i == current and rest_progress > 0.0:
+				# The pip being repaired: a paler fill rising from its bottom edge.
+				var height: float = pip.size.y * clampf(rest_progress, 0.0, 1.0)
+				draw_rect(Rect2(pip.position.x, pip.end.y - height, pip.size.x, height), Color(FULL_COLOR, 0.55))

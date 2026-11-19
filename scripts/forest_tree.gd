@@ -67,6 +67,9 @@ var show_vine_hint: bool = false
 ## tint). `static` means ONE value shared by all trees, not one each, so the
 ## arena sets it once a frame for the whole forest: ForestTree.light_boost = ...
 static var light_boost: float = 1.0
+## How strongly every Heart Tree marker (ring and label) is drawn, 0 to 1. The
+## arena fades it out after the first wave. Shared, like light_boost.
+static var heart_marker_fade: float = 1.0
 
 ## Seconds this tree has spent as a sapling (fills the growth ring).
 var _sapling_age: float = 0.0
@@ -185,6 +188,12 @@ func pop_scale() -> float:
 	return 1.0 + (CONFIG.tree_pop_scale - 1.0) * sin(PI * done)
 
 
+## How strongly to draw the Heart Tree's ring and label, 0 (hidden) to 1: the
+## shared fade the arena sets, but always full while the alarm is showing.
+func heart_marker_strength() -> float:
+	return 1.0 if _alarm_left > 0.0 else heart_marker_fade
+
+
 ## A colour brightened by the shared light_boost (its see-through-ness unchanged).
 static func _lit(color: Color) -> Color:
 	return Color(color.r * light_boost, color.g * light_boost, color.b * light_boost, color.a)
@@ -210,7 +219,14 @@ func _draw_overlay() -> void:
 		_overlay.draw_arc(Vector2.ZERO, cell_px * lerpf(0.5, 1.3, done), 0.0, TAU, 48, ring, 4.0, true)
 	if is_heart:
 		var alarmed: bool = _alarm_left > 0.0
+		# The soft pink glow it keeps all run: two see-through discs, one inside the other.
+		var glow: Color = _lit(CONFIG.heart_glow_color)
+		_overlay.draw_circle(Vector2.ZERO, cell_px * CONFIG.heart_glow_radius_cells, glow)
+		_overlay.draw_circle(Vector2.ZERO, cell_px * CONFIG.heart_glow_radius_cells * 0.6, glow)
+	if is_heart and heart_marker_strength() > 0.01:
+		var alarmed: bool = _alarm_left > 0.0
 		var color: Color = _lit(CONFIG.heart_alarm_color if alarmed else CONFIG.heart_marker_color)
+		color.a *= heart_marker_strength()  # fades out after the first wave
 		# A slow pulse (faster while alarmed): sin() swings the radius in and out.
 		var speed: float = 10.0 if alarmed else 3.0
 		var pulse: float = sin(Time.get_ticks_msec() / 1000.0 * speed) * 0.04
@@ -221,7 +237,7 @@ func _draw_overlay() -> void:
 		var text: String = CONFIG.heart_alarm_label if alarmed else CONFIG.heart_tree_label
 		var width: float = cell_px * 6.0
 		var at := Vector2(-width / 2.0, -cell_px * 1.0)
-		_overlay.draw_string_outline(font, at, text, HORIZONTAL_ALIGNMENT_CENTER, width, CONFIG.heart_label_font_size, 5, Color(0.0, 0.0, 0.0, 0.9))
+		_overlay.draw_string_outline(font, at, text, HORIZONTAL_ALIGNMENT_CENTER, width, CONFIG.heart_label_font_size, 5, Color(0.0, 0.0, 0.0, 0.9 * heart_marker_strength()))
 		_overlay.draw_string(font, at, text, HORIZONTAL_ALIGNMENT_CENTER, width, CONFIG.heart_label_font_size, color)
 	if hp < max_hp():
 		# The health bar: a dark back, and a fill that shortens and reddens.

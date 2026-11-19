@@ -47,6 +47,18 @@ func _ready() -> void:
 		_sprite.self_modulate = CONFIG.linebreaker_tint
 
 
+## Overrides Enemy._draw_marks: a Linebreaker wears a thick gold ring. The bright
+## part is the share of hit points left, so the player can see the pods working.
+func _draw_marks() -> void:
+	if not heavy:
+		return
+	var radius: float = CONFIG.cell_size * 0.74
+	draw_arc(Vector2.ZERO, radius, 0.0, TAU, 48, CONFIG.linebreaker_ring_lost_color, 6.0, true)
+	var share: float = clampf(float(hp) / float(maxi(max_hp, 1)), 0.0, 1.0)
+	# From 12 o'clock (-PI / 2) clockwise; TAU is a full turn.
+	draw_arc(Vector2.ZERO, radius, -PI / 2.0, -PI / 2.0 + TAU * share, 48, CONFIG.linebreaker_ring_color, 6.0, true)
+
+
 ## How fast this machine walks, in pixels per second.
 func _speed() -> float:
 	return CONFIG.scrapper_speed * (CONFIG.linebreaker_speed_factor if heavy else 1.0)

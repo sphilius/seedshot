@@ -112,6 +112,7 @@ func _ready() -> void:
 	await _test_readable_trees()
 	await _test_ng_plus_opening()
 	await _test_plating_and_grove_rest()
+	await _test_s18_machines_heart_cards_light()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -710,7 +711,9 @@ func _test_sawbot_takes_three_pods_and_becomes_a_tree() -> void:
 	await _fresh_arena()
 	var player_cell := Vector2i(5, 12)
 	_arena.player.global_position = _arena.grid.cell_to_world(player_cell)
-	var sawbot: Sawbot = _arena.spawn_sawbot_at(player_cell + Vector2i(5, 0))
+	# Three cells away: close enough that the pod lands before the Sawbot (faster
+	# since s18) has walked out of its path.
+	var sawbot: Sawbot = _arena.spawn_sawbot_at(player_cell + Vector2i(3, 0))
 	await get_tree().physics_frame
 	_check(sawbot.hp == CONFIG.sawbot_hp, "a Sawbot starts with %d hit points" % CONFIG.sawbot_hp)
 
@@ -1191,7 +1194,7 @@ func _test_windows_and_night() -> void:
 	# Clearing a wave (here: pretending wave 4 was cleared) updates the windows.
 	_arena.waves_cleared = 4
 	_arena._update_light()
-	_check(windows.lit_count == _arena.lit_windows_after(4), "clearing waves lights more windows")
+	_check(windows.lit_count == _arena.lit_windows_now() + _arena.tap_bonus_windows(), "clearing waves lights more windows")
 	_check(windows.homes_lit() >= 2 and windows.homes_lit() <= windows.home_count(), "spread over several homes (%d)" % windows.homes_lit())
 	_check(_arena.light_level() > dark_level, "and the lot's light level rises")
 
@@ -2049,3 +2052,56 @@ func _test_plating_and_grove_rest() -> void:
 	_arena.tick_grove_rest(CONFIG.grove_rest_seconds_per_pip)
 	_arena.tick_grove_rest(CONFIG.grove_rest_seconds_per_pip)
 	_check(player.hp == player.max_hp and not player.is_resting, "it stops at full health, and the glow goes out")
+
+## s18 batch 2: tougher and faster machines, the Heart Tree's fading label, Seven
+## parked while the upgrade cards are up, and windows that follow the forest.
+func _test_s18_machines_heart_cards_light() -> void:
+	# Machines: the two heavy kinds have their new hit points and their own speeds.
+	await _fresh_arena(true)
+	var heavy: Scrapper = _arena.spawn_scrapper_at(Vector2i(3, 3), true)
+	var arc: Spitter = _arena.spawn_spitter_at(Vector2i(20, 3), true)
+	await get_tree().physics_frame
+	_check(heavy.hp == CONFIG.linebreaker_hp and heavy.max_hp == heavy.hp, "a Linebreaker starts with %d hit points" % CONFIG.linebreaker_hp)
+	_check(arc.hp == CONFIG.arc_spitter_hp, "an Arc Spitter starts with %d hit points" % CONFIG.arc_spitter_hp)
+	_check(heavy._speed() < CONFIG.scrapper_speed and heavy._speed() > 84.0 * 1.1, "a Linebreaker is faster than it was (84) but still slower than a Scrapper")
+	_check(is_equal_approx(arc._speed(), CONFIG.spitter_speed * CONFIG.arc_spitter_speed_factor), "an Arc Spitter walks at its own speed")
+	heavy.toughen(CONFIG.ng_plus_heavy_hp_multiplier, CONFIG.ng_plus_speed_multiplier)
+	_check(heavy.hp == ceili(CONFIG.linebreaker_hp * CONFIG.ng_plus_heavy_hp_multiplier) and heavy.speed_scale > 1.0, "New Game + makes it tougher and faster still")
+	heavy.queue_free()
+	arc.queue_free()
+
+	# Heart Tree: the ring and label fade once the first wave is cleared, but
+	# come straight back while it is being hit.
+	var heart: ForestTree = _arena.heart_tree
+	_check(is_equal_approx(heart.heart_marker_strength(), 1.0), "the Heart Tree's label shows at the start")
+	_arena.waves_cleared = CONFIG.heart_label_waves
+	var faded: Callable = func() -> bool: return ForestTree.heart_marker_fade <= 0.01
+	_check(await _wait_until(faded, CONFIG.heart_label_fade_seconds + 2.0), "after the first wave the ring and label fade away")
+	heart.take_damage(1)
+	_check(is_equal_approx(heart.heart_marker_strength(), 1.0), "a hit brings the (red) label back for a moment")
+
+	# Upgrade cards: Seven is parked next to the Heart Tree and cannot act.
+	var player: Player = _arena.player
+	_arena._park_player_for_cards()
+	var parked: Vector2i = _arena.grid.world_to_cell(player.global_position)
+	var offset: Vector2i = (parked - Arena.HEART_TREE_CELL).abs()
+	_check(player.locked and maxi(offset.x, offset.y) <= CONFIG.upgrade_park_cells, "the cards park Seven within %d cells of the Heart Tree" % CONFIG.upgrade_park_cells)
+	_check(not _arena.grid.is_solid(parked) and _arena.tree_at(parked) == null, "on an open cell")
+	_check(not player.fire(Vector2.RIGHT) and not player.throw_bramble(), "and Seven cannot shoot or throw while they are up")
+	_arena.apply_upgrade(&"seed_pouch")
+	_check(not player.locked, "picking a card frees Seven again")
+
+	# Light follows the forest: a thin forest carries only part of the earned light.
+	await _fresh_arena()
+	_arena.waves_cleared = 4
+	var earned: int = _arena.lit_windows_after(4)
+	var thin: int = _arena.lit_windows_now()
+	_check(_arena.forest_share() < 1.0 and thin < earned, "with few trees, fewer windows are lit than the waves earned (%d of %d)" % [thin, earned])
+	for x: int in range(3, 23):
+		_arena.spawn_tree(Vector2i(x, 4), true)
+	_check(is_equal_approx(_arena.forest_share(), 1.0) and _arena.lit_windows_now() == earned, "a big healthy forest lights everything the waves earned")
+	var points_before: float = _arena.forest_points()
+	_arena.tree_at(Vector2i(3, 4)).take_damage(3)
+	_check(_arena.forest_points() < points_before, "a damaged tree counts for less light")
+	_arena.waves_cleared = _arena.waves.total_waves()
+	_check(is_equal_approx(_arena.forest_share(), 1.0), "winning lights the whole block whatever the forest")

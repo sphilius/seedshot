@@ -39,6 +39,8 @@ var _slowed_steps: int = 0
 ## Seconds of binding left.
 var _bound_time_left: float = 0.0
 var hp: int = 0
+## The hit points it started with (for the Linebreaker's armour ring).
+var max_hp: int = 0
 var is_dead: bool = false
 
 ## The grid to find routes over. Handed in by setup().
@@ -65,6 +67,7 @@ func take_damage(amount: int) -> void:
 	if is_dead:
 		return
 	hp -= amount
+	queue_redraw()  # the Linebreaker's armour ring shows hit points left
 	if hp <= 0:
 		is_dead = true
 		died.emit(self)
@@ -143,14 +146,32 @@ func _draw() -> void:
 	if _sprite.texture == null:
 		var size: float = (_collision.shape as CircleShape2D).radius * 2.0
 		draw_rect(Rect2(-size / 2.0, -size / 2.0, size, size), _fallback_color)
+	_draw_marks()
+
+
+## Extra marks a kind of machine paints around itself. Nothing here; the
+## Linebreaker and the Arc Spitter write their own versions ("overriding").
+## It is drawn BEHIND the sprite, which is a child node, so it shows around it.
+func _draw_marks() -> void:
+	pass
+
+
+## Called by the arena for New Game +: more hit points and a faster walk.
+## ceili rounds up to a whole number.
+func toughen(hp_multiplier: float, speed_multiplier: float) -> void:
+	hp = ceili(float(hp) * hp_multiplier)
+	max_hp = hp
+	speed_scale *= speed_multiplier
+	queue_redraw()
 
 
 ## Each kind of machine calls this from its own _ready with its own numbers:
 ## join the "enemies" group, set HP, and size the hit circle and the sprite.
 ## (The leading underscore marks it as "for this class and its children only".)
-func _configure_body(max_hp: int, radius_cells: float, texture: Texture2D, fallback_color: Color) -> void:
+func _configure_body(start_hp: int, radius_cells: float, texture: Texture2D, fallback_color: Color) -> void:
 	add_to_group(GROUP)
-	hp = max_hp
+	hp = start_hp
+	max_hp = start_hp
 	_fallback_color = fallback_color
 	(_collision.shape as CircleShape2D).radius = radius_cells * CONFIG.cell_size
 	_sprite.texture = texture
@@ -198,6 +219,8 @@ func _next_goal(final_position: Vector2) -> Vector2:
 ## the sprite to face the way it is going.
 func _walk_towards(goal: Vector2, speed: float) -> void:
 	velocity = global_position.direction_to(goal) * speed * speed_scale
+	# limit_length shortens a vector that is too long: the top speed for machines.
+	velocity = velocity.limit_length(CONFIG.player_speed * CONFIG.enemy_top_speed_share)
 	# In a bramble patch: walk slower, and count down the steps left in the thorns.
 	if _slowed_steps > 0:
 		velocity *= CONFIG.bramble_slow_factor

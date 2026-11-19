@@ -155,6 +155,8 @@ static func _describe(id: StringName) -> String:
 func _draw() -> void:
 	if not is_open():
 		return
+	# Darken the whole screen behind the cards, so the choice has the player's eye.
+	draw_rect(Rect2(Vector2.ZERO, get_viewport_rect().size), CONFIG.upgrade_dim_color)
 	var font: Font = ThemeDB.fallback_font
 	var heading: String = "The block chips in. Pick one  (1 / 2 / 3, or tap)"
 	draw_string(font, Vector2(0.0, CARDS_TOP - 14.0), heading, HORIZONTAL_ALIGNMENT_CENTER, get_viewport_rect().size.x, 20, TITLE_COLOR)

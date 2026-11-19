@@ -79,7 +79,8 @@ extends Resource
 @export var sapling_retry_time: float = 0.25
 
 @export_group("Scrapper")
-@export var scrapper_speed: float = 120.0
+## s18: every machine walks 20% faster than before (this was 120).
+@export var scrapper_speed: float = 144.0
 ## 1 = dies to a single seed pod.
 @export var scrapper_hp: int = 1
 @export_range(0.1, 0.49) var scrapper_radius_cells: float = 0.33
@@ -101,17 +102,29 @@ extends Resource
 ## Slower than a Scrapper (120): you have time to reach it before a tree falls.
 ## LINEBREAKER (a heavy Scrapper, scrapper.gd `heavy`): hit points, size (1 =
 ## a Scrapper's), speed (share of a Scrapper's), melee damage and colour.
-@export var linebreaker_hp: int = 5
+## s18: 15 hit points (was 5), and 15% faster than before: 0.67 of the new
+## Scrapper speed is about 97 px/s (it was 84). Still a third slower than a Scrapper.
+@export var linebreaker_hp: int = 15
 @export var linebreaker_scale: float = 1.35
-@export var linebreaker_speed_factor: float = 0.7
+@export var linebreaker_speed_factor: float = 0.67
 @export var linebreaker_damage: int = 2
-@export var linebreaker_tint: Color = Color(1.0, 0.55, 0.45)
+## Hazard gold (s18: the old red-brown looked like any other Scrapper).
+@export var linebreaker_tint: Color = Color(1.45, 1.10, 0.35)
+## The Linebreaker's armour ring: the bright part is the hit points it has left.
+@export var linebreaker_ring_color: Color = Color(1.60, 1.20, 0.20)
+@export var linebreaker_ring_lost_color: Color = Color(0.25, 0.20, 0.10, 0.85)
 ## ARC SPITTER (spitter.gd `arc`): hit points, the angle between the shots of
 ## its three-shot fan, and colour.
-@export var arc_spitter_hp: int = 3
+## s18: 6 hit points (was 3), and 15% faster than before (115 px/s): 0.96 of
+## the new Spitter speed.
+@export var arc_spitter_hp: int = 6
+@export var arc_spitter_speed_factor: float = 0.96
 @export var arc_spitter_spread_degrees: float = 18.0
-@export var arc_spitter_tint: Color = Color(0.70, 0.75, 1.30)
-@export var sawbot_speed: float = 90.0
+## Electric cyan, with three sparks circling it (one per shot of its fan).
+@export var arc_spitter_tint: Color = Color(0.55, 1.35, 1.45)
+@export var arc_spitter_spark_color: Color = Color(0.50, 1.70, 1.90)
+## s18: 20% faster (was 90).
+@export var sawbot_speed: float = 108.0
 ## Takes three pods. It ignores you, so the cost of leaving it alone is trees.
 @export var sawbot_hp: int = 3
 @export_range(0.1, 0.49) var sawbot_radius_cells: float = 0.36
@@ -126,7 +139,8 @@ extends Resource
 @export var sawbot_saw_interval: float = 0.5
 
 @export_group("Spitter")
-@export var spitter_speed: float = 100.0
+## s18: 20% faster (was 100).
+@export var spitter_speed: float = 120.0
 ## Takes two pods.
 @export var spitter_hp: int = 2
 @export_range(0.1, 0.49) var spitter_radius_cells: float = 0.33
@@ -213,6 +227,14 @@ extends Resource
 ## machines (rounded up), and sends them this many times faster. 1.5 = 50% more.
 @export var ng_plus_count_multiplier: float = 1.5
 @export var ng_plus_pace_multiplier: float = 1.5
+## New Game + machines also walk this much faster, and the two heavy kinds
+## (Linebreaker, Arc Spitter) have this many times their hit points.
+@export var ng_plus_speed_multiplier: float = 1.10
+## No machine ever walks faster than this share of Seven's own speed, however
+## the per-wave and New Game + speed-ups stack. (Without it a wave 10 Scrapper
+## in New Game + would do 272 px/s against Seven's 260.)
+@export var enemy_top_speed_share: float = 0.92
+@export var ng_plus_heavy_hp_multiplier: float = 1.5
 ## In New Game +, a tree that was already grown when a wave started and is still
 ## standing when that wave is cleared matures into a GREAT SUNROOT (tree stage 4).
 ## Its hit points are this many times a normal tree's.
@@ -255,6 +277,13 @@ extends Resource
 ## over the glow so they are always visible.
 @export var heart_marker_color: Color = Color(1.0, 0.45, 0.62)
 @export var heart_tree_label: String = "HEART TREE"
+## The ring and label show until this many waves are cleared, then fade over
+## heart_label_fade_seconds. (They still come back, in red, when it is hit.)
+@export var heart_label_waves: int = 1
+@export var heart_label_fade_seconds: float = 2.5
+## The soft pink glow the Heart Tree keeps for the whole run, and its radius.
+@export var heart_glow_color: Color = Color(1.0, 0.45, 0.75, 0.16)
+@export var heart_glow_radius_cells: float = 1.15
 ## Letter height of that label in pixels (big enough to read on a phone).
 @export var heart_label_font_size: int = 20
 ## The ring and label switch to this colour and text for heart_alarm_show_seconds
@@ -352,6 +381,17 @@ extends Resource
 ## (but not the last), the player picks one of `upgrade_choices` cards.
 @export var upgrade_from_wave: int = 1
 @export var upgrade_choices: int = 3
+## While the cards are up the whole screen is darkened with this colour, and
+## Seven is parked within this many cells of the Heart Tree, unable to act.
+@export var upgrade_dim_color: Color = Color(0.0, 0.0, 0.0, 0.62)
+@export var upgrade_park_cells: int = 2
+## LIGHT FOLLOWS THE FOREST (s18): cleared waves decide how much light the block
+## has EARNED; the forest decides how much of that shines. Each grown tree counts
+## as its share of health (a half-cut tree counts 0.5). The earned light is fully
+## on when the forest has this many tree-points per wave cleared.
+@export var light_trees_per_wave: float = 4.0
+## How often the windows are brought up to date with the forest, in seconds.
+@export var light_refresh_seconds: float = 0.4
 ## Seed Pouch multiplies the time between pods by this (0.8 = 20% faster).
 @export var upgrade_fire_cooldown_factor: float = 0.8
 ## Heavy Seeds: extra damage per pod.
@@ -368,9 +408,14 @@ extends Resource
 ## GROVE REST is how Seven repairs (s18; Thick Plating no longer does it): while
 ## Seven is within grove_rest_radius_cells of at least grove_rest_trees grown
 ## trees, one pip comes back every grove_rest_seconds_per_pip seconds.
-@export var grove_rest_radius_cells: float = 2.0
+## (First try was 2 cells and 4 s: Sasha could not tell it was working.)
+@export var grove_rest_radius_cells: float = 3.0
 @export var grove_rest_trees: int = 4
-@export var grove_rest_seconds_per_pip: float = 4.0
+@export var grove_rest_seconds_per_pip: float = 2.5
+## The small words under Seven: trees in reach while hurt, and while repairing.
+@export var grove_rest_count_text: String = "Grove %d / %d"
+@export var grove_rest_working_text: String = "Repairing"
+@export var grove_rest_text_color: Color = Color(0.75, 1.5, 0.75)
 ## The glow around Seven while resting. Values above 1 stay bright at night.
 @export var grove_rest_glow_color: Color = Color(0.55, 1.35, 0.55, 0.40)
 ## Radius of that glow, in cells.
