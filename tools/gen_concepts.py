@@ -396,7 +396,7 @@ def get_key() -> str:
     return key
 
 
-def generate(prompt: str, key: str, references: tuple = ()) -> bytes:
+def generate(prompt: str, key: str, references: tuple = (), aspect: str = "4:3") -> bytes:
     """Ask the model for one picture and return its PNG/JPEG bytes.
     The reply holds a list of "parts"; a picture part carries its data base64-encoded
     under `inlineData`, so we look for the first part that has it."""
@@ -409,7 +409,7 @@ def generate(prompt: str, key: str, references: tuple = ()) -> bytes:
     parts.append({"text": prompt})
     body = {
         "contents": [{"parts": parts}],
-        "generationConfig": {"responseModalities": ["TEXT", "IMAGE"], "imageConfig": {"aspectRatio": "4:3"}},
+        "generationConfig": {"responseModalities": ["TEXT", "IMAGE"], "imageConfig": {"aspectRatio": aspect}},
     }
     request = urllib.request.Request(
         ENDPOINT.format(model=MODEL), data=json.dumps(body).encode("utf-8"), method="POST",
