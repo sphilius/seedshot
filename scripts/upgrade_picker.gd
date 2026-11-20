@@ -33,7 +33,7 @@ const CATALOG: Dictionary[StringName, Array] = {
 	&"long_trellis": ["Vine Trip Line", "Your trip line lasts %s s longer. Stacks."],
 	# s24 SKILL UNLOCKS: these two are not there at the start of a run. Each is
 	# picked once; the arena stops dealing it after that.
-	&"trip_line": ["Vine Trip Line", "Zip from beside one tree to another: the vine stays strung %s s and trips machines."],
+	&"trip_line": ["Vine Trip Line", "Zip from beside one tree to another: a vine stays %s s and trips machines."],
 	&"bramble_seed": ["Bramble Seed", "Throw thorns that slow a crowd and chew it up. Hold %d; they grow back."],
 	# s22: takes time off the seed shooter's reload, up to a limit (see the config).
 	&"quick_reload": ["Quick Reload", "Reloads %s s faster. Stacks %d times."],
