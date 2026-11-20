@@ -47,8 +47,9 @@ extends Resource
 ## After a hit the bot blinks and cannot be hurt again for this long, so two
 ## enemies landing together cost one hit point, not two.
 @export var player_hit_invulnerable_time: float = 0.8
-## Seconds between the bot going down and the arena starting over.
-@export var death_restart_delay: float = 1.2
+## Seconds between the bot going down and the arena starting over. (s18 round 2:
+## 1.8, was 1.2, so the knock-out can be watched. Real seconds, not slowed ones.)
+@export var death_restart_delay: float = 1.8
 
 @export_group("Seed pod")
 @export var seed_speed: float = 720.0
@@ -137,7 +138,7 @@ extends Resource
 ## Radius of the bubble in cells, how solid its inside is (0 = clear glass), and
 ## how many times brighter it flares for a moment when a pod lands on it.
 @export var shield_radius_cells: float = 0.74
-@export var shield_fill_alpha: float = 0.13
+@export var shield_fill_alpha: float = 0.08
 @export var shield_hit_flare: float = 2.2
 ## ARC SPITTER (spitter.gd `arc`): hit points, the angle between the shots of
 ## its three-shot fan, and colour.
@@ -239,8 +240,29 @@ extends Resource
 ## lightning bolt over Seven, while the picture pops big and settles back.
 @export var fuse_flash_seconds: float = 0.8
 @export var fuse_flash_color: Color = Color(1.9, 1.6, 0.5)
-## Seconds Seven cannot be hurt after the fuse saves it (it blinks meanwhile).
-@export var fuse_invulnerable_time: float = 2.0
+## Seconds Seven cannot be hurt after the fuse saves it. A gold shield shows
+## around Seven for that long, fading away as it runs out (s18 round 2: 3 s, was 2).
+@export var fuse_invulnerable_time: float = 3.0
+@export var fuse_shield_color: Color = Color(1.9, 1.5, 0.4)
+## THE BIG MOMENTS (s18 round 2, Sasha: the fuse revive was "just a quick bolt").
+## When Seven is knocked out, or the fuse brings it back, the whole game slows
+## to drama_slow_scale (0.3 = 30% speed) and the screen darkens by
+## drama_dim_alpha (0 = not at all, 1 = black), both easing back over
+## knockout_drama_seconds / fuse_drama_seconds of real time.
+@export var drama_slow_scale: float = 0.3
+@export var drama_dim_alpha: float = 0.6
+@export var knockout_drama_seconds: float = 0.7
+@export var fuse_drama_seconds: float = 1.3
+## WEAR AND TEAR: Seven shows its damage in three steps (player.gd wear_level).
+##   level 1  at or under wear_dented_share of full health: scorch marks, a spark now and then
+##   level 2  at or under wear_battered_share: more scorch, steady sparks, smoke
+##   level 3  on the last pip: sparks all the time and a red warning light
+@export var wear_dented_share: float = 0.67
+@export var wear_battered_share: float = 0.34
+@export var wear_scorch_color: Color = Color(0.05, 0.04, 0.04, 0.55)
+@export var wear_spark_color: Color = Color(2.2, 1.7, 0.5)
+@export var wear_smoke_color: Color = Color(0.6, 0.6, 0.65, 0.35)
+@export var wear_warning_color: Color = Color(2.2, 0.3, 0.2)
 ## Talking to Lucky: Seven must be within this many cells of the open shop for
 ## the E key to work. (A tap on the shop works from anywhere.)
 @export var lucky_talk_range_cells: float = 3.5

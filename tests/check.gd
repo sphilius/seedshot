@@ -122,6 +122,7 @@ func _ready() -> void:
 	await _test_s18_shields_and_bolts()
 	await _test_s18_machine_roles()
 	await _test_s18_sunburst_chain()
+	await _test_s18_wear_and_big_moments()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -1421,7 +1422,8 @@ func _test_spare_fuse() -> void:
 	_arena.waves_cleared += 1
 	_arena._update_light()
 	_check(not player.has_fuse, "clearing a wave does not refit the fuse")
-	await _wait_frames(150)  # let the long fuse blink run out
+	# Let the fuse's "cannot be hurt" time run out (60 physics frames a second).
+	await _wait_frames(int(CONFIG.fuse_invulnerable_time * 60.0) + 30)
 	player.take_damage(CONFIG.player_max_hp)
 	_check(player.is_dead, "without a fuse the next deadly hit downs Seven")
 
@@ -2596,3 +2598,52 @@ func _test_s18_sunburst_chain() -> void:
 	_arena.waves.start_wave(3)
 	_arena._restart_current_wave()
 	_check(_arena.tree_at(Vector2i(20, 9)).waves_stood == 2, "a restarted wave keeps how long each tree has stood")
+
+
+## s18 playtest round 2: Seven shows wear in three steps, the fuse gives a gold
+## shield that runs down, and a knock-out or a fuse revive slows and darkens the game.
+func _test_s18_wear_and_big_moments() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	# Wear follows the share of health left. (hp is set directly: take_damage
+	# would be ignored while Seven blinks after the hit before.)
+	_check(player.wear_level() == 0, "an unhurt Seven shows no wear")
+	player.hp = 3  # 3 of 5 = 60%: at or under the "dented" share
+	_check(player.wear_level() == 1, "at 3 of 5 pips Seven is dented (level 1)")
+	player.hp = 2
+	# 2 of 5 = 40% is above the "battered" share of 34%, so still level 1.
+	_check(player.wear_level() == 1, "at 2 of 5 it is still level 1")
+	player.max_hp = 10
+	player.hp = 3
+	_check(player.wear_level() == 2, "at 3 of 10 pips Seven is battered (level 2)")
+	player.hp = 1
+	_check(player.wear_level() == 3, "on the last pip it is level 3, whatever the maximum")
+	player.max_hp = CONFIG.player_max_hp
+
+	# The fuse: Seven gets back up, the game slows and darkens, and a shield counts down.
+	# (The big moments only play during a wave, so pretend wave 3 is being fought.)
+	_arena.waves.wave = 3
+	_arena.waves.state = WaveDirector.State.FIGHTING
+	player.receive_cat_gift()
+	player.hp = 1
+	player._invulnerable_left = 0.0
+	player.take_damage(1)
+	_check(player.hp == CONFIG.fuse_revive_hp and not player.is_dead, "the fuse puts Seven back up")
+	_check(is_equal_approx(player.fuse_shield_left, CONFIG.fuse_invulnerable_time), "with a shield for %.0f seconds" % CONFIG.fuse_invulnerable_time)
+	_check(_arena.drama_left > 0.0 and is_equal_approx(Engine.time_scale, CONFIG.drama_slow_scale), "the game drops into slow motion for the moment")
+	await _wait_frames(3)
+	_check(_arena.dim_sheet.color.a > 0.0, "and the screen darkens")
+	_check(not player.take_damage(1), "nothing can hurt Seven while the shield is up")
+	# The slow motion ends by itself after fuse_drama_seconds of REAL time.
+	var normal_again: Callable = func() -> bool: return _arena.drama_left <= 0.0
+	_check(await _wait_until(normal_again, CONFIG.fuse_drama_seconds + 1.0), "the slow motion ends")
+	_check(is_equal_approx(Engine.time_scale, 1.0) and is_zero_approx(_arena.dim_sheet.color.a), "at normal speed, with the screen clear again")
+
+	# A knock-out does the same, and the arena leaves normal speed behind it.
+	player.has_fuse = false
+	player._invulnerable_left = 0.0
+	player.fuse_shield_left = 0.0
+	player.hp = 1
+	player.take_damage(1)
+	_check(player.is_dead and _arena.drama_left > 0.0, "a knock-out also slows and darkens the game")
+	_check(await _wait_until(normal_again, CONFIG.knockout_drama_seconds + 1.0) and is_equal_approx(Engine.time_scale, 1.0), "and then lets go of it")

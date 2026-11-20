@@ -109,6 +109,12 @@ var _shake_left: float = 0.0
 ## seconds of that flash left. Public so the tests can read them.
 var hurt_flash: ColorRect
 var hurt_flash_left: float = 0.0
+## THE BIG MOMENTS (knock-out, fuse revive): a black sheet over the screen that
+## darkens it, the real seconds of slow motion left, and how long this one
+## lasts in all. Public so the tests can read them.
+var dim_sheet: ColorRect
+var drama_left: float = 0.0
+var _drama_seconds: float = 1.0
 ## True once the opening line has been shown, so a restarted wave 1 skips it.
 var _hook_shown: bool = false
 ## The cell of the most recent sapling planted by a downed machine.
@@ -312,6 +318,13 @@ func _ready() -> void:
 	hurt_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	$Hud.add_child(hurt_flash)
 	$Hud.move_child(hurt_flash, 0)
+	# The black "big moment" sheet, made the same way and also under the HUD's labels.
+	dim_sheet = ColorRect.new()
+	dim_sheet.color = Color(0.0, 0.0, 0.0, 0.0)
+	dim_sheet.size = get_viewport_rect().size
+	dim_sheet.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	$Hud.add_child(dim_sheet)
+	$Hud.move_child(dim_sheet, 1)  # just above the red sheet, under everything else
 	radio = Radio.new()
 	$Hud.add_child(radio)
 	upgrade_picker = UpgradePicker.new()
@@ -1074,6 +1087,23 @@ func _tick_impact(delta: float) -> void:
 		hurt_flash_left = maxf(hurt_flash_left - real_delta, 0.0)
 		var share: float = hurt_flash_left / CONFIG.hurt_flash_seconds  # 1 at the hit, 0 when over
 		hurt_flash.color = Color(CONFIG.hurt_flash_color, CONFIG.hurt_flash_color.a * share)
+	if drama_left > 0.0:
+		drama_left = maxf(drama_left - real_delta, 0.0)
+		var left: float = drama_left / _drama_seconds  # 1 at the start, 0 when over
+		dim_sheet.color = Color(0.0, 0.0, 0.0, CONFIG.drama_dim_alpha * left)
+		if drama_left <= 0.0:
+			# Back to normal speed, unless a wave end slow-down is still running.
+			Engine.time_scale = CONFIG.wave_end_slow_scale if _beat_left > 0.0 else 1.0
+
+
+## Starts a BIG MOMENT: slow motion and a darkened screen for `seconds` of real
+## time (see drama_slow_scale and drama_dim_alpha in the config). Public for the tests.
+func start_drama(seconds: float) -> void:
+	if seconds <= 0.0:
+		return
+	_drama_seconds = seconds
+	drama_left = seconds
+	Engine.time_scale = CONFIG.drama_slow_scale
 
 
 ## Signal handler: a hit on Seven counted. Shake hard and flash the screen red.
@@ -1103,6 +1133,8 @@ func _on_pause_restart_wave() -> void:
 		return  # no wave is running: nothing to restart
 	Engine.time_scale = 1.0  # in case a wave end slow-down was running
 	_beat_left = 0.0
+	drama_left = 0.0
+	dim_sheet.color = Color(0.0, 0.0, 0.0, 0.0)
 	player.locked = false
 	_restart_current_wave()
 
@@ -1189,7 +1221,11 @@ func _lucky_says(line: String) -> Dictionary:
 
 ## Signal handler: the spare fuse saved Seven from going down.
 func _on_player_fuse_used() -> void:
-	_show_banner("Fuse blown! Seven is back up", 2.0)
+	_show_banner("Fuse blown! Second wind: %d s of shield" % roundi(CONFIG.fuse_invulnerable_time), 2.5)
+	# The game slows and darkens around the gold flash. (Only during a wave, like
+	# the knock-out: the older tests blow fuses with no wave running.)
+	if waves.wave > 0:
+		start_drama(CONFIG.fuse_drama_seconds)
 
 
 ## Signal handler: the player finished a vine zip. The "you can vine to this"
@@ -1433,9 +1469,11 @@ func _on_player_died() -> void:
 	if waves.wave == 0:
 		return  # no wave is running (the tests do this): nothing to restart
 	_show_banner("Down! Wave %d starts again" % waves.wave, CONFIG.death_restart_delay)
+	start_drama(CONFIG.knockout_drama_seconds)  # slow motion and a dark screen as Seven powers off
 	# `await` pauses this function here until the timer's `timeout` signal fires.
-	# The `false` means "this timer stops while the game is paused".
-	await get_tree().create_timer(CONFIG.death_restart_delay, false).timeout
+	# The first `false` means "this timer stops while the game is paused"; the
+	# last `true` means "count real seconds, even while the game is in slow motion".
+	await get_tree().create_timer(CONFIG.death_restart_delay, false, false, true).timeout
 	# After an `await`, anything may have changed: this arena may already be gone.
 	if not is_inside_tree():
 		return

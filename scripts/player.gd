@@ -85,6 +85,9 @@ var rest_trees: int = 0
 var locked: bool = false
 ## The Tween moving Seven along the vine, kept so park() can stop it.
 var _zip_tween: Tween
+## Seconds left of the gold shield the fuse gives (see _draw_fuse_shield).
+## Public so the tests can read it.
+var fuse_shield_left: float = 0.0
 ## Seconds left of the knock-out animation and of the fuse-revive animation.
 var _knockout_left: float = 0.0
 var _fuse_flash_left: float = 0.0
@@ -143,6 +146,8 @@ func _ready() -> void:
 	add_child(_aim_overlay)
 	_aim_overlay.draw.connect(_draw_nozzle)
 	_aim_overlay.draw.connect(_draw_hurt_arc)  # a signal can call several functions
+	_aim_overlay.draw.connect(_draw_wear)
+	_aim_overlay.draw.connect(_draw_fuse_shield)
 
 
 ## _physics_process runs 60 times per second: cooldowns, aiming, walking, firing.
@@ -152,6 +157,7 @@ func _physics_process(delta: float) -> void:
 	_lash_time_left = maxf(_lash_time_left - delta, 0.0)
 	_knockout_left = maxf(_knockout_left - delta, 0.0)
 	_fuse_flash_left = maxf(_fuse_flash_left - delta, 0.0)
+	fuse_shield_left = maxf(fuse_shield_left - delta, 0.0)
 	hurt_arc_left = maxf(hurt_arc_left - delta, 0.0)
 	_update_hit_blink(delta)
 	_tick_brambles(delta)
@@ -339,6 +345,7 @@ func take_damage(amount: int, from: Vector2 = Vector2.INF) -> bool:
 		has_fuse = false
 		hp = CONFIG.fuse_revive_hp
 		_invulnerable_left = CONFIG.fuse_invulnerable_time
+		fuse_shield_left = CONFIG.fuse_invulnerable_time
 		_play_fuse_flash()
 		health_changed.emit(hp, max_hp)
 		Sfx.play(&"cat")
@@ -368,6 +375,7 @@ func revive(world_position: Vector2) -> void:
 	bramble_charges = CONFIG.bramble_max_charges  # a fresh start refills the seeds
 	bramble_recharge_left = 0.0
 	modulate = Color.WHITE
+	fuse_shield_left = 0.0
 	_reset_body()  # stand the picture back up after the knock-out
 	_invulnerable_left = CONFIG.player_hit_invulnerable_time
 	# A real defeat is the only thing that refits a used fuse.
@@ -504,6 +512,77 @@ func receive_cat_gift() -> void:
 	can_bind = true
 	has_fuse_slot = true
 	has_fuse = true
+
+
+## How battered Seven looks, 0 (fine) to 3 (about to go down). It follows the
+## share of health left, so it still works after health upgrades.
+func wear_level() -> int:
+	if is_dead or hp >= max_hp:
+		return 0
+	if hp <= 1:
+		return 3
+	var share: float = float(hp) / float(maxi(max_hp, 1))
+	if share <= CONFIG.wear_battered_share:
+		return 2
+	if share <= CONFIG.wear_dented_share:
+		return 1
+	return 0
+
+
+## Paints Seven's wear and tear on the overlay node (in front of the sprite):
+## scorch marks, sparks, smoke, and on the last pip a red warning light.
+## Everything here is drawn from the clock, so nothing needs remembering:
+## `tick` is a whole number that steps up several times a second, and feeding
+## it to sin() gives "random-looking" places that hold still between steps.
+func _draw_wear() -> void:
+	var level: int = wear_level()
+	if level == 0:
+		return
+	var cell_px: float = float(CONFIG.cell_size)
+	var seconds: float = float(Time.get_ticks_msec()) / 1000.0
+	# SCORCH: two dark blotches per level, always in the same places on the body.
+	var scorch_spots: Array[Vector2] = [
+		Vector2(-0.16, -0.10), Vector2(0.14, 0.12), Vector2(0.10, -0.20),
+		Vector2(-0.12, 0.18), Vector2(0.20, -0.02), Vector2(-0.22, 0.04),
+	]
+	for i: int in level * 2:
+		_aim_overlay.draw_circle(scorch_spots[i] * cell_px, 3.0 + float(i % 3), CONFIG.wear_scorch_color)
+	# SPARKS: a few short bright streaks jumping off the body. Level 1 sparks
+	# only now and then (one tick in three), level 2 most of the time, level 3 always.
+	var tick: float = floorf(seconds * 9.0)
+	var sparking: bool = level >= 3 or (level == 2 and int(tick) % 3 != 0) or (level == 1 and int(tick) % 3 == 0)
+	if sparking:
+		for i: int in level + 1:
+			var angle: float = tick * 2.4 + float(i) * 2.1
+			var from: Vector2 = Vector2.from_angle(angle) * cell_px * 0.22
+			var to: Vector2 = from + Vector2.from_angle(angle + sin(tick + float(i)) * 0.8) * (6.0 + 4.0 * float(level))
+			_aim_overlay.draw_line(from, to, CONFIG.wear_spark_color, 2.0)
+			_aim_overlay.draw_circle(to, 1.5, CONFIG.wear_spark_color)
+	# SMOKE (level 2 and up): two grey puffs rising and fading, over and over.
+	# fmod(x, 1.0) is the part of x after the decimal point: it runs 0 to 1 again and again.
+	if level >= 2:
+		for i: int in 2:
+			var rise: float = fmod(seconds * 0.7 + float(i) * 0.5, 1.0)
+			var puff := Vector2((float(i) - 0.5) * 12.0 + sin(seconds * 2.0 + float(i)) * 3.0, -cell_px * (0.35 + 0.6 * rise))
+			_aim_overlay.draw_circle(puff, 4.0 + 5.0 * rise, Color(CONFIG.wear_smoke_color, CONFIG.wear_smoke_color.a * (1.0 - rise)))
+	# WARNING LIGHT (level 3): a small red lamp on Seven that blinks fast.
+	if level >= 3 and fmod(seconds * 3.0, 1.0) < 0.5:
+		_aim_overlay.draw_circle(Vector2(0.0, -cell_px * 0.42), 4.0, CONFIG.wear_warning_color)
+
+
+## Paints the gold shield the spare fuse gives Seven: a bubble that is solid at
+## first and fades away as the "cannot be hurt" time runs out, so the player
+## can see exactly how long the second wind lasts.
+func _draw_fuse_shield() -> void:
+	if fuse_shield_left <= 0.0 or is_dead:
+		return
+	var left: float = fuse_shield_left / CONFIG.fuse_invulnerable_time  # 1 at the start, 0 when over
+	var radius: float = float(CONFIG.cell_size) * 0.78
+	var color: Color = CONFIG.fuse_shield_color
+	_aim_overlay.draw_circle(Vector2.ZERO, radius, Color(color, 0.14 * left))
+	_aim_overlay.draw_arc(Vector2.ZERO, radius - 4.0, 0.0, TAU, 40, Color(color, 0.25 * left), 3.0, true)
+	# The rim shortens like a clock hand running down: what is left of the shield.
+	_aim_overlay.draw_arc(Vector2.ZERO, radius, -PI / 2.0, -PI / 2.0 + TAU * left, 48, Color(color, 0.4 + 0.5 * left), 3.0, true)
 
 
 ## Paints the red arc that shows what just hurt Seven: a quarter circle on the

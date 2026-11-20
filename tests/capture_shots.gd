@@ -135,7 +135,7 @@ func _shot_upgrade_cards() -> void:
 
 
 ## Picture 3: late in New Game +. The block nearly lit, great sunroots with
-## their gold Sunburst rings and Canopy lines, graffiti across the roofs.
+## their gold Sunburst sheen and Canopy lines, a graffiti tag on every roof.
 func _shot_block_lit() -> void:
 	await _fresh_arena()
 	_arena.apply_ng_plus()

@@ -25,19 +25,20 @@ switch ($Task) {
     "import" { & $console --headless --path $project --import }
     "test"   {
         # A test scene whose script fails to compile never reaches its quit() call and
-        # would hang forever, so run it with a 2-minute safety limit.
+        # would hang forever, so run it with a 4-minute safety limit. (The checks
+        # themselves take about 100 seconds since s18.)
         $log = Join-Path $env:TEMP "seedshot_test.log"
         $proc = Start-Process -FilePath $console -NoNewWindow -PassThru `
             -ArgumentList "--headless", "--path", "`"$project`"", "res://tests/check.tscn" `
             -RedirectStandardOutput $log -RedirectStandardError "$log.err"
         $null = $proc.Handle  # keeps the handle open so ExitCode is readable afterwards
-        if (-not $proc.WaitForExit(120000)) {
+        if (-not $proc.WaitForExit(240000)) {
             # The console exe is only a launcher; kill it and the Godot process it started.
             Get-CimInstance Win32_Process -Filter "ParentProcessId = $($proc.Id)" |
                 ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
             Stop-Process -Id $proc.Id -Force
             Get-Content $log, "$log.err"
-            Write-Host "TIMEOUT: tests did not finish in 120 s (usually a script compile error above)."
+            Write-Host "TIMEOUT: tests did not finish in 240 s (usually a script compile error above)."
             exit 2
         }
         Get-Content $log, "$log.err"
