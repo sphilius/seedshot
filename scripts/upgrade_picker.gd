@@ -80,8 +80,10 @@ func _ready() -> void:
 	# IGNORE: clicks pass through to the game except where _gui_input says otherwise.
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	visible = false
-	# NEAREST keeps pixel art crisp when it is drawn bigger than its 64 px.
-	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	# s26: the card icons follow the game-wide filter that DisplayFilter picks for the
+	# window (crisp on big screens, smooth on small ones), so no filter is set here.
+	# PARENT_NODE means "inherit"; with no CanvasItem parent that is the viewport's default.
+	texture_filter = CanvasItem.TEXTURE_FILTER_PARENT_NODE
 	for id: StringName in CATALOG.keys():
 		# Some cards borrow another card's picture (ICON_SHARED_WITH).
 		var icon_file: String = ICON_PATH % ICON_SHARED_WITH.get(id, id)

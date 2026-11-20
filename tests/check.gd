@@ -150,6 +150,8 @@ func _ready() -> void:
 	await _test_s23_fullscreen()
 	# s24: Bramble Seeds and the Vine Trip Line are cards, from wave 3 on.
 	await _test_s24_skill_unlocks()
+	# s26: HD display (128 px art, drawn at the device's real resolution).
+	_test_s26_hd_display()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -3788,3 +3790,54 @@ func _test_s24_skill_unlocks() -> void:
 	_check(not _arena.skill_cards_on and _arena.player.bramble_unlocked and _arena.trip_line_unlocked, "without skill cards both skills are there from the start")
 	_arena.waves.wave = 3
 	_check(_arena.upgrades_left_out().has(&"bramble_seed") and _arena.upgrades_left_out().has(&"trip_line") and _arena.upgrades_always_shown().is_empty(), "and their cards are never dealt")
+
+
+## s26 HD display: the window-scale filter rule, the settings that let the web build
+## draw at the device's real resolution, and mipmaps on every sprite (needed by the
+## smooth filter used in small windows).
+func _test_s26_hd_display() -> void:
+	var layout: Vector2 = DisplayFilter.layout_size()
+	_check(layout == Vector2(1280, 720), "the layout is still 1280 x 720 (%s)" % layout)
+	# window_scale: the smaller of the two ratios (stretch aspect "keep" letterboxes the other).
+	_check(is_equal_approx(DisplayFilter.window_scale(Vector2(1280, 720), layout), 1.0), "a 1280 x 720 window is scale 1")
+	_check(is_equal_approx(DisplayFilter.window_scale(Vector2(2560, 1440), layout), 2.0), "a 1440p window is scale 2")
+	_check(is_equal_approx(DisplayFilter.window_scale(Vector2(3840, 1080), layout), 1.5), "a wide window uses the smaller ratio (height)")
+	_check(is_equal_approx(DisplayFilter.window_scale(Vector2(1280, 720), Vector2.ZERO), 1.0), "a zero layout does not divide by zero")
+	# The rule, at the config's threshold and either side of it.
+	var limit: float = CONFIG.pixel_filter_min_scale
+	var nearest := Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
+	var smooth := Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_check(limit > 1.0 and limit <= 2.0, "the pixel-filter threshold is between 1 and 2 (%.2f)" % limit)
+	_check(DisplayFilter.filter_for(layout * limit, layout, limit) == nearest, "exactly at the threshold: hard pixels")
+	_check(DisplayFilter.filter_for(layout * (limit - 0.01), layout, limit) == smooth, "just below the threshold: smooth with mipmaps")
+	_check(DisplayFilter.filter_for(Vector2(1280, 720), layout, 1.5) == smooth, "a 720p window is smooth")
+	_check(DisplayFilter.filter_for(Vector2(1920, 1080), layout, 1.5) == nearest, "a 1080p window has hard pixels")
+	_check(DisplayFilter.filter_for(Vector2(3840, 2160), layout, 1.5) == nearest, "a 4K window has hard pixels")
+	# Phones held in landscape: 812 x 375 CSS pixels at device ratio 3 is 2436 x 1125 (scale 1.56),
+	# at ratio 2 it is 1624 x 750 (scale 1.04).
+	_check(DisplayFilter.filter_for(Vector2(2436, 1125), layout, 1.5) == nearest, "a ratio-3 phone in landscape has hard pixels")
+	_check(DisplayFilter.filter_for(Vector2(1624, 750), layout, 1.5) == smooth, "a ratio-2 phone in landscape is smooth")
+	# The autoload has applied the rule to the real root viewport.
+	var root: Window = get_tree().root
+	_check(root.canvas_item_default_texture_filter == DisplayFilter.filter_for(Vector2(root.size), layout, limit),
+		"the root viewport's filter follows the rule for this window (%s)" % root.size)
+	# Project settings: draw at the device's real resolution, layout unchanged.
+	_check(ProjectSettings.get_setting("display/window/dpi/allow_hidpi") == true, "high-DPI drawing is allowed")
+	_check(ProjectSettings.get_setting("display/window/stretch/mode") == "canvas_items", "stretch mode is still canvas_items")
+	_check(ProjectSettings.get_setting("display/window/stretch/aspect") == "keep", "stretch aspect is still keep")
+	_check(ProjectSettings.get_setting("rendering/renderer/rendering_method") == "gl_compatibility", "the Compatibility renderer is kept")
+	# The web export preset: no threads (iPhone Safari), canvas resized to the page (2 = adaptive).
+	var presets := ConfigFile.new()
+	_check(presets.load("res://export_presets.cfg") == OK, "export_presets.cfg reads")
+	_check(presets.get_value("preset.0.options", "variant/thread_support", true) == false, "the web build has no thread support")
+	_check(presets.get_value("preset.0.options", "html/canvas_resize_policy", 0) == 2, "the web canvas resize policy is adaptive")
+	# Mipmaps on every sprite, or the smooth filter has nothing to use when the art is shrunk.
+	var missing: PackedStringArray = []
+	for folder: String in ["res://art/sprites/", "res://art/sprites/upgrades/"]:
+		for file: String in DirAccess.get_files_at(folder):
+			if not file.ends_with(".png"):
+				continue
+			var settings := ConfigFile.new()
+			if settings.load(folder + file + ".import") != OK or settings.get_value("params", "mipmaps/generate", false) != true:
+				missing.append(file)
+	_check(missing.is_empty(), "every sprite is imported with mipmaps (missing: %s)" % ", ".join(missing))
