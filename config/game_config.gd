@@ -961,6 +961,11 @@ extends Resource
 @export var graffiti_font: Font
 @export var tree_grown_texture: Texture2D
 @export var tree_cut_texture: Texture2D
+## s19: how much bigger than the normal sprite size a grown tree is DRAWN (1.0 =
+## the old 64 px; 1.5 = 96 px). Sasha: "trees are hard to see". DRAWING ONLY: the
+## collision square stays exactly one cell, so shots cannot slip between
+## neighbours and the grid's pathfinding is untouched. A sapling is not scaled.
+@export_range(1.0, 2.5) var tree_draw_scale: float = 1.5
 ## The floor slabs: one row of 48 x 48 tiles (one grid cell each), built from
 ## the concept floor sheet by tools/floor_tiles.ps1. Leave empty for the plain
 ## floor colour.

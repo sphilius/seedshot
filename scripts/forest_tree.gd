@@ -211,6 +211,13 @@ func pop_scale() -> float:
 	return 1.0 + (CONFIG.tree_pop_scale - 1.0) * sin(PI * done)
 
 
+## How much bigger than the normal sprite size this tree is DRAWN: tree_draw_scale
+## once it has grown, 1.0 as a sapling. It never touches the collision square
+## (see _ready): what a tree blocks stays exactly one cell. Public for the tests.
+func drawn_scale() -> float:
+	return 1.0 if stage == Stage.SAPLING else CONFIG.tree_draw_scale
+
+
 ## How strongly to draw the Heart Tree's ring and label, 0 (hidden) to 1: the
 ## shared fade the arena sets, but always full while the alarm is showing.
 func heart_marker_strength() -> float:
@@ -288,7 +295,7 @@ func _draw() -> void:
 		# 64 px pictures are drawn at sprite size; a bigger picture (the great
 		# sunroot is 72 px) is drawn bigger by the same proportion.
 		# pop_scale() is 1.0 except during the brief "it grew!" swell.
-		var size: float = CONFIG.sprite_size_cells * cell_px * float(picture.get_width()) / 64.0 * pop_scale()
+		var size: float = CONFIG.sprite_size_cells * cell_px * float(picture.get_width()) / 64.0 * pop_scale() * drawn_scale()
 		# A tap tree is drawn with a warm gold tint (the last argument multiplies its colours).
 		var tint: Color = CONFIG.tap_tree_tint if is_tap else Color.WHITE
 		if is_heart:

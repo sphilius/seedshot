@@ -141,6 +141,7 @@ func _ready() -> void:
 	await _test_s19_bramble_preview()
 	await _test_s19_bramble_intro()
 	await _test_s19_lucky()
+	await _test_s19_bigger_trees()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -3358,3 +3359,23 @@ func _test_s19_lucky() -> void:
 	_arena.player.touch_mode = false
 	await _wait_drawn_frames(2)
 	_check(not shop.show_tap_button, "on a desktop the button is not shown (the shop says 'E: talk' instead)")
+
+
+## s19 item 10: trees are DRAWN bigger, but what they block stays exactly one cell.
+func _test_s19_bigger_trees() -> void:
+	await _fresh_arena(true)
+	_check(CONFIG.tree_draw_scale > 1.0, "a grown tree is drawn bigger than before (%.2f x)" % CONFIG.tree_draw_scale)
+	var grown: ForestTree = _arena.spawn_tree(Vector2i(8, 12), true)
+	var young: ForestTree = _arena.spawn_tree(Vector2i(12, 12), false)
+	await _wait_frames(2)
+	_check(is_equal_approx(grown.drawn_scale(), CONFIG.tree_draw_scale), "a grown tree is drawn at the new scale")
+	_check(is_equal_approx(young.drawn_scale(), 1.0), "a sapling keeps its size")
+	grown.mature()
+	_check(is_equal_approx(grown.drawn_scale(), CONFIG.tree_draw_scale), "so does a great sunroot")
+	# The collision square is exactly one cell for every kind of tree, whatever is drawn.
+	var cell_px: float = float(CONFIG.cell_size)
+	var trees: Array[ForestTree] = [grown, young, _arena.heart_tree]
+	for tree: ForestTree in trees:
+		var square: Vector2 = (tree.get_node("CollisionShape2D") as CollisionShape2D).shape.get_rect().size
+		_check(square.is_equal_approx(Vector2(cell_px, cell_px)), "a tree's collision square is exactly one cell (%.0f x %.0f)" % [square.x, square.y])
+	_check((grown.get_node("CollisionShape2D") as CollisionShape2D).scale.is_equal_approx(Vector2.ONE) and grown.scale.is_equal_approx(Vector2.ONE), "the tree itself is not scaled, only its picture")
