@@ -652,6 +652,7 @@ func spawn_sawbot_at(cell: Vector2i, big: bool = false) -> Sawbot:
 	sawbot.position = grid.cell_to_world(cell)
 	sawbot.setup(grid)
 	sawbot.died.connect(_on_enemy_died)
+	_hurt_player_on_touch(sawbot)
 	_enemies.add_child(sawbot)
 	return sawbot
 
@@ -667,8 +668,17 @@ func spawn_spitter_at(cell: Vector2i, arc: bool = false) -> Spitter:
 	spitter.died.connect(_on_enemy_died)
 	# The Spitter only announces "I fired"; the arena makes the shot appear.
 	spitter.spat.connect(spawn_spit_shot)
+	_hurt_player_on_touch(spitter)
 	_enemies.add_child(spitter)
 	return spitter
+
+
+## Makes touching `machine` hurt Seven: the machine only announces `touched`, and
+## the player's take_damage decides (it ignores a hit while Seven is blinking from
+## the one before, which is what keeps contact from draining health).
+func _hurt_player_on_touch(machine: Enemy) -> void:
+	machine.watch_contact(player)
+	machine.touched.connect(func(damage: int) -> void: player.take_damage(damage, machine.global_position))
 
 
 ## Creates one enemy shot at `origin`, flying along `direction` (a unit vector).

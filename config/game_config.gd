@@ -892,6 +892,18 @@ extends Resource
 ## front of the bot, along the aim direction.
 @export var touch_reticle_distance_cells: float = 2.5
 
+@export_group("Contact")
+## s19: touching a machine hurts. How many pips one touch costs Seven.
+@export var contact_damage: int = 1
+## Seconds a machine waits before it can hurt Seven by touch again, in seconds.
+## (Seven's own blink after a hit, player_hit_invulnerable_time, also protects her.)
+@export var contact_damage_cooldown: float = 1.0
+## How close to touching counts as touching, in pixels: the gap allowed between
+## the machine's edge and Seven's edge. Seven cannot walk INTO a machine, so
+## "touching" is really "pressed against". A few pixels covers the physics
+## engine's own small safety gap.
+@export var contact_margin_px: float = 6.0
+
 @export_group("Art")
 ## The sprites are 64 x 64 pixel art drawn with Klad (recipes in art/source/klad).
 ## Leave a texture empty to fall back to a plain coloured rectangle.

@@ -135,6 +135,7 @@ func _ready() -> void:
 	await _test_s18_round_4()
 	# s19: phase 1 of the post-jam backlog.
 	await _test_s19_phase1()
+	await _test_s19_contact()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -3066,3 +3067,95 @@ func _test_s19_phase1() -> void:
 	_check(CONFIG.helios_lines[0] == "Courtesy Notice: This sector's account is 90 minutes past due.", "Helios's opening line is the new text")
 	for line: String in CONFIG.helios_lines:
 		_check(not line.contains("90 days"), "no Helios line still says 90 days")
+
+
+## s19 item 3: machines are solid to Seven and hurt on contact (not while they
+## are arriving or tied up), and Seven can never be pinned by one.
+func _test_s19_contact() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	player._invulnerable_left = 0.0
+	player.global_position = _arena.grid.cell_to_world(Vector2i(5, 12))
+	# A machine tied up by the vine stands still, so it makes a fixed obstacle.
+	# (Binding with the puller at its own spot binds it without dragging it.)
+	var wall_bot: Scrapper = _arena.spawn_scrapper_at(Vector2i(8, 12))
+	await _wait_frames(2)
+	wall_bot.yank_and_bind(wall_bot.global_position, 0.0, 999.0)
+	var wall_x: float = wall_bot.global_position.x
+	Input.action_press(&"move_right")
+	await _wait_frames(120)  # two seconds: far more than enough to cross three cells
+	Input.action_release(&"move_right")
+	var gap: float = wall_x - player.global_position.x
+	var radii: float = (CONFIG.player_radius_cells + CONFIG.scrapper_radius_cells) * float(CONFIG.cell_size)
+	_check(player.global_position.x < wall_x and gap > radii - 3.0, "Seven cannot walk through a machine (stopped %.0f px short; the two bodies are %.0f px wide together)" % [gap, radii])
+	_check(player.hp == CONFIG.player_max_hp, "pushing against a tied-up machine does not hurt")
+
+	# A free machine that is touching Seven hurts her, once per cooldown.
+	await _fresh_arena()
+	player = _arena.player
+	player._invulnerable_left = 0.0
+	player.global_position = _arena.grid.cell_to_world(Vector2i(5, 12))
+	var toucher: Sawbot = _arena.spawn_sawbot_at(Vector2i(8, 12))
+	await _wait_frames(2)
+	toucher.is_entering = false
+	toucher.global_position = player.global_position + Vector2(radii + 2.0, 0.0)  # edges 2 px apart
+	player.hp = player.max_hp
+	player._invulnerable_left = 0.0
+	toucher._contact_left = 0.0
+	toucher._tick_bound(0.0)  # what the machine does at the top of every physics step
+	_check(player.hp == player.max_hp - CONFIG.contact_damage, "touching a machine costs %d pip" % CONFIG.contact_damage)
+	toucher._tick_bound(0.0)
+	_check(player.hp == player.max_hp - CONFIG.contact_damage, "and not again straight away")
+	# Even with the machine's cooldown over, Seven's own blink protects her.
+	toucher._contact_left = 0.0
+	toucher._tick_bound(0.0)
+	_check(player.hp == player.max_hp - CONFIG.contact_damage, "Seven's blink after a hit blocks another touch")
+	player._invulnerable_left = 0.0
+	toucher._contact_left = 0.0
+	toucher._tick_bound(0.0)
+	_check(player.hp == player.max_hp - 2 * CONFIG.contact_damage, "once the blink and the cooldown are over, a touch hurts again")
+
+	# Not while it is arriving, not while it is tied up, not when merely near.
+	player.hp = player.max_hp
+	player._invulnerable_left = 0.0
+	toucher._contact_left = 0.0
+	toucher.is_entering = true
+	toucher._tick_bound(0.0)
+	_check(player.hp == player.max_hp, "a machine still rolling out of a gate or dropping in does not hurt")
+	toucher.is_entering = false
+	toucher.is_bound = true
+	toucher._bound_time_left = 5.0
+	toucher._tick_bound(0.0)
+	_check(player.hp == player.max_hp, "a bound machine does not hurt")
+	toucher.is_bound = false
+	toucher.global_position = player.global_position + Vector2(radii + CONFIG.contact_margin_px + 10.0, 0.0)
+	toucher._tick_bound(0.0)
+	_check(player.hp == player.max_hp, "standing close but not touching does not hurt")
+
+	# Never pinned: Seven stands between a tree and a tied-up machine and can walk out.
+	await _fresh_arena()
+	player = _arena.player
+	_arena.spawn_tree(Vector2i(10, 12), true)
+	player.global_position = _arena.grid.cell_to_world(Vector2i(9, 12))
+	var jammer: Scrapper = _arena.spawn_scrapper_at(Vector2i(7, 12))
+	await _wait_frames(2)
+	jammer.yank_and_bind(jammer.global_position, 0.0, 999.0)
+	jammer.global_position = player.global_position + Vector2(-radii - 1.0, 0.0)  # pressed against her left side
+	var start_y: float = player.global_position.y
+	Input.action_press(&"move_up")
+	await _wait_frames(30)
+	Input.action_release(&"move_up")
+	_check(start_y - player.global_position.y > 15.0, "pressed between a machine and a tree, Seven can still walk out sideways (%.0f px)" % (start_y - player.global_position.y))
+
+	# The vine zip passes over machines.
+	await _fresh_arena()
+	player = _arena.player
+	player.global_position = _arena.grid.cell_to_world(Vector2i(4, 12))
+	var tree: ForestTree = _arena.spawn_tree(Vector2i(14, 12), true)
+	var in_the_way: Scrapper = _arena.spawn_scrapper_at(Vector2i(8, 12))
+	await _wait_frames(2)
+	in_the_way.yank_and_bind(in_the_way.global_position, 0.0, 999.0)
+	_check(player.try_vine(tree.global_position), "the vine still latches a tree with a machine in the line")
+	var landed_past: Callable = func() -> bool: return not player.is_zipping
+	await _wait_until(landed_past, 3.0)
+	_check(player.global_position.x > in_the_way.global_position.x + 20.0, "and the zip carries Seven past the machine")

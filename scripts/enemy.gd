@@ -19,6 +19,9 @@ signal died(enemy: Enemy)
 ## Emitted the moment a machine that dropped in hits the floor (see drop_in).
 ## The arena answers with a screen shake and the crash sound.
 signal landed(enemy: Enemy)
+## Emitted when this machine is touching Seven and its contact cooldown is over.
+## The arena passes the damage on to the player ("signal up, call down").
+signal touched(damage: int)
 
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
 ## Group that every machine joins, so code can ask the scene tree for "all enemies".
@@ -66,6 +69,11 @@ var shoulders_through: bool = false
 var _stuck_time: float = 0.0
 ## Seconds left of shouldering through. Public-ish for the tests.
 var _shoulder_left: float = 0.0
+
+## The body this machine hurts by touching (Seven). Handed in by watch_contact().
+var _contact_target: Node2D
+## Seconds until this machine may hurt by touch again.
+var _contact_left: float = 0.0
 
 ## The grid to find routes over. Handed in by setup().
 var _grid: ArenaGrid
@@ -315,14 +323,38 @@ func _tick_bound(delta: float) -> bool:
 		velocity = Vector2.ZERO
 		return true  # still rolling out of a gate or falling: do nothing yet
 	if not is_bound:
+		_check_contact(delta)
 		return false
 	_bound_time_left -= delta
 	if _bound_time_left <= 0.0:
 		is_bound = false
 		modulate = Color.WHITE  # white = "no tint"
+		_check_contact(delta)
 		return false
 	velocity = Vector2.ZERO
-	return true
+	return true  # a bound machine is tied up, so it does not hurt by touch either
+
+
+## Called by the arena: this machine should hurt `body` (Seven) by touch.
+func watch_contact(body: Node2D) -> void:
+	_contact_target = body
+
+
+## Touching Seven? Then announce it (at most once per contact_damage_cooldown).
+## Called from _tick_bound, so a machine that is still arriving (rolling out of a
+## gate or falling) or tied up never gets here: those do not hurt.
+func _check_contact(delta: float) -> void:
+	_contact_left = maxf(_contact_left - delta, 0.0)
+	if _contact_target == null or not is_instance_valid(_contact_target) or _contact_left > 0.0:
+		return
+	# Touching = the gap between the two edges is at most contact_margin_px.
+	# scale.x makes a big machine (the Linebreaker is scaled up) count its full size.
+	var machine_radius: float = (_collision.shape as CircleShape2D).radius * scale.x
+	var player_radius: float = CONFIG.player_radius_cells * float(CONFIG.cell_size)
+	var reach: float = machine_radius + player_radius + CONFIG.contact_margin_px
+	if global_position.distance_to(_contact_target.global_position) <= reach:
+		_contact_left = CONFIG.contact_damage_cooldown
+		touched.emit(CONFIG.contact_damage)
 
 
 ## _draw paints a plain square, only when there is no sprite texture.
