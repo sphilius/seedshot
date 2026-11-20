@@ -53,6 +53,9 @@ var is_great: bool = false
 ## whole block's roots run through. Lots of hit points, Sawbots go for it first,
 ## and if it falls the wave starts again. Set by the arena before the tree is added.
 var is_heart: bool = false
+## How many whole waves this tree has stood through, grown (New Game + only).
+## At great_sunroot_waves_needed it may mature. Counted by the arena.
+var waves_stood: int = 0
 ## Extra hit points from Hardwood upgrades. Set by the arena.
 var bonus_hp: int = 0
 ## Multiplies how long the sapling takes to root (Quick Roots makes it smaller).

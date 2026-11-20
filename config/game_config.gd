@@ -305,6 +305,13 @@ extends Resource
 ## standing when that wave is cleared matures into a GREAT SUNROOT (tree stage 4).
 ## Its hit points are this many times a normal tree's.
 @export var great_sunroot_hp_multiplier: int = 3
+## s18 round 2 (Sasha): great sunroots were too common (a late run had 30+ on
+## screen). A tree must now stand, grown, through this many whole waves before
+## it matures (it was 1)...
+@export var great_sunroot_waves_needed: int = 3
+## ...and the lot holds at most this many great sunroots. The trees that have
+## stood longest mature first.
+@export var great_sunroot_max: int = 8
 ## Picture of the great sunroot (tools/tree_sprites.py: tree_big.png).
 @export var tree_great_texture: Texture2D
 
@@ -417,6 +424,15 @@ extends Resource
 ## s18: now only a short guard against one zip firing two; the real limit is
 ## the charges below. (It was a hidden 8 seconds.)
 @export var sunburst_cooldown: float = 1.0
+## THE CHAIN (s18 round 2): a Sunburst sets off every other great sunroot
+## within this many cells of it, each of those sets off its own neighbours, and
+## so on, like dominoes. Each tree flares once per chain, and the whole chain
+## costs one charge. Plant great sunroots in a line to carry it across the lot.
+@export var sunburst_chain_range_cells: float = 4.5
+## Seconds between one tree flaring and the next one in the chain.
+@export var sunburst_chain_delay: float = 0.22
+## Colour of the flare: a soft gold wash that spreads and fades.
+@export var sunburst_flare_color: Color = Color(1.6, 1.3, 0.55)
 ## Sunbursts Seven gets each wave. Shown on the HUD; refilled when a wave starts.
 @export var sunburst_charges_per_wave: int = 2
 ## While a Sunburst is ready, every great sunroot turns gold: its picture is
@@ -427,7 +443,7 @@ extends Resource
 @export var sunburst_glow_color: Color = Color(1.0, 0.78, 0.30, 0.30)
 ## Canopy FM explains it the first time great sunroots stand at a wave start.
 ## %d is the number of charges.
-@export var sunburst_intro_line: String = "See the great sunroots glow gold? Zip to one for a Sunburst: it stuns every machine near it. You get %d each wave."
+@export var sunburst_intro_line: String = "See the great sunroots glow gold? Zip to one for a Sunburst: it stuns every machine near it, and great sunroots close by catch and flare too. You get %d each wave."
 
 @export_group("Canopy FM")
 ## The block's pirate radio (scripts/canopy_fm.gd). How loud the song is, in

@@ -67,6 +67,9 @@ var _rng := RandomNumberGenerator.new()
 var _forest_at_wave_start: Dictionary[Vector2i, bool] = {}
 ## The cells holding a great sunroot at wave start (New Game +), for restarts.
 var _great_trees_at_wave_start: Array[Vector2i] = []
+## How many waves each tree had stood through at wave start (cell -> count), so
+## a restarted wave does not wipe a tree's progress toward becoming great.
+var _tree_ages_at_wave_start: Dictionary[Vector2i, int] = {}
 ## True for a New Game + run: harder waves, and trees mature into great sunroots.
 var ng_plus: bool = false
 ## The cells holding a tap tree at wave start, so a restart replants them as tap trees.
@@ -704,6 +707,8 @@ func _restart_current_wave() -> void:
 		if _tap_trees_at_wave_start.has(cell):
 			tap_points.append(cell)  # spawn_tree turns this back into a tap tree
 		var replanted: ForestTree = spawn_tree(cell, _forest_at_wave_start[cell])
+		if replanted != null:
+			replanted.waves_stood = _tree_ages_at_wave_start.get(cell, 0)
 		if replanted != null and _great_trees_at_wave_start.has(cell):
 			replanted.mature()
 
@@ -895,8 +900,10 @@ func _on_wave_started(number: int, total: int) -> void:
 	_forest_at_wave_start.clear()
 	_tap_trees_at_wave_start.clear()
 	_great_trees_at_wave_start.clear()
+	_tree_ages_at_wave_start.clear()
 	for cell: Vector2i in _trees_by_cell.keys():
 		_forest_at_wave_start[cell] = _trees_by_cell[cell].stage == ForestTree.Stage.GROWN
+		_tree_ages_at_wave_start[cell] = _trees_by_cell[cell].waves_stood
 		if _trees_by_cell[cell].is_tap:
 			_tap_trees_at_wave_start.append(cell)
 		if _trees_by_cell[cell].is_great:
@@ -1198,7 +1205,8 @@ func _on_player_zip_finished() -> void:
 		great_powers.add_trellis(from_tree.global_position, tree.global_position)
 	# A zip that ends at a great sunroot sets off its Sunburst.
 	if is_instance_valid(tree) and tree.is_great and tree.stage == ForestTree.Stage.GROWN:
-		if great_powers.sunburst(tree.global_position) > 0:
+		# sunburst() returns -1 when none went off (no charge, or cooling down).
+		if great_powers.sunburst(tree.global_position) >= 0:
 			_show_banner("Sunburst!  %d left this wave" % great_powers.sunburst_charges, 1.2)
 
 
@@ -1555,10 +1563,23 @@ func _on_tutorial_answered(wants_tutorial: bool) -> void:
 	waves.start_wave(1)
 
 
-## New Game +: every tree that was already grown when this wave started and is
-## still standing now matures into a great sunroot (tree stage 4).
+## New Game +, called when a wave is cleared. Every tree that was already grown
+## when the wave started and is still standing has stood through one more wave.
+## A tree that has stood through great_sunroot_waves_needed of them matures
+## into a great sunroot (tree stage 4), oldest first, until the lot holds
+## great_sunroot_max. (Before s18 round 2 one wave was enough and there was no
+## limit, which filled the screen with great trees.)
 func mature_trees() -> void:
+	var ready: Array[ForestTree] = []
 	for cell: Vector2i in _trees_by_cell.keys():
 		var tree: ForestTree = _trees_by_cell[cell]
-		if _forest_at_wave_start.get(cell, false) and tree.stage == ForestTree.Stage.GROWN and not tree.is_great:
-			tree.mature()
+		if not _forest_at_wave_start.get(cell, false) or tree.stage != ForestTree.Stage.GROWN or tree.is_great:
+			continue
+		tree.waves_stood += 1
+		if tree.waves_stood >= CONFIG.great_sunroot_waves_needed:
+			ready.append(tree)
+	# sort_custom sorts with our own rule: "a goes before b if a has stood longer".
+	ready.sort_custom(func(a: ForestTree, b: ForestTree) -> bool: return a.waves_stood > b.waves_stood)
+	var room: int = CONFIG.great_sunroot_max - count_great_trees()
+	for i: int in mini(room, ready.size()):  # mini = the smaller of the two
+		ready[i].mature()

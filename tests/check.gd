@@ -121,6 +121,7 @@ func _ready() -> void:
 	await _test_hit_feedback()
 	await _test_s18_shields_and_bolts()
 	await _test_s18_machine_roles()
+	await _test_s18_sunburst_chain()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -1550,8 +1551,12 @@ func _test_new_game_plus() -> void:
 	# Great sunroots: a tree grown at wave start and standing at wave clear matures.
 	_arena.waves.start_wave(2)  # snapshots the forest: the three hand-placed trees are grown
 	var tree: ForestTree = _arena.tree_at(Arena.TEST_TREE_CELLS[0])
+	# It must stand through great_sunroot_waves_needed waves: one short is not enough.
+	for i: int in CONFIG.great_sunroot_waves_needed - 1:
+		_arena.mature_trees()
+	_check(not tree.is_great, "one wave short, the tree is not a great sunroot yet")
 	_arena._on_wave_cleared(2)
-	_check(tree.is_great, "a tree that stood through the wave matures into a great sunroot")
+	_check(tree.is_great, "a tree that stood through %d waves matures into a great sunroot" % CONFIG.great_sunroot_waves_needed)
 	_check(tree.hp == CONFIG.tree_hp * CONFIG.great_sunroot_hp_multiplier, "with %dx the hit points" % CONFIG.great_sunroot_hp_multiplier)
 	_check(tree.current_texture() == CONFIG.tree_great_texture, "and the stage 4 picture")
 	var fresh: ForestTree = _arena.spawn_tree(Vector2i(8, 8), true)
@@ -1612,7 +1617,7 @@ func _test_great_powers() -> void:
 	var near: Scrapper = _arena.spawn_scrapper_at(Vector2i(4, 10))
 	_check(powers.sunburst(a.global_position) >= 1, "a Sunburst stuns the machines near the great tree")
 	_check(not is_instance_valid(near) or near.is_dead or near.is_bound, "the machine in range is stunned (or downed)")
-	_check(powers.sunburst(a.global_position) == 0, "a second Sunburst waits for the cooldown")
+	_check(powers.sunburst(a.global_position) == -1, "a second Sunburst waits for the cooldown")
 	powers.sunburst_cooldown_left = 0.0
 	_arena.player.zip_tree = b
 	_arena._on_player_zip_finished()
@@ -2545,3 +2550,49 @@ func _test_s18_machine_roles() -> void:
 	# Ready to fire again: it comes back out for a clear line.
 	spitter._cooldown_left = 0.0
 	_check(await _wait_until(func() -> bool: return spitter.is_winding_up, 4.0), "with the shot ready it steps out and winds up")
+
+
+## s18 playtest round 2: a Sunburst chains to great sunroots close by, great
+## sunroots are capped, and a restarted wave keeps a tree's age.
+func _test_s18_sunburst_chain() -> void:
+	await _fresh_arena()
+	var powers: GreatPowers = _arena.great_powers
+	# Three great sunroots in a row, 4 cells apart (inside the chain range of
+	# 4.5), and a fourth far away on its own.
+	var cells: Array[Vector2i] = [Vector2i(4, 11), Vector2i(8, 11), Vector2i(12, 11), Vector2i(22, 3)]
+	var trees: Array[ForestTree] = []
+	for cell: Vector2i in cells:
+		var tree: ForestTree = _arena.spawn_tree(cell, true)
+		tree.mature()
+		trees.append(tree)
+	# A machine beside the THIRD tree: too far for the first flare, in reach of the chain.
+	var far_bot: Sawbot = _arena.spawn_sawbot_at(Vector2i(13, 12))
+	far_bot.set_physics_process(false)  # keep it from walking off during the check
+	await get_tree().physics_frame
+	powers.sunburst_charges = 1
+	var hp_before: int = far_bot.hp
+	var caught: int = powers.sunburst(trees[0].global_position)
+	_check(caught == 0 and far_bot.hp == hp_before, "the first flare does not reach a machine three trees away")
+	# The chain needs two steps of sunburst_chain_delay to reach the third tree.
+	var settled: Callable = func() -> bool: return powers._chain.is_empty() and powers.chain_size >= 3
+	_check(await _wait_until(settled, CONFIG.sunburst_chain_delay * 2.0 + 1.0), "the Sunburst runs down the row of great sunroots")
+	_check(powers.chain_size == 3, "three trees flared: the far one on its own was out of reach (%d)" % powers.chain_size)
+	_check(far_bot.hp == hp_before - CONFIG.sunburst_damage and far_bot.is_bound, "the chain stuns and hurts the machine by the third tree")
+	_check(powers.sunburst_charges == 0, "and the whole chain cost one charge")
+
+	# The cap: with great_sunroot_max standing, no more trees mature.
+	await _fresh_arena()
+	_arena.ng_plus = true
+	var planted: Array[ForestTree] = []
+	for x: int in range(2, 2 + CONFIG.great_sunroot_max + 3):
+		planted.append(_arena.spawn_tree(Vector2i(x, 12), true))
+	_arena.waves.start_wave(2)  # snapshots the forest, so these count as "grown at wave start"
+	for i: int in CONFIG.great_sunroot_waves_needed:
+		_arena.mature_trees()
+	_check(_arena.count_great_trees() == CONFIG.great_sunroot_max, "the lot holds at most %d great sunroots (%d)" % [CONFIG.great_sunroot_max, _arena.count_great_trees()])
+	# A restarted wave replants the forest; a tree keeps the waves it had stood through.
+	var young: ForestTree = _arena.spawn_tree(Vector2i(20, 9), true)
+	young.waves_stood = 2
+	_arena.waves.start_wave(3)
+	_arena._restart_current_wave()
+	_check(_arena.tree_at(Vector2i(20, 9)).waves_stood == 2, "a restarted wave keeps how long each tree has stood")
