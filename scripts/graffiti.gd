@@ -40,7 +40,7 @@ const MAX_FONT_SIZE: int = 22
 const BACK_WALL_TAGS: int = 2
 ## The side wall stretches that take a tag, as (first row, last row), used in
 ## turn left, right, left, right. They lie between the gates (config gate_rows).
-const SIDE_WALL_ROWS: Array[Vector2i] = [Vector2i(4, 6), Vector2i(8, 10), Vector2i(12, 13), Vector2i(1, 2)]
+const SIDE_WALL_ROWS: Array[Vector2i] = [Vector2i(4, 6), Vector2i(8, 9), Vector2i(12, 13), Vector2i(1, 2)]
 const MIN_FONT_SIZE: int = 11
 ## Kept as the size the old tests measured with; a tag now picks its own size.
 const FONT_SIZE: int = 17

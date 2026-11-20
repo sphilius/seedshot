@@ -59,6 +59,14 @@ var hit_flash_left: float = 0.0
 ## is painted behind its children, so the flash needs a child of its own.)
 var _hit_overlay: Node2D
 
+## True for a machine too big to stay wedged (the Linebreaker): when it has made
+## no headway for stuck_seconds it shoulders straight through for a moment.
+var shoulders_through: bool = false
+## Seconds it has been pushing without getting anywhere.
+var _stuck_time: float = 0.0
+## Seconds left of shouldering through. Public-ish for the tests.
+var _shoulder_left: float = 0.0
+
 ## The grid to find routes over. Handed in by setup().
 var _grid: ArenaGrid
 ## Remaining cells to walk through, next one first.
@@ -410,4 +418,24 @@ func _walk_towards(goal: Vector2, speed: float) -> void:
 		_slowed_steps -= 1
 	# The art faces "up", and angle() measures from "right", hence the quarter turn.
 	_sprite.rotation = velocity.angle() + PI / 2.0
+	var step: float = get_physics_process_delta_time()  # the length of one physics step, in seconds
+	# SHOULDERING THROUGH (see shoulders_through): for a short moment the machine
+	# moves straight at its goal and ignores whatever is in the way.
+	if _shoulder_left > 0.0:
+		_shoulder_left -= step
+		global_position = global_position.move_toward(goal, velocity.length() * step)
+		return
+	var before: Vector2 = global_position
 	move_and_slide()  # moves by `velocity`, sliding along anything solid
+	if not shoulders_through:
+		return
+	# Did it get anywhere? If it keeps covering less than a quarter of the
+	# ground it should, it is wedged: after stuck_seconds of that, push through.
+	var wanted: float = velocity.length() * step
+	if wanted > 0.01 and global_position.distance_to(before) < wanted * 0.25:
+		_stuck_time += step
+	else:
+		_stuck_time = maxf(_stuck_time - step, 0.0)
+	if _stuck_time >= CONFIG.stuck_seconds:
+		_stuck_time = 0.0
+		_shoulder_left = CONFIG.stuck_shoulder_seconds

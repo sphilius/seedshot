@@ -2912,3 +2912,43 @@ func _test_s18_round_4() -> void:
 	_check(not _arena.has_end_panel(), "no panel behind an ordinary banner")
 	_arena._on_all_waves_cleared()
 	_check(_arena.has_end_panel() and _arena._banner.size.x < get_viewport().get_visible_rect().size.x, "the end screen's words sit on a dark panel sized to them")
+
+	# THE RIPSAW: the upgraded Sawbot.
+	await _fresh_arena()
+	var ripsaw: Sawbot = _arena.spawn_sawbot_at(Vector2i(4, 8), true)
+	var plain: Sawbot = _arena.spawn_sawbot_at(Vector2i(4, 10))
+	await _wait_frames(2)
+	_check(ripsaw.big and ripsaw.hp == CONFIG.ripsaw_hp and ripsaw.hp > plain.hp, "a Ripsaw has more hit points than a Sawbot (%d to %d)" % [ripsaw.hp, plain.hp])
+	_check(ripsaw._speed() > plain._speed() and is_equal_approx(ripsaw._saw_interval() * 2.0, plain._saw_interval()), "it walks faster and its blade bites twice as often")
+	_check(ripsaw.scale.x > plain.scale.x, "and it is bigger")
+	var waves: WaveDirector = _arena.waves
+	var first_wave: int = 0
+	var most: int = 0
+	for number: int in range(1, waves.total_waves() + 1):
+		var count: int = waves._build_queue(number).count(WaveDirector.RIPSAW)
+		if count > 0 and first_wave == 0:
+			first_wave = number
+		most = maxi(most, count)
+	_check(first_wave == 7 and most <= 3, "regular game: Ripsaws from wave 7, never more than 3 in a wave")
+	_arena.apply_ng_plus()
+	first_wave = 0
+	most = 0
+	for number: int in range(1, waves.total_waves() + 1):
+		var count: int = waves._build_queue(number).count(WaveDirector.RIPSAW)
+		if count > 0 and first_wave == 0:
+			first_wave = number
+		most = maxi(most, count)
+	_check(first_wave == 4 and most <= 5, "New Game +: Ripsaws from wave 4, never more than 5 in a wave")
+
+	# A WEDGED LINEBREAKER shoulders through; routes keep off the outer border.
+	var heavy_one: Scrapper = _arena.spawn_scrapper_at(Vector2i(20, 8), true)
+	await _wait_frames(2)
+	_check(heavy_one.shoulders_through and not _arena.spawn_scrapper_at(Vector2i(20, 10)).shoulders_through, "a Linebreaker can shoulder through when wedged; a Scrapper cannot")
+	heavy_one._stuck_time = CONFIG.stuck_seconds  # as if it had been pushing at something
+	heavy_one.velocity = Vector2.ZERO
+	var along_border: Array[Vector2i] = _arena.grid.find_path(Vector2i(3, 1), Vector2i(22, 1))
+	var leaves_border: bool = false
+	for cell: Vector2i in along_border:
+		if cell.y > 1:
+			leaves_border = true
+	_check(leaves_border, "a route between two border cells swings in off the border")

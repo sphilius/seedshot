@@ -36,6 +36,7 @@ const SPITTER: StringName = &"spitter"
 const SAWBOT: StringName = &"sawbot"
 const LINEBREAKER: StringName = &"linebreaker"
 const ARC_SPITTER: StringName = &"arc_spitter"
+const RIPSAW: StringName = &"ripsaw"
 
 ## While true, the break between waves does not count down (the arena sets it
 ## while the upgrade cards are showing, and clears it once one is picked).
@@ -52,6 +53,10 @@ var pace_multiplier: float = 1.0
 ## staged_waves: how many opening waves send one machine at a time (the tutorial).
 ## -1 means "use the config"; New Game + sets 0, since the player knows the game.
 var staged_waves: int = -1
+## Ripsaws (upgraded Sawbots) per wave. Empty = use the config's wave_ripsaws;
+## New Game + hands in its own list. These numbers are used as they are (not
+## multiplied by count_multiplier), so the list IS the most at one time.
+var ripsaw_counts: Array[int] = []
 ## The current wave, counting from 1. 0 means no wave has started yet.
 var wave: int = 0
 var state: State = State.IDLE
@@ -154,9 +159,10 @@ func _build_queue(number: int) -> Array[StringName]:
 	var sawbots: int = _scaled(_count_for(CONFIG.wave_sawbots, index))
 	var linebreakers: int = _scaled(_count_for(CONFIG.wave_linebreakers, index))
 	var arc_spitters: int = _scaled(_count_for(CONFIG.wave_arc_spitters, index))
+	var ripsaws: int = _count_for(CONFIG.wave_ripsaws if ripsaw_counts.is_empty() else ripsaw_counts, index)
 	var specials: Array[StringName] = []
 	# Deal the specials out like cards, one of each kind per round, so the kinds mix.
-	for i: int in maxi(maxi(spitters, sawbots), maxi(linebreakers, arc_spitters)):
+	for i: int in maxi(maxi(maxi(spitters, sawbots), maxi(linebreakers, arc_spitters)), ripsaws):
 		if i < spitters:
 			specials.append(SPITTER)
 		if i < sawbots:
@@ -165,6 +171,8 @@ func _build_queue(number: int) -> Array[StringName]:
 			specials.append(LINEBREAKER)
 		if i < arc_spitters:
 			specials.append(ARC_SPITTER)
+		if i < ripsaws:
+			specials.append(RIPSAW)
 
 	for i: int in specials.size():
 		# Spread them through the queue: with 2 specials, about 1/3 and 2/3 of the

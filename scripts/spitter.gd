@@ -59,6 +59,8 @@ var _target: Node2D
 ## What the current route leads to (&"ward", &"target" or &"cover"). When the
 ## Spitter changes its mind, the route is worked out again at once.
 var _route_kind: StringName = &""
+## An Arc Spitter's chosen spot to shoot from (see step 3), or NO_CELL.
+var _fire_cell: Vector2i = ArenaGrid.NO_CELL
 var _windup_time_left: float = 0.0
 ## Seconds until the next windup may start.
 var _cooldown_left: float = 0.0
@@ -144,7 +146,17 @@ func _physics_process(delta: float) -> void:
 				Sfx.play(&"windup")
 			return
 		if has_ward:
-			# A guard does not leave its ward to hunt: it waits for a clear line.
+			# A guard does not leave its ward to hunt. An ARC SPITTER is
+			# proactive, though (s18 round 4): it steps to the nearest spot,
+			# still within the leash of its Sawbot, that HAS a clear line.
+			if guards_sawbots:
+				if think or _route_kind != &"fire":
+					_fire_cell = _find_spot(true, false)
+				if _fire_cell != ArenaGrid.NO_CELL and global_position.distance_to(_grid.cell_to_world(_fire_cell)) > WAYPOINT_REACHED_DISTANCE:
+					_route(&"fire", _fire_cell, think)
+					_walk_towards(_next_goal(_grid.cell_to_world(_fire_cell)), _speed())
+					return
+			# Otherwise (or once there) it waits for a clear line.
 			velocity = Vector2.ZERO
 			_face(to_target)
 			return
@@ -155,7 +167,7 @@ func _physics_process(delta: float) -> void:
 
 	# 4. Reloading: get behind something.
 	if think or _route_kind != &"cover":
-		cover_cell = _find_cover(has_ward)
+		cover_cell = _find_spot(has_ward, true)
 	if cover_cell != ArenaGrid.NO_CELL:
 		var spot: Vector2 = _grid.cell_to_world(cover_cell)
 		if global_position.distance_to(spot) > WAYPOINT_REACHED_DISTANCE:
@@ -211,7 +223,11 @@ func _nearest_sawbot() -> Enemy:
 ##   - (for a guard) the cell is within the leash of its ward.
 ## Of those it takes the nearest. Its own cell counts, so a Spitter that is
 ## already hidden simply stays where it is.
-func _find_cover(has_ward: bool) -> Vector2i:
+##
+## With `hidden` false it looks for the opposite: the nearest cell the player
+## CAN be shot from (a clear line, and within shooting range). An Arc Spitter
+## uses that to step out and cover its Sawbot.
+func _find_spot(has_ward: bool, hidden: bool) -> Vector2i:
 	var own: Vector2i = _grid.world_to_cell(global_position)
 	var reach: int = CONFIG.spitter_cover_search_cells
 	var min_range: float = CONFIG.spitter_min_range_cells * CONFIG.cell_size
@@ -235,8 +251,11 @@ func _find_cover(has_ward: bool) -> Vector2i:
 			# The ray only looks at layer 1 ("world"): an empty result means the
 			# player has a clear line to this cell, so it is NOT cover.
 			var ray := PhysicsRayQueryParameters2D.create(spot, _target.global_position, WORLD_MASK)
-			if space.intersect_ray(ray).is_empty():
-				continue
+			var is_hidden: bool = not space.intersect_ray(ray).is_empty()
+			if is_hidden != hidden:
+				continue  # looking for cover and this is open, or the other way round
+			if not hidden and spot.distance_to(_target.global_position) > CONFIG.spitter_max_range_cells * CONFIG.cell_size:
+				continue  # a firing spot must be within range
 			best = cell
 			best_distance = walk
 	return best
@@ -250,7 +269,8 @@ func _on_bound() -> void:
 ## Ends the windup and sends one shot towards the player.
 func _fire(to_target: Vector2) -> void:
 	is_winding_up = false
-	_cooldown_left = CONFIG.spitter_cooldown
+	# An Arc Spitter reloads faster: it is there to keep Seven off the Sawbots.
+	_cooldown_left = CONFIG.spitter_cooldown * (CONFIG.arc_spitter_cooldown_factor if arc else 1.0)
 	modulate = Color.WHITE  # white = "no tint"
 	if to_target == Vector2.ZERO:
 		return  # standing exactly on the target: no direction to fire in

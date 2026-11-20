@@ -42,6 +42,7 @@ func _ready() -> void:
 	if heavy:
 		# Scaling the whole node makes the picture AND the hit circle bigger.
 		scale = Vector2.ONE * CONFIG.linebreaker_scale
+		shoulders_through = true  # too big to stay wedged in a gap (see enemy.gd)
 		# self_modulate tints only this node's own drawing; the sprite is a child,
 		# so tint it directly. (modulate is kept free for the windup's red glow.)
 		_sprite.self_modulate = CONFIG.linebreaker_tint

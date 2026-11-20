@@ -129,6 +129,10 @@ extends Resource
 @export var escort_leash_cells: float = 3.0
 @export var linebreaker_scale: float = 1.35
 @export var linebreaker_speed_factor: float = 0.47
+## A Linebreaker that has made no headway for stuck_seconds shoulders straight
+## through whatever wedged it, for stuck_shoulder_seconds.
+@export var stuck_seconds: float = 0.9
+@export var stuck_shoulder_seconds: float = 0.5
 @export var linebreaker_damage: int = 2
 ## Hazard gold (s18: the old red-brown looked like any other Scrapper).
 @export var linebreaker_tint: Color = Color(1.45, 1.10, 0.35)
@@ -147,6 +151,8 @@ extends Resource
 ## speed (115 px/s). It guards the Sawbots: it stays beside the nearest one.
 @export var arc_spitter_hp: int = 12
 @export var arc_spitter_speed_factor: float = 0.96
+## An Arc Spitter's reload, as a share of a Spitter's (0.65 = about a third faster).
+@export var arc_spitter_cooldown_factor: float = 0.65
 @export var arc_spitter_spread_degrees: float = 18.0
 ## Electric cyan. Its force field is the same blue, with small lightning arcs
 ## crawling over it, and its shots are bolts of that colour (spit_shot.gd).
@@ -157,6 +163,20 @@ extends Resource
 ## Takes six pods (three before s18 round 2). It ignores you, so the cost of
 ## leaving it alone is trees.
 @export var sawbot_hp: int = 6
+## THE RIPSAW (s18 round 4): the upgraded Sawbot. Bigger (ripsaw_scale), more
+## hit points, a faster walk (x ripsaw_speed_factor), and its blade bites in
+## half the time (x ripsaw_saw_interval_factor), so trees fall twice as fast.
+@export var ripsaw_hp: int = 14
+@export var ripsaw_scale: float = 1.4
+@export var ripsaw_speed_factor: float = 1.3
+@export var ripsaw_saw_interval_factor: float = 0.5
+## Its tint: hot red steel. (Values above 1 brighten.)
+@export var ripsaw_tint: Color = Color(1.5, 0.75, 0.6)
+## Ripsaws per wave (entry 0 is wave 1). Regular game: from wave 7, never more
+## than 3. New Game +: from wave 4, never more than 5. Used as written.
+@export var wave_ripsaws: Array[int] = [0, 0, 0, 0, 0, 0, 1, 2, 2, 3]
+@export var ng_plus_wave_ripsaws: Array[int] = [0, 0, 0, 1, 2, 2, 3, 4, 4, 5]
+@export var dj_first_ripsaw: Array[String] = ["That big red one is a Ripsaw. It drops a tree in half the time. Stop it before it reaches the Heart Tree."]
 @export_range(0.1, 0.49) var sawbot_radius_cells: float = 0.36
 ## How often a Sawbot picks its next tree and recalculates its route.
 @export var sawbot_repath_interval: float = 0.5
@@ -183,7 +203,7 @@ extends Resource
 @export var spitter_max_range_cells: float = 8.0
 ## COVER (s18 round 2): between shots a Spitter hides behind one of YOUR trees.
 ## It looks for a hiding cell within this many cells of where it stands...
-@export var spitter_cover_search_cells: int = 4
+@export var spitter_cover_search_cells: int = 6
 ## ...and steps back out this many seconds before its next shot is ready.
 @export var spitter_peek_seconds: float = 0.4
 ## The warning: it glows red for this long before the shot leaves.
@@ -240,6 +260,7 @@ extends Resource
 	&"sawbot": "SAWBOT\nIgnores you. Cuts your trees. Heads for the Heart Tree.",
 	&"linebreaker": "LINEBREAKER\nHeavy unit. Arrives with a Spitter escort.",
 	&"arc_spitter": "ARC SPITTER\nGuards the Sawbots. Fires three bolts.",
+	&"ripsaw": "RIPSAW\nUpgraded Sawbot. Faster, tougher, cuts twice as quick.",
 }
 ## A Linebreaker's escorts drop in one after another, this many seconds apart.
 @export var escort_drop_gap: float = 0.18

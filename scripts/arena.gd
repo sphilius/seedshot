@@ -627,8 +627,10 @@ func spawn_scrapper_at(cell: Vector2i, heavy: bool = false) -> Scrapper:
 
 
 ## Creates a Sawbot on a cell. It finds its own trees, so it needs only the grid.
-func spawn_sawbot_at(cell: Vector2i) -> Sawbot:
+## `big` (optional) makes it a Ripsaw, the upgraded Sawbot.
+func spawn_sawbot_at(cell: Vector2i, big: bool = false) -> Sawbot:
 	var sawbot: Sawbot = SAWBOT_SCENE.instantiate()
+	sawbot.big = big
 	sawbot.position = grid.cell_to_world(cell)
 	sawbot.setup(grid)
 	sawbot.died.connect(_on_enemy_died)
@@ -1106,8 +1108,10 @@ func _on_spawn_requested(kind: StringName, wave_number: int) -> void:
 		return
 	# The machine sent in, whatever its kind (every kind is an Enemy).
 	var machine: Enemy
-	if kind == WaveDirector.SAWBOT:
-		machine = spawn_sawbot_at(cell)
+	if kind == WaveDirector.SAWBOT or kind == WaveDirector.RIPSAW:
+		machine = spawn_sawbot_at(cell, kind == WaveDirector.RIPSAW)
+		if kind == WaveDirector.RIPSAW:
+			_dj_once(&"ripsaw", CONFIG.dj_first_ripsaw)
 		_dj_once(&"sawbot", CONFIG.dj_first_sawbot)
 	elif kind == WaveDirector.SPITTER or kind == WaveDirector.ARC_SPITTER:
 		machine = spawn_spitter_at(cell, kind == WaveDirector.ARC_SPITTER)
@@ -1914,6 +1918,7 @@ func _choose_tap_points(wave_number: int) -> void:
 ## staging; and trees can mature into great sunroots (see mature_trees).
 func apply_ng_plus() -> void:
 	ng_plus = true
+	waves.ripsaw_counts = CONFIG.ng_plus_wave_ripsaws  # Ripsaws come earlier, and more of them
 	tutorial_on = false  # until the player asks for the reminder (offer_refresher)
 	waves.count_multiplier = CONFIG.ng_plus_count_multiplier
 	waves.pace_multiplier = CONFIG.ng_plus_pace_multiplier
