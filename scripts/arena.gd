@@ -215,7 +215,7 @@ var tutorial_offer: TutorialOffer
 ## Always true in a normal run; in New Game + only if the player asks for it.
 var tutorial_on: bool = true
 ## Run-long upgrade effects the arena hands out (see apply_upgrade). Public for tests.
-var seed_damage_bonus: int = 0
+var seed_damage_bonus: float = 0.0
 var tree_hp_bonus: int = 0
 var sapling_time_scale: float = 1.0
 ## How many Quick Roots have been picked (each one adds to the rooting rate).
@@ -1787,7 +1787,7 @@ func _on_player_seed_fired(origin: Vector2, direction: Vector2) -> void:
 	var pod: SeedPod = SEED_POD_SCENE.instantiate()
 	pod.position = origin
 	pod.direction = direction
-	pod.damage = CONFIG.seed_damage + seed_damage_bonus  # Heavy Seeds upgrades add to it
+	pod.damage = float(CONFIG.seed_damage) + seed_damage_bonus  # Heavy Seeds upgrades add to it
 	_pods.add_child(pod)
 
 

@@ -75,6 +75,8 @@ the shop is still shut, a graffiti arrow points at the shutter ("KNOCK x3"). Not
 is behind the cat: the zip is theirs from the start.
 ## Lucky's lines (all placeholders)
 
+> **s20 note:** the live words were rewritten in s20 (voice pass, one more line per beat). The source of truth is now `config/game_config.gd`; the tables below are the original draft.
+
 Lucky has two kinds of line. Neither changes the game.
 
 **The greeting**, said once when the shutter opens. It depends on the wave you found it in:

@@ -1089,6 +1089,14 @@ func _test_three_pods_open_the_cat_shop() -> void:
 	var shop: CatShop = _arena.cat_shop
 	var pods: Node = _arena.get_node("Pods")
 	_check(shop != null and not shop.is_open and shop.hits == 0, "the arena has a closed shop")
+	_check(not shop.is_neon_showing(), "a closed shop shows no neon paw (it is not a clue)")
+	# The flicker: steady at full brightness, and a stutter between dim and bright at
+	# the start of every period.
+	var period: float = CONFIG.neon_flicker_period
+	var stutter: float = CONFIG.neon_flicker_seconds
+	_check(is_equal_approx(CatShop.neon_level(stutter + 0.1, period, stutter), 1.0), "the neon burns steady between flickers")
+	_check(is_equal_approx(CatShop.neon_level(0.0, period, stutter), 0.25) and is_equal_approx(CatShop.neon_level(CatShop.NEON_STUTTER_STEP * 1.5, period, stutter), 1.0), "the neon stutters dim, bright at the start of each period")
+	_check(is_equal_approx(CatShop.neon_level(period + 0.0, period, stutter), 0.25), "and it flickers again every period")
 	_check(not player.can_bind and not player.has_fuse, "no clamp and no fuse to begin with")
 
 	# A pod on the ordinary wall, well left of the shop, must not count.
@@ -1107,6 +1115,7 @@ func _test_three_pods_open_the_cat_shop() -> void:
 		if shot < CONFIG.cat_hits_needed - 1:
 			_check(not shop.is_open, "the shop stays shut after %d pod(s)" % (shot + 1))
 	_check(shop.is_open, "the third pod opens the shop")
+	_check(shop.is_neon_showing(), "once open, the neon paw sign shows")
 	_check(player.can_bind and player.has_fuse, "the cat's gift: the clamp and a spare fuse")
 	await _wait_until(func() -> bool: return pods.get_child_count() == 0, 1.5)
 
@@ -1430,10 +1439,24 @@ func _test_tree_pictures() -> void:
 	seven.touch_mode = true          # so the aim comes from aim_direction, not the mouse
 	seven.aim_direction = Vector2.LEFT
 	await _wait_frames(3)
-	_check(seven_sprite.flip_h and is_zero_approx(seven_sprite.rotation), "aiming left mirrors Seven without spinning it")
+	_check(not seven_sprite.flip_h and is_zero_approx(seven_sprite.rotation), "aiming left shows the West frame, not a mirror, and no lean")
+	_check(seven_sprite.frame == 4, "aiming left picks the West frame (4), got %d" % seven_sprite.frame)
 	seven.aim_direction = Vector2.RIGHT
 	await _wait_frames(3)
-	_check(not seven_sprite.flip_h, "aiming right faces it right again")
+	_check(seven_sprite.frame == 0, "aiming right picks the East frame (0), got %d" % seven_sprite.frame)
+	# All eight compass points, then the angles in between rounding to the nearest frame.
+	var compass: Array[Vector2] = [Vector2.RIGHT, Vector2(1, 1), Vector2.DOWN, Vector2(-1, 1), Vector2.LEFT, Vector2(-1, -1), Vector2.UP, Vector2(1, -1)]
+	var every_frame_right: bool = true
+	for i: int in compass.size():
+		every_frame_right = every_frame_right and Player.facing_frame(compass[i], 8) == i
+	_check(every_frame_right, "each of the eight compass aims picks its own facing frame")
+	_check(Player.facing_frame(Vector2.from_angle(deg_to_rad(-10.0)), 8) == 0, "aiming a little above East still picks East")
+	_check(Player.facing_frame(Vector2.from_angle(deg_to_rad(-30.0)), 8) == 7, "aiming 30 degrees above East picks North-East")
+	_check(seven_sprite.hframes == CONFIG.player_facing_count, "Seven's sprite is cut into one frame per facing")
+	var facings: Texture2D = CONFIG.player_facings_texture
+	_check(facings != null and facings.get_size() == Vector2(64.0 * CONFIG.player_facing_count, 64.0), "the facings strip is one 64 x 64 frame per facing")
+	var repair: Texture2D = CONFIG.repair_icon_texture
+	_check(repair != null and repair.get_size() == Vector2(64.0, 64.0), "the repair icon is 64 x 64")
 	await _fresh_arena()
 	var tree: ForestTree = _arena.spawn_tree(Vector2i(5, 5), false)
 	_check(tree != null and tree.current_texture() == CONFIG.tree_sapling_texture, "a new tree shows the sapling picture")
@@ -1771,8 +1794,21 @@ func _test_upgrades() -> void:
 	_check(player.max_hp == hp_before, "Patch Kit: no extra max health")
 	_arena.apply_upgrade(&"seed_pouch")
 	_check(player.fire_cooldown_scale < 1.0, "Seed Pouch: pods come faster")
+	# Compare with the bonus before: an earlier step in this test may have picked a
+	# random card, Heavy Seeds included, so the bonus does not always start at zero.
+	var bonus_before: float = _arena.seed_damage_bonus
 	_arena.apply_upgrade(&"heavy_seeds")
-	_check(_arena.seed_damage_bonus >= CONFIG.upgrade_seed_damage, "Heavy Seeds: pods hit harder")
+	_check(is_equal_approx(_arena.seed_damage_bonus - bonus_before, CONFIG.upgrade_seed_damage), "Heavy Seeds: pods hit harder, by %.1f" % CONFIG.upgrade_seed_damage)
+	_arena.apply_upgrade(&"heavy_seeds")
+	_check(is_equal_approx(_arena.seed_damage_bonus - bonus_before, 2.0 * CONFIG.upgrade_seed_damage), "Heavy Seeds stacks: two picks add twice")
+	_check(is_equal_approx(CONFIG.upgrade_seed_damage, 0.5), "Heavy Seeds adds half a point of damage")
+	# A fractional hit: the machine keeps the leftover half for its next hit.
+	var target: Scrapper = _arena.spawn_scrapper_at(Vector2i(20, 3))
+	var target_hp: int = target.hp
+	target.take_damage(1.5)
+	_check(target.hp == target_hp - 1, "a 1.5 hit takes 1 point and keeps the half")
+	target.take_damage(1.5)
+	_check(target.hp == target_hp - 3, "the next 1.5 hit takes 2: 3 points over two hits")
 	var standing: ForestTree = _arena.tree_at(Arena.TEST_TREE_CELLS[0])
 	var tree_hp_before: int = standing.hp
 	_arena.apply_upgrade(&"hardwood")
@@ -2364,6 +2400,17 @@ func _test_back_wall_and_roof_graffiti() -> void:
 	var shop_front: int = Arena.CAT_SHOP_CELL.x / BackWall.FRONT_CELLS
 	_check(wall.front_count() * BackWall.FRONT_CELLS == CONFIG.grid_cols, "the fronts fill the back wall exactly (%d of them)" % wall.front_count())
 	_check(wall.is_shop_front(shop_front), "one front is left empty for Lucky's shop")
+	# Lit windows are small scenes: they take turns between a sprout and a hanging lamp,
+	# and only every second door / third windows front is lit (a few, not all).
+	_check(BackWall.lit_style(0) != BackWall.lit_style(1) and BackWall.lit_style(2) == BackWall.lit_style(0), "lit windows alternate between a sprout and a lamp")
+	var lit_doors: int = 0
+	var lit_window_fronts: int = 0
+	for i: int in wall.front_count():
+		if wall.kind_of(i) == BackWall.Kind.DOOR and BackWall.is_lit_door(i):
+			lit_doors += 1
+		if wall.kind_of(i) == BackWall.Kind.WINDOWS and BackWall.is_lit_windows(i):
+			lit_window_fronts += 1
+	_check(lit_doors >= 1 and lit_window_fronts >= 1, "the back wall has some lit homes (%d doors, %d window fronts)" % [lit_doors, lit_window_fronts])
 	_check(is_equal_approx(wall.front_rect(shop_front).get_center().x, _arena.cat_shop.global_position.x), "and the shop stands exactly in it")
 	_check(wall.kind_of(shop_front) == BackWall.Kind.SHUTTER, "that front would be a shutter anyway, so the pattern is unbroken")
 	var other_shutters: int = 0
@@ -2441,7 +2488,8 @@ func _test_harder_waves_aim_line_sunburst() -> void:
 	_check(blocked_reach < open_reach and blocked_reach <= CONFIG.cell_size * 3.0, "and stops at the first tree in the way")
 	player.aim_direction = Vector2(0.6, 0.8)  # down and to the right
 	await _wait_frames(3)
-	_check(player._sprite.rotation > 0.05, "Seven leans toward the aim")
+	# With the facings strip the turn is in the picture: no lean, the SE frame instead.
+	_check(is_zero_approx(player._sprite.rotation) and player._sprite.frame == 1, "Seven turns to the South-East frame for a down-right aim, with no lean")
 	_check(player.is_aim_shown(), "the aim line shows while Seven can act")
 	player.locked = true
 	_check(not player.is_aim_shown(), "and hides while the upgrade cards lock Seven")
@@ -3081,7 +3129,7 @@ func _test_s19_phase1() -> void:
 	_check(_radio_copies_of("S19 this-wave line.") == 1, "wave 3's one-time line plays again after the restart")
 
 	# ITEM 2: Helios's opening line.
-	_check(CONFIG.helios_lines[0] == "Courtesy Notice: This sector's account is 90 minutes past due.", "Helios's opening line is the new text")
+	_check(CONFIG.helios_lines[0] == "Good evening, valued customer. Your sector's account is 90 minutes past due, and we hate to bring it up.", "Helios's opening line is the new text")
 	for line: String in CONFIG.helios_lines:
 		_check(not line.contains("90 days"), "no Helios line still says 90 days")
 

@@ -14,7 +14,8 @@ const POD_COLOR: Color = Color(0.85, 0.95, 0.35)
 ## Unit vector (length 1) the pod travels along. Set by the arena when spawning.
 var direction: Vector2 = Vector2.RIGHT
 ## Damage this pod does to a machine. Set by the arena when it fires.
-var damage: int = 1
+## A fraction is fine (Heavy Seeds adds 0.5): the machine carries the leftover.
+var damage: float = 1.0
 
 ## Seconds this pod has existed.
 var _age: float = 0.0

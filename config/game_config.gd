@@ -176,7 +176,7 @@ extends Resource
 ## than 3. New Game +: from wave 4, never more than 5. Used as written.
 @export var wave_ripsaws: Array[int] = [0, 0, 0, 0, 0, 0, 1, 2, 2, 3]
 @export var ng_plus_wave_ripsaws: Array[int] = [0, 0, 0, 1, 2, 2, 3, 4, 4, 5]
-@export var dj_first_ripsaw: Array[String] = ["That big red one is a Ripsaw. It drops a tree in half the time. Stop it before it reaches the Heart Tree."]
+@export var dj_first_ripsaw: Array[String] = ["Uh oh. That big red one is a Ripsaw. It fells a tree in half the time, so stop it before it reaches the Heart Tree."]
 @export_range(0.1, 0.49) var sawbot_radius_cells: float = 0.36
 ## How often a Sawbot picks its next tree and recalculates its route.
 @export var sawbot_repath_interval: float = 0.5
@@ -289,6 +289,10 @@ extends Resource
 ## Seconds between blinks of the cat's eyes behind the shutter (the only visual
 ## hint that the shop is special). Long on purpose: the cat is meant to be hard.
 @export var cat_glint_interval: float = 7.0
+## The neon paw sign (shown only once the shop is open) flickers: every
+## neon_flicker_period seconds it stutters for neon_flicker_seconds, then burns steady.
+@export var neon_flicker_period: float = 3.2
+@export var neon_flicker_seconds: float = 0.4
 ## THE CAT'S GIFT (story step 3): the live clamp (right-click a machine to yank
 ## and bind it; locked until the cat is found) and a spare fuse. With a fuse
 ## fitted, the first time Seven would go down it gets back up instead, with this
@@ -361,27 +365,27 @@ extends Resource
 
 ## Lucky's greeting when the shutter opens, by the wave the cat was found in.
 ## Words only: nothing Lucky says changes the game. (Placeholders, STORY.md.)
-@export_multiline var lucky_greeting_early: String = "Early. I like early. Take the clamp, kid. And a fuse, on the house."
-@export_multiline var lucky_greeting_middle: String = "Thought you'd never knock. Clamp. Fuse. Don't tell Helios."
-@export_multiline var lucky_greeting_late: String = "The whole block's lit and NOW you find me? Take the clamp anyway."
+@export_multiline var lucky_greeting_early: String = "Found me this early? Sharp eyes, kid. Take the clamp. The fuse is free too, and free never lasts."
+@export_multiline var lucky_greeting_middle: String = "Took you long enough. Here: clamp, fuse, and if Helios asks, I was napping."
+@export_multiline var lucky_greeting_late: String = "Whole block's glowing and now you knock? Fine. Clamp, fuse. I'm not proud."
 ## Lucky's small talk, by the wave being played. Each talk gives the next line.
 @export var lucky_talk_waves_1_to_3: Array[String] = [
-	"They used to queue down the alley for me.",
-	"That saw-thing's coming. They always send the saw-thing.",
-	"Seven's a lucky number. I'd know.",
+	"There used to be a line down the alley for my parts. Now it's me and the dust.",
+	"Hear that buzzing? Sawbot. They always send one for the trees. Rude.",
+	"Seven, huh. Lucky number. I'm on my seventh life, so I'd know.",
 ]
 @export var lucky_talk_waves_4_to_7: Array[String] = [
-	"Watch the trees, not yourself. You, I can fix.",
-	"Hear that? Somebody's got the radio going.",
-	"I've sold fuses to worse causes.",
+	"Watch the trees, not yourself. Trees I can't patch. You I can, with duct tape.",
+	"Hear that? Somebody's pirating the radio. Terrible taste in songs. I love it.",
+	"I've sold fuses to worse causes. This one I like.",
 ]
 @export var lucky_talk_wave_8: Array[String] = [
-	"Look at that. Haven't seen my own sign lit in years.",
-	"Don't get soft. They'll want it back.",
+	"Look at that. Haven't seen my own sign lit in years. Makes an old cat misty.",
+	"Don't get comfy. Helios will want it back, with interest.",
 ]
 @export var lucky_talk_waves_9_to_10: Array[String] = [
-	"They're not sending notices any more.",
-	"Hold it one more night. Next block's watching.",
+	"No more notices. When a company stops writing, it starts driving.",
+	"Hold it one more night, kid. The next block over is watching, and taking notes.",
 ]
 
 @export_group("Tap points")
@@ -391,7 +395,7 @@ extends Resource
 ## are picked at the start of every wave from `tap_points_from_wave` on.
 @export var tap_points_per_wave: int = 2
 ## What Canopy FM says the first time tap points appear.
-@export var dj_tap_points: String = "See the gold rings on the floor? Old grid taps. Grow a tree on one: Seven gets a pip back and more homes light up."
+@export var dj_tap_points: String = "See those gold rings on the floor? Old grid taps. Grow a tree on one and Seven gets a pip back, plus more homes light up."
 @export var tap_points_from_wave: int = 2
 ## Extra windows each standing tap tree lights.
 @export var tap_tree_bonus_windows: int = 3
@@ -484,10 +488,10 @@ extends Resource
 @export var heart_alarm_show_seconds: float = 2.0
 ## Canopy FM says this when the Heart Tree is hit, at most once every
 ## heart_alarm_cooldown seconds (so one Sawbot does not fill the radio).
-@export var heart_alarm_line: String = "They are cutting the Heart Tree! Get to the middle of the lot!"
+@export var heart_alarm_line: String = "They're cutting the Heart Tree! Middle of the lot, Seven, go!"
 @export var heart_alarm_cooldown: float = 12.0
 ## Canopy FM points the Heart Tree out as wave 1 starts.
-@export var heart_intro_line: String = "The big tree in the middle is the Heart Tree. If it falls, the wave starts over."
+@export var heart_intro_line: String = "That big tree in the middle? The Heart Tree. If it falls, the wave starts over, so don't let it."
 
 ## TREE STATE YOU CAN READ (s18).
 ## A hurt tree shows a small health bar: full colour, nearly-felled colour, back.
@@ -565,10 +569,10 @@ extends Resource
 @export var sunburst_glow_color: Color = Color(1.0, 0.78, 0.30, 0.30)
 ## Said once, the first time a canopy line forms between two great sunroots:
 ## where the vines come from (s19).
-@export var canopy_line_intro_line: String = "Those glowing vines between the great sunroots? The roots string them on their own, and they snare any machine that crosses."
+@export var canopy_line_intro_line: String = "See those glowing vines between the great sunroots? The roots string them up all by themselves, and they snare any machine that wanders across."
 ## Canopy FM explains Sunburst the first time great sunroots stand at a wave start.
 ## %d is the number of charges.
-@export var sunburst_intro_line: String = "See the great sunroots glow gold? Zip to one for a Sunburst: it stuns every machine near it, and great sunroots close by catch and flare too. You get %d each wave."
+@export var sunburst_intro_line: String = "Look at the great sunroots glowing gold. Zip to one for a Sunburst: it stuns every machine nearby, and any great sunroots close by catch the flare too. You get %d each wave."
 
 @export_group("Canopy FM")
 ## The block's pirate radio (scripts/canopy_fm.gd). How loud the song is, in
@@ -621,8 +625,9 @@ extends Resource
 ## Seed Pouch multiplies the time between pods by this (0.9 = 10% faster). Every
 ## pick multiplies again, so the upgrade stacks.
 @export var upgrade_fire_cooldown_factor: float = 0.9
-## Heavy Seeds: extra damage per pod.
-@export var upgrade_seed_damage: int = 1
+## Heavy Seeds: extra damage per pod, added once for every pick (so it stacks).
+## Half a point: a machine keeps the leftover half, see Enemy.take_damage.
+@export var upgrade_seed_damage: float = 0.5
 ## PATCH KIT (the card that used to be Thick Plating): refills a random number
 ## of pips between these two, and adds no max health, so picking it again never
 ## stacks. It is not dealt while Seven is unhurt.
@@ -653,7 +658,7 @@ extends Resource
 ## Radius of that glow, in cells.
 @export var grove_rest_glow_radius_cells: float = 0.85
 ## Canopy FM explains it the first time Seven is hurt in a run.
-@export var grove_rest_line: String = "Dented? Stand close to four grown trees and the grove patches you up, one pip at a time."
+@export var grove_rest_line: String = "Dented? Stand near four grown trees and the grove patches you up, one pip at a time."
 ## Hardwood: extra hit points for every tree, per pick (it stacks).
 @export var upgrade_tree_hp: int = 1
 ## Quick Roots: each pick makes saplings root this much faster (0.15 = 15%), and
@@ -696,15 +701,15 @@ extends Resource
 @export var story_hook: String = "Helios owns the sun. Your block stopped paying for it."
 ## What Helios customer service says as each wave starts. Entry 0 is wave 1.
 @export var helios_lines: Array[String] = [
-	"Courtesy Notice: This sector's account is 90 minutes past due.",
-	"A technician is on the way to help you.",
-	"Unlicensed generation is theft of sunlight.",
-	"Disconnection crews dispatched. Thank you for your patience.",
-	"We'd hate to lose you. Ask about our amnesty plan.",
-	"Your neighbours are paying for your choices.",
-	"Unit MR-7 is stolen Helios property.",
-	"Your amnesty offer has expired. Recovery crews are on site.",
-	"Service area reclassified. Recovering all assets, trees included.",
+	"Good evening, valued customer. Your sector's account is 90 minutes past due, and we hate to bring it up.",
+	"Good news: a technician is on the way to help you. Please stay exactly where you are.",
+	"Unlicensed generation is theft of sunlight. We say that with a smile.",
+	"Disconnection crews have been dispatched. Thank you for your patience. We'll need a little more of it.",
+	"We'd hate to lose you! Ask about our amnesty plan, open to anyone who stops.",
+	"Your neighbours are paying for your choices. Awkward for everyone, really.",
+	"Unit MR-7, we know that's you in there. Please return to your dock. This is the friendly version.",
+	"Your amnesty offer has expired. Recovery crews are on site, and they're looking forward to meeting you.",
+	"Service area reclassified. We're recovering all assets. Yes, the trees too.",
 	"Final notice.",
 ]
 ## What the Block paints on the walls when each wave is cleared. Entry 0 is wave 1.
@@ -754,7 +759,7 @@ extends Resource
 @export var end_panel_color: Color = Color(0.03, 0.04, 0.06, 0.84)
 ## Canopy FM mentions, as this wave starts, that its music can be changed.
 @export var dj_music_hint_wave: int = 4
-@export var dj_music_hint: String = "Not your sound? Canopy FM has four stations. Pick another on the title screen."
+@export var dj_music_hint: String = "Not feeling this song? We've got four stations. Pick another on the title screen."
 ## Seconds each radio line stays on the air once it has finished typing.
 @export var story_line_seconds: float = 6.0
 
@@ -766,70 +771,70 @@ extends Resource
 @export var radio_helios_static: float = 0.03
 ## Canopy FM's DJ, wave 1 (keyboard and mouse): the tutorial. Feeble signal.
 @export var dj_intro: Array[String] = [
-	"...is this on? Meter-bot. Seven. If you can hear me, move. WASD.",
-	"Point the mouse at a Helios machine. Hold left click. Plant a seed in it.",
+	"...is this thing on? Hello? Meter-bot? Seven? If you can hear me, move. WASD, you know the drill. Or you don't, so: WASD.",
+	"Okay, see that Helios machine? Point the mouse at it and hold left click. Plant a seed in it. Trust me.",
 ]
 ## The same tutorial for touch screens.
 @export var dj_intro_touch: Array[String] = [
-	"...is this on? Meter-bot. Seven. If you can hear me, move. Left thumb.",
-	"Right thumb aims and fires. Plant a seed in that Helios machine.",
+	"...is this thing on? Hello? Meter-bot? Seven? If you can hear me, move. Left thumb.",
+	"Right thumb aims and fires. Put a seed in that Helios machine. Go on.",
 ]
 ## Canopy FM, the first time a machine goes down (keyboard and mouse).
 @export var dj_first_tree: Array[String] = [
-	"Ha! It rooted. That's a tree now. Spitter shots stop dead on bark: get behind it.",
-	"And kid? Right-click any tree. The vine zips you straight to it.",
+	"Ha! It rooted! A Helios machine, now a tree. Spitter shots die on bark, so get behind it.",
+	"Oh, and Seven? Right-click any tree. The vine zips you straight to it.",
 ]
 ## The same, for touch screens.
 @export var dj_first_tree_touch: Array[String] = [
-	"Ha! It rooted. That's a tree now. Spitter shots stop dead on bark: get behind it.",
-	"And kid? Tap any tree. The vine zips you straight to it.",
+	"Ha! It rooted! A Helios machine, now a tree. Spitter shots die on bark, so get behind it.",
+	"Oh, and Seven? Tap any tree. The vine zips you straight to it.",
 ]
 ## Canopy FM, on wave 2 (not in New Game +): the Bramble Seed. Keyboard and touch.
 ## s19: says what it does and when to use it, and names the key. (Sasha: "Thorns
 ## was unclear", and the counter sat at 3 / 3 for two runs.)
 @export var dj_bramble: Array[String] = [
-	"New trick, kid: press Q or Space to throw a Bramble Seed. It grows thorns where it lands, and every machine inside slows down and takes damage.",
-	"Throw it at a crowd, or into a gateway they all have to cross. You hold three, and they grow back.",
+	"Okay, new toy: press Q or Space to throw a Bramble Seed. Thorns grow where it lands, and every machine inside slows down and takes damage.",
+	"Lob it at a crowd, or into a gateway they all have to squeeze through. You hold three, and they grow back.",
 ]
 @export var dj_bramble_touch: Array[String] = [
-	"New trick, kid: tap the bramble button, right side, to throw a Bramble Seed. It grows thorns where it lands, and every machine inside slows down and takes damage.",
-	"Throw it at a crowd, or into a gateway they all have to cross. You hold three, and they grow back.",
+	"Okay, new toy: tap the bramble button, right side, to throw a Bramble Seed. Thorns grow where it lands, and every machine inside slows down and takes damage.",
+	"Lob it at a crowd, or into a gateway they all have to squeeze through. You hold three, and they grow back.",
 ]
 ## The Bramble Seed's intro clip (once, the first time a seed is in hand in wave 2):
 ## the machines' clip style, with this text. The touch version names the button.
 @export var bramble_intro_title_touch: String = "BRAMBLE SEED\nTap the bramble button to throw it.\nThorns slow a crowd and chew it up. Best in a gateway."
 ## Canopy FM, the first time a Sawbot is sent in.
 @export var dj_first_sawbot: Array[String] = [
-	"Sawbot on the lot! It doesn't want you. It wants the trees. Drop it first.",
-	"It'll go for the Heart, the big old tree in the middle. Lose the Heart, lose the wave.",
+	"Sawbot on the lot! It's not after you, it's after the trees. Drop it first.",
+	"It'll head straight for the Heart, the big old tree in the middle. Lose the Heart, lose the wave. No pressure.",
 ]
 ## Canopy FM, the first time a Linebreaker or an Arc Spitter is sent in.
 @export var dj_first_linebreaker: Array[String] = [
-	"Big one! That's a Linebreaker. Shielded, slow, hits twice as hard, and it brings three Spitters to cover it.",
+	"Whoa, big one. That's a Linebreaker: shielded, slow, hits twice as hard. It brings three Spitters to cover for it.",
 ]
 @export var dj_first_arc_spitter: Array[String] = [
-	"Arc Spitter. Fires a fan of three bolts and guards the Sawbots. One tree won't cover you: find a thicket.",
+	"Arc Spitter. It fires a fan of three bolts and it's guarding the Sawbots. One tree won't cover you, so find a thicket.",
 ]
 ## NEW GAME + OPENING (s18). Before wave 1, Canopy FM wakes Seven up and asks
 ## whether a reminder is wanted (see tutorial_offer.gd). The wave waits for the
 ## answer; with no answer after ng_plus_refresher_seconds it skips the tutorial.
-@export var ng_plus_wakeup_line: String = "You're finally back up! Not sure what happened, but we need your help again. Do you remember what to do?"
+@export var ng_plus_wakeup_line: String = "Seven, you're back up! No idea what happened, but we need you again. Do you remember how this goes?"
 @export var ng_plus_refresher_seconds: float = 12.0
 ## Said as New Game + wave 1 starts, whatever the answer was.
-@export var ng_plus_threat_line: String = "Heads up: Helios has sent tougher, faster drones after you this time."
+@export var ng_plus_threat_line: String = "Heads up: Helios sent tougher, faster drones this time. They've clearly been studying you."
 ## Canopy FM, wave 1 of New Game +: what great sunroots do.
 @export var dj_ng_plus_intro: Array[String] = [
-	"Trees that stand a whole wave grow GREAT now.",
-	"Two great ones in sight of each other string a Canopy line. Machines get tangled.",
-	"Zip to a great one and it bursts with light. Use it when they crowd you.",
+	"Big news: trees that stand a whole wave grow GREAT now.",
+	"Two great ones in sight of each other string up a Canopy line, and machines get tangled in it.",
+	"Zip to a great one and it bursts with light. Save it for when they crowd you.",
 ]
 ## The waves on which Canopy FM drops a hint about the lucky cat (only while
 ## the shop is still shut), and the hints, in the same order.
 @export var dj_cat_hint_waves: Array[int] = [2, 4, 6, 8]
 @export var dj_cat_hints: Array[String] = [
 	"Shout-out to Mrs. Maneki. Her shop on the north wall's been shuttered since Helios came. Her cat never left.",
-	"Funny thing about shutters. They don't blink.",
-	"Lucky cats like a polite knock. Three seeds, if you're asking.",
+	"Funny thing about shutters. They don't blink. Just saying.",
+	"Lucky cats like a polite knock. Three seeds, if anybody's asking.",
 	"Still dark up by the north wall. Somebody should knock.",
 ]
 
@@ -944,6 +949,18 @@ extends Resource
 ## The sprites are 64 x 64 pixel art drawn with Klad (recipes in art/source/klad).
 ## Leave a texture empty to fall back to a plain coloured rectangle.
 @export var player_texture: Texture2D
+## The small spanner-and-sprout icon beside the "Repairing" words (art/sprites/repair_icon.png).
+@export var repair_icon_texture: Texture2D
+## Seven turned to face every way: one strip of equal frames side by side
+## (art/sprites/gardener_bot_facings.png, drawn by tools/seven_facings.py).
+## Frame order follows Godot's angles: East, South-East, South, South-West, West,
+## North-West, North, North-East. Leave it empty to use the single front picture
+## (player_texture), which is then mirrored left or right to follow the aim.
+@export var player_facings_texture: Texture2D
+## How many frames the facings strip holds (8 = a frame every 45 degrees).
+@export var player_facing_count: int = 8
+## How big the repair icon is drawn, in pixels (the picture is 64 x 64).
+@export var repair_icon_px: float = 18.0
 @export var scrapper_texture: Texture2D
 @export var sawbot_texture: Texture2D
 @export var spitter_texture: Texture2D

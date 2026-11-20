@@ -328,6 +328,36 @@ def draw_long_trellis():
     return g
 
 
+def draw_repair():
+    """Repairing: a steel spanner with a green sprout (the grove mending Seven).
+    Not an upgrade card: it sits beside the "Repairing" words under Seven (player.gd)."""
+    g = Grid()
+    # The handle: a fat diagonal bar from the lower left up to the head, shaded on the
+    # lower right (light comes from the top left, like every other icon).
+    handle = line_points(14, 50, 38, 26)
+    g.stroke(handle, "steel-dark", 9)
+    g.stroke([(x - 1, y - 1) for (x, y) in handle], "steel-light", 6)
+    # The ring at the handle's end, with a hole through it.
+    g.fill(ellipse(12, 52, 7.5, 7.5), "steel-dark")
+    g.fill(ellipse(11.5, 51.5, 6.5, 6.5), "steel-light")
+    g.fill(ellipse(12, 52, 2.6, 2.6), None)
+    # The head: a round jaw with a wedge cut out of its upper right.
+    g.fill(ellipse(43, 21, 12.5, 12.5), "steel-dark")
+    g.fill(ellipse(42, 20, 11, 11), "steel-light")
+    g.fill(polygon([(43, 21), (53, 3), (62, 3), (62, 14)]), None)
+    g.fill(polygon([(43, 21), (53, 3), (55, 3), (45, 23)]), None)
+    # A gold glint on the head and two bolt dots on the handle.
+    g.dot(34, 13, "cream", 3)
+    g.dot(24, 38, "steel-dark", 2)
+    g.dot(29, 33, "steel-dark", 2)
+    # The sprout: two leaves on a short stem, rising from the lower right.
+    g.fill(box(49, 46, 2, 10), "leaf-dark")
+    g.fill(polygon([(50, 47), (58, 42), (60, 48), (53, 52)]), "leaf-light")
+    g.fill(polygon([(50, 51), (42, 46), (40, 52), (47, 56)]), "leaf-dark")
+    g.fill(polygon([(50, 51), (43, 47), (42, 51), (47, 54)]), "leaf-light")
+    return g
+
+
 ICONS = [
     ("seed_pouch", draw_seed_pouch),
     ("heavy_seeds", draw_heavy_seeds),
@@ -335,6 +365,12 @@ ICONS = [
     ("hardwood", draw_hardwood),
     ("quick_roots", draw_quick_roots),
     ("long_trellis", draw_long_trellis),
+]
+
+
+# Icons that are NOT upgrade cards: (name, draw function, folder the PNG goes to).
+EXTRA_ICONS = [
+    ("repair", draw_repair, Path("C:/Users/sphil/dev/seedshot/art/sprites")),
 ]
 
 
@@ -409,6 +445,14 @@ def main():
         png_paths.append(png)
         print(f"wrote {png}")
     contact_sheet(png_paths, CONTACT_OUT)
+    # The extra icons use the same pipeline but stay out of the six-card contact sheet.
+    for name, draw, folder in EXTRA_ICONS:
+        grid = draw()
+        grid.outline()
+        grid_for[name] = grid
+        png = folder / f"{name}_icon.png"
+        build_icon(name, HERE / f"{name}.klad", png)
+        print(f"wrote {png}")
     print(f"wrote {CONTACT_OUT}")
 
 

@@ -52,6 +52,12 @@ const TALK_COLOR: Color = Color(1.0, 1.0, 1.0, 0.9)
 ## The phone's paw button: Lucky's pink on the radio, with a dark paw on it.
 const BUTTON_COLOR: Color = Color(1.0, 0.55, 0.75)
 const BUTTON_PAW_COLOR: Color = Color(0.30, 0.08, 0.16)
+## The neon paw sign: hot pink above 1 so it glows through the night tint, and the
+## dim colour of a tube that has dropped out.
+const NEON_COLOR: Color = Color(2.2, 0.55, 1.5)
+const NEON_DIM_COLOR: Color = Color(0.45, 0.12, 0.32)
+## How long one dim-or-bright step of the flicker lasts, in seconds.
+const NEON_STUTTER_STEP: float = 0.07
 
 ## How many pods have landed so far, and whether the shutter is up.
 ## Public (no underscore) so the tests can read them.
@@ -131,6 +137,24 @@ func hit_by_seed() -> void:
 		opened.emit()
 
 
+## How bright the neon paw is at `time` seconds, 0.25 (dim) to 1.0 (full). Mostly 1.0;
+## at the start of every `period` it stutters between dim and bright for
+## `flicker_seconds`. `fmod` is the remainder after division for decimals: it turns
+## the ever-growing clock into "seconds into this period". Static and public so the
+## tests can read the flicker without a shop.
+static func neon_level(time: float, period: float, flicker_seconds: float) -> float:
+	var phase: float = fmod(time, period)
+	if phase >= flicker_seconds:
+		return 1.0
+	return 0.25 if int(phase / NEON_STUTTER_STEP) % 2 == 0 else 1.0
+
+
+## True while the neon paw sign is lit: only after the shutter has lifted, so it
+## is a reward for finding Lucky and not a clue before. Public for the tests.
+func is_neon_showing() -> bool:
+	return is_open
+
+
 ## _draw paints the shop. (0, 0) is the centre of the shop front.
 func _draw() -> void:
 	var cell_px: float = float(CONFIG.cell_size)
@@ -173,8 +197,12 @@ func _draw() -> void:
 	if is_open and show_tap_button:
 		_draw_tap_button()
 
-	# The other hint: a faded paw print on the wall just right of the shop.
-	_draw_paw(Vector2(half.x + 16.0, 4.0), 1.0, PAW_COLOR)
+	# The other hint: a faded paw print on the wall just right of the shop. Once the
+	# shop is open it is replaced by the flickering neon sign.
+	if is_neon_showing():
+		_draw_neon_paw(Vector2(half.x + 22.0, 8.0))
+	else:
+		_draw_paw(Vector2(half.x + 16.0, 4.0), 1.0, PAW_COLOR)
 
 
 ## Where the tap button's centre sits, relative to the shop's centre: just under
@@ -182,6 +210,23 @@ func _draw() -> void:
 static func button_offset() -> Vector2:
 	var cell_px: float = float(CONFIG.cell_size)
 	return Vector2(0.0, cell_px / 2.0 + STICK_OUT + CONFIG.lucky_button_radius_px + 6.0)
+
+
+## The neon paw sign: ring-shaped tubes (a pad and four toes) with a soft glow behind
+## them. While the flicker is dimmed, two toes drop out and the glow goes.
+func _draw_neon_paw(at: Vector2) -> void:
+	var level: float = neon_level(_time, CONFIG.neon_flicker_period, CONFIG.neon_flicker_seconds)
+	var tube: Color = NEON_DIM_COLOR.lerp(NEON_COLOR, level)
+	var pad: Vector2 = at + Vector2(0.0, 5.0)
+	var toes: Array[Vector2] = [Vector2(-10.0, -3.0), Vector2(-4.0, -8.5), Vector2(4.0, -8.5), Vector2(10.0, -3.0)]
+	if level > 0.5:  # the glow only while the sign is burning properly
+		draw_circle(pad, 14.0, Color(NEON_COLOR, 0.06))
+		for toe: Vector2 in toes:
+			draw_circle(at + toe, 7.0, Color(NEON_COLOR, 0.07))
+	draw_arc(pad, 7.0, 0.0, TAU, 28, tube, 2.0)
+	for i: int in toes.size():
+		var toe_tube: Color = tube if (level > 0.5 or i < 2) else NEON_DIM_COLOR
+		draw_arc(at + toes[i], 3.3, 0.0, TAU, 20, toe_tube, 2.0)
 
 
 ## A paw print: one pad and three toes, `scale` times the wall print's size.
