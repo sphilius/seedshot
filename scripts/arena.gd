@@ -20,6 +20,8 @@ signal player_defeated
 signal heart_tree_felled
 
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
+## The key the Bramble Seed's intro clip uses in _intro_done and intro_titles.
+const BRAMBLE_KIND: StringName = &"bramble"
 ## preload() loads a scene file once, when the script itself loads. instantiate()
 ## then stamps out a fresh copy of that scene each time it is called.
 const PLAYER_SCENE: PackedScene = preload("res://scenes/player.tscn")
@@ -438,6 +440,7 @@ func _ready() -> void:
 
 ## _process runs every drawn frame: hide the banner when its time is up.
 func _process(delta: float) -> void:
+	_tick_bramble_clip()
 	# The corner label doubles as the score: every standing tree powers one home.
 	if waves.wave > 0:
 		# Bramble Seeds in hand, out of the most Seven can hold.
@@ -1346,6 +1349,20 @@ func _play_intro_once(kind: StringName, machine: Enemy) -> void:
 		return
 	_intro_done[kind] = true
 	start_clip(machine, CONFIG.intro_titles[kind], CONFIG.heavy_intro_seconds)
+
+
+## The Bramble Seed's intro clip (s19): once per run, the first moment in wave 2
+## that Seven holds a seed and no other clip is playing. It waits its turn like the
+## machines' clips do, and a restarted wave does not replay it (_intro_done).
+## In New Game + it plays too: that mode shows every intro (s18 round 5).
+func _tick_bramble_clip() -> void:
+	if not intro_clips_on or _intro_done.has(BRAMBLE_KIND) or waves.wave != 2 or clip_left > 0.0:
+		return
+	if player.is_dead or player.bramble_charges <= 0 or _restart_pending:
+		return
+	_intro_done[BRAMBLE_KIND] = true
+	var title: String = CONFIG.bramble_intro_title_touch if _is_touch() else CONFIG.intro_titles[BRAMBLE_KIND]
+	start_clip(player, title, CONFIG.heavy_intro_seconds)
 
 
 ## Starts an INTRO CLIP on `target`: slow motion, the camera pushing in on it,

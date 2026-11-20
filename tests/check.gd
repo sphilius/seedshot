@@ -139,6 +139,7 @@ func _ready() -> void:
 	await _test_s19_snare()
 	await _test_s19_canopy_line_line()
 	await _test_s19_bramble_preview()
+	await _test_s19_bramble_intro()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -3278,3 +3279,41 @@ func _test_s19_bramble_preview() -> void:
 	_check(not player.is_bramble_preview_shown(), "nor while the upgrade cards have Seven locked")
 	player.locked = false
 	_check(Bramble.radius_px() == CONFIG.bramble_radius_cells * CONFIG.cell_size, "the ring is the size of the patch")
+
+
+## s19 item 8: the Bramble Seed is introduced clearly, once, with a clip.
+func _test_s19_bramble_intro() -> void:
+	# The words say what it does, when to use it, and name the key.
+	var keys_text: String = " ".join(CONFIG.dj_bramble)
+	_check(keys_text.contains("Q or Space") and keys_text.contains("slows down") and keys_text.contains("gateway"), "the wave 2 radio lines name the key, say what it does and when to use it")
+	_check(" ".join(CONFIG.dj_bramble_touch).contains("bramble button") and not keys_text.to_lower().contains("trick."), "the touch lines name the button")
+	_check(CONFIG.intro_titles.has(Arena.BRAMBLE_KIND) and CONFIG.intro_titles[Arena.BRAMBLE_KIND].contains("Q or Space"), "the clip's title is in intro_titles and names the key")
+
+	await _fresh_arena()
+	_arena.intro_clips_on = true
+	_arena.waves.time_scale = 0.0  # no machines arrive: only the bramble clip is under test
+	_arena.waves.start_wave(1)
+	await _wait_drawn_frames(3)
+	_check(_arena.clip_left <= 0.0, "no clip in wave 1")
+	# Wave 2, but another clip is playing: the bramble clip waits its turn.
+	_arena.clip_left = 5.0
+	_arena.waves.start_wave(2)
+	await _wait_drawn_frames(3)
+	_check(not _arena._intro_done.has(Arena.BRAMBLE_KIND), "it waits while another clip is playing")
+	_arena.clip_left = 0.0
+	# No seed in hand yet: still waits ("the first time a charge is available").
+	_arena.player.bramble_charges = 0
+	_arena.player.bramble_recharge_left = 100.0  # or the next physics step would grow one back
+	await _wait_drawn_frames(3)
+	_check(_arena.clip_left <= 0.0, "and while Seven has no seed")
+	_arena.player.bramble_charges = 1
+	await _wait_drawn_frames(3)
+	_check(_arena.clip_left > 0.0 and _arena.clip_label.text == CONFIG.intro_titles[Arena.BRAMBLE_KIND], "wave 2 with a seed in hand: the clip plays, with its title")
+	# Once only, even after the wave restarts.
+	_arena.clip_left = 0.0
+	Engine.time_scale = 1.0
+	_arena._restart_current_wave()
+	await _wait_drawn_frames(3)
+	_check(_arena.clip_left <= 0.0, "it does not play again after a restart")
+	_arena.intro_clips_on = false
+	Engine.time_scale = 1.0

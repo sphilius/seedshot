@@ -261,6 +261,9 @@ extends Resource
 	&"linebreaker": "LINEBREAKER\nHeavy unit. Arrives with a Spitter escort.",
 	&"arc_spitter": "ARC SPITTER\nGuards the Sawbots. Fires three bolts.",
 	&"ripsaw": "RIPSAW\nUpgraded Sawbot. Faster, tougher, cuts twice as quick.",
+	# Not a machine: the Bramble Seed's clip uses the same table (s19). Keyboard
+	# text here; bramble_intro_title_touch is the phone version.
+	&"bramble": "BRAMBLE SEED\nPress Q or Space to throw it.\nThorns slow a crowd and chew it up. Best in a gateway.",
 }
 ## A Linebreaker's escorts drop in one after another, this many seconds apart.
 @export var escort_drop_gap: float = 0.18
@@ -776,12 +779,19 @@ extends Resource
 	"And kid? Tap any tree. The vine zips you straight to it.",
 ]
 ## Canopy FM, on wave 2 (not in New Game +): the Bramble Seed. Keyboard and touch.
+## s19: says what it does and when to use it, and names the key. (Sasha: "Thorns
+## was unclear", and the counter sat at 3 / 3 for two runs.)
 @export var dj_bramble: Array[String] = [
-	"One more trick. Press Q or Space: a bramble seed. Thorns slow them down and chew them up.",
+	"New trick, kid: press Q or Space to throw a Bramble Seed. It grows thorns where it lands, and every machine inside slows down and takes damage.",
+	"Throw it at a crowd, or into a gateway they all have to cross. You hold three, and they grow back.",
 ]
 @export var dj_bramble_touch: Array[String] = [
-	"One more trick. Tap the thorn button, right side: a bramble seed. Thorns slow them down and chew them up.",
+	"New trick, kid: tap the bramble button, right side, to throw a Bramble Seed. It grows thorns where it lands, and every machine inside slows down and takes damage.",
+	"Throw it at a crowd, or into a gateway they all have to cross. You hold three, and they grow back.",
 ]
+## The Bramble Seed's intro clip (once, the first time a seed is in hand in wave 2):
+## the machines' clip style, with this text. The touch version names the button.
+@export var bramble_intro_title_touch: String = "BRAMBLE SEED\nTap the bramble button to throw it.\nThorns slow a crowd and chew it up. Best in a gateway."
 ## Canopy FM, the first time a Sawbot is sent in.
 @export var dj_first_sawbot: Array[String] = [
 	"Sawbot on the lot! It doesn't want you. It wants the trees. Drop it first.",
