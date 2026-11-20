@@ -44,7 +44,7 @@ const AIM_REST_SPOT: Vector2 = Vector2(0.87, 0.76)
 const MOVE_COLOR: Color = Color(1.0, 1.0, 1.0, 0.55)
 const AIM_COLOR: Color = Color(0.75, 0.95, 0.45, 0.60)
 const REST_ALPHA: float = 0.30
-const TOUCH_HINT: String = "Left thumb: move   |   Right thumb: aim + fire   |   Tap a tree: zip   |   Tap a machine: bind   |   Bramble button: slow a crowd"
+const TOUCH_HINT: String = "Left thumb: move   |   Right thumb: aim + fire   |   Tap a tree: zip   |   Tap a machine: bind"
 const ROTATE_TEXT: String = "Turn your phone sideways"
 ## The Bramble Seed button: a circle on the right side, above the aim stick's spot
 ## (as shares of the screen width and height), and its radius in pixels.
@@ -149,11 +149,12 @@ func _draw() -> void:
 	var screen: Vector2 = get_viewport_rect().size
 	_draw_stick(_move_finger, MOVE_REST_SPOT * screen, MOVE_COLOR)
 	_draw_stick(_aim_finger, AIM_REST_SPOT * screen, AIM_COLOR)
-	# The Bramble Seed button, with one small dot per seed in hand.
-	var button: Vector2 = BRAMBLE_SPOT * screen
-	draw_arc(button, BRAMBLE_RADIUS, 0.0, TAU, 40, BRAMBLE_COLOR, 3.0)
-	draw_string(ThemeDB.fallback_font, button + Vector2(-BRAMBLE_RADIUS, 6.0), "bramble", HORIZONTAL_ALIGNMENT_CENTER, BRAMBLE_RADIUS * 2.0, 16, BRAMBLE_COLOR)
-	if _player != null:
+	# The Bramble Seed button, with one small dot per seed in hand. Only once
+	# Seven has the seeds (s24: their card unlocks them).
+	if is_bramble_button_shown():
+		var button: Vector2 = BRAMBLE_SPOT * screen
+		draw_arc(button, BRAMBLE_RADIUS, 0.0, TAU, 40, BRAMBLE_COLOR, 3.0)
+		draw_string(ThemeDB.fallback_font, button + Vector2(-BRAMBLE_RADIUS, 6.0), "bramble", HORIZONTAL_ALIGNMENT_CENTER, BRAMBLE_RADIUS * 2.0, 16, BRAMBLE_COLOR)
 		for i: int in _player.bramble_charges:
 			draw_circle(button + Vector2((i - 1) * 12.0, BRAMBLE_RADIUS * 0.55), 4.0, BRAMBLE_COLOR)
 
@@ -222,9 +223,18 @@ func touch_up(index: int) -> void:
 		_player.try_vine(finger.start, CONFIG.touch_vine_pick_radius_cells)
 
 
-## True if screen point `at` is on the Bramble Seed button.
+## True if screen point `at` is on the Bramble Seed button. While the button is
+## hidden (s24: no seeds unlocked yet) nothing is on it, so a tap there can still
+## pick a tree for the vine.
 func bramble_button_hit(at: Vector2) -> bool:
+	if not is_bramble_button_shown():
+		return false
 	return at.distance_to(BRAMBLE_SPOT * get_viewport_rect().size) <= BRAMBLE_RADIUS
+
+
+## s24: true once Seven has Bramble Seeds, so the button is drawn and can be tapped.
+func is_bramble_button_shown() -> bool:
+	return _player != null and _player.bramble_unlocked
 
 
 ## Turns a sliding finger into the MOVE stick (left half) or the AIM stick (right

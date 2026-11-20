@@ -19,6 +19,7 @@
 # Change its shapes and run the script again. Everything is regenerated from scratch.
 
 import json
+import math
 import shutil
 import subprocess
 from pathlib import Path
@@ -29,7 +30,11 @@ from PIL import Image
 KLAD = Path("C:/Users/sphil/dev/klad-dist/klad-windows/klad.exe")
 HERE = Path(__file__).resolve().parent                       # the upgrades source folder
 PALETTE_OPS = HERE.parent / "palette.ops.jsonl"              # the game's shared 12 colours
-SPRITE_OUT = Path("C:/Users/sphil/dev/seedshot/art/sprites/upgrades")
+# s24: the game folder is worked out from where this script sits (four folders up:
+# upgrades -> klad -> source -> art -> the repo), so a second checkout of the repo
+# writes its own sprites instead of the main folder's.
+REPO = HERE.parents[3]
+SPRITE_OUT = REPO / "art" / "sprites" / "upgrades"
 CONTACT_OUT = HERE / "contact_sheet.png"
 
 SIZE = 64  # every icon is 64 x 64 pixels
@@ -384,6 +389,39 @@ def draw_quick_reload():
     return g
 
 
+def draw_bramble_seed():
+    """Bramble Seed (s24): a brown seed in the middle of a ring of thorny green bramble
+    stems, with a fresh leaf sprouting from its top. It unlocks the third seed type."""
+    g = Grid()
+    cx, cy = 32, 34  # the seed's centre; the thorns point away from it
+    # Two bramble stems curling round the seed, one on each side (curve_points makes a
+    # smooth bend through three points: start, the point it bends towards, end).
+    left = curve_points((14, 58), (0, 26), (26, 10), steps=90)
+    right = curve_points((50, 58), (64, 26), (38, 10), steps=90)
+    for stem in (left, right):
+        g.stroke(stem, "leaf-dark", 3)
+        g.stroke(stem, "leaf-light", 1)
+        # Thorns: a small cream triangle every so often along the stem, pointing
+        # outwards (away from the seed). math.hypot is the distance formula.
+        for i in range(8, len(stem) - 4, 13):
+            sx, sy = stem[i]
+            dx, dy = sx - cx, sy - cy
+            length = math.hypot(dx, dy) or 1.0
+            ux, uy = dx / length, dy / length          # one step straight outwards
+            px, py = -uy, ux                           # one step sideways
+            tip = (sx + ux * 6, sy + uy * 6)
+            g.fill(polygon([(sx + px * 2, sy + py * 2), tip, (sx - px * 2, sy - py * 2)]), "cream")
+    # The seed: a mid-brown oval, a darker lower right (light comes from the top
+    # left, like the other cards) and a small light patch at the top left.
+    g.fill(ellipse(cx, cy, 10, 12), "rust-mid")
+    g.fill(both(ellipse(cx, cy, 10, 12), lambda x, y: x + y > cx + cy + 6), "rust-dark")
+    g.fill(ellipse(cx - 4, cy - 5, 3, 4), "rust-light")
+    # The sprout: a short stem up from the seed's top and one leaf leaning right.
+    g.stroke(line_points(cx, cy - 12, cx, cy - 18), "leaf-dark", 2)
+    g.fill(polygon([(cx, cy - 18), (cx + 6, cy - 24), (cx + 11, cy - 21), (cx + 5, cy - 16)]), "leaf-light")
+    return g
+
+
 ICONS = [
     ("seed_pouch", draw_seed_pouch),
     ("heavy_seeds", draw_heavy_seeds),
@@ -392,12 +430,13 @@ ICONS = [
     ("quick_roots", draw_quick_roots),
     ("long_trellis", draw_long_trellis),
     ("quick_reload", draw_quick_reload),
+    ("bramble_seed", draw_bramble_seed),
 ]
 
 
 # Icons that are NOT upgrade cards: (name, draw function, folder the PNG goes to).
 EXTRA_ICONS = [
-    ("repair", draw_repair, Path("C:/Users/sphil/dev/seedshot/art/sprites")),
+    ("repair", draw_repair, REPO / "art" / "sprites"),
 ]
 
 

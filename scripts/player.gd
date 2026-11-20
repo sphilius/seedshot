@@ -86,6 +86,11 @@ var reload_left: float = 0.0
 ## grows back. Public so the HUD and tests can read them.
 var bramble_charges: int = CONFIG.bramble_max_charges
 var bramble_recharge_left: float = 0.0
+## s24 SKILL UNLOCKS: false until the Bramble Seed card is picked. While false
+## Seven holds no seeds, none grow back and Q / Space does nothing. True by
+## default so a Player on its own (outside the arena) still has them; the arena
+## calls lock_brambles() at the start of a run.
+var bramble_unlocked: bool = true
 ## True once hp reaches zero: the bot stops moving, firing and zipping.
 var is_dead: bool = false
 ## True while the grove is repairing Seven (Grove rest). The arena decides this
@@ -287,7 +292,7 @@ func _draw() -> void:
 ## Seven does not make the patch: the arena hears bramble_thrown and grows it
 ## ("signal up"). Returns true if a seed was thrown.
 func throw_bramble() -> bool:
-	if is_dead or locked or bramble_charges <= 0:
+	if is_dead or locked or not bramble_unlocked or bramble_charges <= 0:
 		return false
 	bramble_charges -= 1
 	if bramble_recharge_left <= 0.0:
@@ -326,8 +331,26 @@ func _draw_bramble_preview() -> void:
 	_aim_overlay.draw_arc(centre, Bramble.radius_px(), 0.0, TAU, 40, color, 2.0)
 
 
+## s24: takes the Bramble Seeds away until the card is picked (the arena calls
+## this at the start of a run). Seven holds none and none grow back.
+func lock_brambles() -> void:
+	bramble_unlocked = false
+	bramble_charges = 0
+	bramble_recharge_left = 0.0
+
+
+## s24: the Bramble Seed card was picked: Seven gets a full hand of seeds now.
+func unlock_brambles() -> void:
+	bramble_unlocked = true
+	bramble_charges = CONFIG.bramble_max_charges
+	bramble_recharge_left = 0.0
+
+
 ## Grows Bramble Seeds back, one every bramble_recharge_seconds, up to the max.
+## Nothing grows while the seeds are still locked (s24).
 func _tick_brambles(delta: float) -> void:
+	if not bramble_unlocked:
+		return
 	if bramble_charges >= CONFIG.bramble_max_charges:
 		bramble_recharge_left = 0.0
 		return
@@ -512,7 +535,10 @@ func revive(world_position: Vector2, start_hp: int = 0) -> void:
 	hp = max_hp if start_hp <= 0 else clampi(start_hp, 1, max_hp)
 	is_dead = false
 	is_zipping = false
-	bramble_charges = CONFIG.bramble_max_charges  # a fresh start refills the seeds
+	# A fresh start refills the Bramble Seeds, but only once their card is picked
+	# (s24): a knock-out must not hand back seeds Seven never unlocked.
+	if bramble_unlocked:
+		bramble_charges = CONFIG.bramble_max_charges
 	bramble_recharge_left = 0.0
 	refill_seeds()  # ...and a full load of seed pods
 	modulate = Color.WHITE

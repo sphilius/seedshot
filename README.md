@@ -20,6 +20,12 @@ The green squares at the top centre are your hit points. A Scrapper glows red ju
 
 The itch page is `kingriot/seedshot` (channel `html5`).
 
+### Playable builds on GitHub
+
+**Play in the browser: https://sphilius.github.io/seedshot/** (GitHub Pages, from the `gh-pages` branch). `.\tools\publish_pages.ps1` updates it with the build in `build\web`, or `-Export` to export first. Pages only works while the repo is public; it is planned to go private again on November 28, 2026, and the link stops then.
+
+Each web build is also attached to a GitHub Release as a zip (the newest: [web-208916b](https://github.com/sphilius/seedshot/releases/tag/web-208916b)). Unzip it, run `python -m http.server 8079` inside the folder, and open http://127.0.0.1:8079. Opening `index.html` directly does not work: browsers block the game files from a `file://` address.
+
 ### Touch (phones and tablets, landscape)
 
 | Input | Verb |
@@ -38,6 +44,7 @@ Touch switches on at the first finger and off again when a real mouse moves. It 
 .\tools\godot.ps1 test      # headless checks; prints "N passed, M failed"
 .\tools\godot.ps1 export    # web build -> build\web\index.html
 python tools\serve_web.py   # play the web build at http://127.0.0.1:8079
+.\tools\publish_pages.ps1   # copy build\web onto the gh-pages branch and push it
 python tools\clean_art.py   # re-cut art\source\*.jpg into art\placeholder\*.png
 ```
 

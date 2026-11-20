@@ -10,9 +10,9 @@ extends Node2D
 ##   Mute     press M, or tap/click the speaker button (left of the pause button)
 ##
 ## THE PAUSE MENU (s18; before that it was only the word "Paused"):
-##   left side    five buttons: Resume, Restart this wave, Sound effects on/off,
-##                Music on/off, Quit to main menu. Click or tap one, or press
-##                its number. P or Esc also resumes.
+##   left side    six buttons: Resume, Restart this wave, Sound effects on/off,
+##                Music on/off, Full screen on/off (s23), Quit to main menu.
+##                Click or tap one, or press its number. P or Esc also resumes.
 ##   right side   this run's numbers (wave, homes lit, trees...) and the controls.
 ##   Restart and Quit throw progress away, so they ask first: the first press
 ##   changes the button to "Sure? ...", the second press does it.
@@ -31,6 +31,8 @@ signal restart_wave_requested
 ## Emitted when the player confirms "Quit to main menu".
 signal quit_requested
 
+const CONFIG: GameConfig = preload("res://config/game_config.tres")
+
 ## The clickable/tappable button area, measured from the top-right screen corner.
 ## Bigger than the drawn icon, because a fingertip is not exact.
 const BUTTON_SIZE: Vector2 = Vector2(72.0, 48.0)
@@ -42,8 +44,9 @@ const PAUSED_TEXT: String = "PAUSED"
 const NO_PRESS: Vector2 = Vector2.INF
 
 ## The menu buttons, top to bottom. The numbers are their places in the list.
-enum Item { RESUME, RESTART, EFFECTS, MUSIC, QUIT }
-const ITEM_COUNT: int = 5
+## (Full screen sits above Quit so the button that throws the run away stays last.)
+enum Item { RESUME, RESTART, EFFECTS, MUSIC, FULLSCREEN, QUIT }
+const ITEM_COUNT: int = 6
 const MENU_BUTTON_SIZE: Vector2 = Vector2(440.0, 62.0)
 const MENU_BUTTON_GAP: float = 14.0
 ## Top-left corner of the first button, in screen pixels.
@@ -57,12 +60,19 @@ const TITLE_COLOR: Color = Color(1.0, 0.82, 0.50)
 const TEXT_COLOR: Color = Color(0.92, 0.94, 0.96)
 ## The words that mark the bind line in the two lists below.
 const BIND_MARK: String = "bind it"
+## s24: the words that mark the Bramble Seed line (hidden until its card is picked).
+const BRAMBLE_MARK: String = "Bramble Seed"
+## The CONTROLS list on the right of the pause menu, one entry per drawn line:
+## first for mouse and keyboard, then for touch. controls_lines() picks one of
+## the two and drops the lines that would give away a skill not yet earned.
+## (s24: Q got its own line so it can be hidden; R reload joined M mute.)
 const CONTROLS_KEYS: Array[String] = [
 	"WASD / arrows   move",
 	"Mouse   aim        Left click   shoot seeds",
 	"Right click a tree   vine to it",
 	"Right click a machine   bind it",
-	"Q   throw a Bramble Seed        M   mute",
+	"Q or Space   throw a Bramble Seed",
+	"R   reload        M   mute",
 	"Stand by 4 grown trees   repair",
 ]
 const CONTROLS_TOUCH: Array[String] = [
@@ -70,6 +80,7 @@ const CONTROLS_TOUCH: Array[String] = [
 	"Right thumb   aim and shoot",
 	"Tap a tree   vine to it",
 	"Tap a machine   bind it",
+	"Bramble button   throw a Bramble Seed",
 	"Stand by 4 grown trees   repair",
 ]
 
@@ -80,11 +91,16 @@ var stats_provider: Callable
 ## True once Lucky's gift lets the vine bind machines. Until then the controls
 ## list leaves that line out, so it does not give the secret away. Set by the arena.
 var bind_unlocked: bool = false
+## s24: true once Seven has Bramble Seeds (its card is picked, or the run started
+## with them). Until then the Bramble line is left out. Set by the arena.
+var bramble_unlocked: bool = true
 
 ## The mute state the speaker icon was last drawn with (see _process).
 var _drawn_muted: bool = false
 ## The button waiting for its second, confirming press (-1 = none).
 var _armed: int = -1
+## The full-screen state the menu was last drawn with (see _process).
+var _drawn_fullscreen: bool = false
 
 
 ## _ready runs once when the node enters the scene.
@@ -93,6 +109,22 @@ func _ready() -> void:
 	# Draw above everything else on the HUD. The radio panel and the upgrade cards
 	# are added in code after this node, and without this they showed through.
 	z_index = 100
+	if OS.has_feature("web") and CONFIG.fullscreen_lock_landscape:
+		# A few lines of the page's own JavaScript: whenever the page goes full
+		# screen, ask the phone to hold landscape. (A phone only allows that lock
+		# while full screen.) The window.__seedshotLandscape flag makes sure the
+		# listener is added once, not again every time the arena is rebuilt.
+		# .catch() swallows the refusal from browsers that do not support it.
+		JavaScriptBridge.eval("""
+			if (!window.__seedshotLandscape) {
+				window.__seedshotLandscape = true;
+				document.addEventListener('fullscreenchange', function () {
+					if (document.fullscreenElement && screen.orientation && screen.orientation.lock) {
+						screen.orientation.lock('landscape').catch(function () {});
+					}
+				});
+			}
+		""", true)
 
 
 ## _exit_tree runs when the node leaves the scene (for example on a restart).
@@ -166,10 +198,47 @@ func choose(index: int) -> void:
 			Sfx.effects_on = not Sfx.effects_on
 		Item.MUSIC:
 			CanopyFM.set_music_on(not CanopyFM.music_on)
+		Item.FULLSCREEN:
+			# The menu stays up, so the player sees the switch and resumes when ready.
+			toggle_fullscreen()
 		Item.QUIT:
 			set_paused(false)
 			quit_requested.emit()
 	queue_redraw()
+
+
+## True when the game can go full screen here. Outside a browser it always can.
+## In a browser the page is asked: iPhone Safari, for one, offers no full screen
+## for games (only for videos). `static`: needs no PauseOverlay, so tests can call it.
+static func fullscreen_available() -> bool:
+	if not OS.has_feature("web"):
+		return true
+	# JavaScriptBridge.eval runs one line of the page's JavaScript and hands back
+	# its answer. "!!" turns whatever the browser says into a plain true / false.
+	return bool(JavaScriptBridge.eval("!!(document.fullscreenEnabled || document.webkitFullscreenEnabled)", true))
+
+
+## True while the game fills the whole screen. In a browser this asks the page,
+## because the player can also leave full screen without the menu (the Esc key,
+## or the back gesture on a phone).
+static func is_fullscreen() -> bool:
+	if OS.has_feature("web"):
+		return bool(JavaScriptBridge.eval("!!(document.fullscreenElement || document.webkitFullscreenElement)", true))
+	var mode: DisplayServer.WindowMode = DisplayServer.window_get_mode()
+	return mode == DisplayServer.WINDOW_MODE_FULLSCREEN or mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
+
+
+## Switches full screen on or off. Returns false if this browser cannot do it.
+## A browser only allows full screen in answer to a tap or click; the menu button
+## press is one, so this works when called from choose().
+func toggle_fullscreen() -> bool:
+	if not fullscreen_available():
+		return false
+	if is_fullscreen():
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	else:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+	return true
 
 
 ## The text on menu button `index`, with its number in front.
@@ -184,6 +253,11 @@ func menu_label(index: int) -> String:
 			text = "Sound effects: %s%s" % ["On" if Sfx.effects_on else "Off", _muted_note()]
 		Item.MUSIC:
 			text = "Music: %s%s" % ["On" if CanopyFM.music_on else "Off", _muted_note()]
+		Item.FULLSCREEN:
+			if not fullscreen_available():
+				text = "Full screen: not in this browser"
+			else:
+				text = "Full screen: %s" % ("On" if is_fullscreen() else "Off")
 		Item.QUIT:
 			text = "Sure? This run will be lost" if _armed == index else "Quit to main menu"
 	return "%d   %s" % [index + 1, text]
@@ -242,12 +316,16 @@ func _draw() -> void:
 
 
 ## The controls to list: the keyboard or the touch set, without the bind line
-## until Lucky's gift has unlocked it. Public for the tests.
+## until Lucky's gift has unlocked it, and without the Bramble line until its
+## card is picked (s24). Public for the tests.
 func controls_lines(touch: bool) -> Array[String]:
 	var lines: Array[String] = []
 	for line: String in (CONTROLS_TOUCH if touch else CONTROLS_KEYS):
-		if bind_unlocked or not line.contains(BIND_MARK):
-			lines.append(line)
+		if not bind_unlocked and line.contains(BIND_MARK):
+			continue  # "continue" skips to the next line of the list
+		if not bramble_unlocked and line.contains(BRAMBLE_MARK):
+			continue
+		lines.append(line)
 	return lines
 
 
@@ -308,4 +386,9 @@ func _draw_speaker(centre: Vector2) -> void:
 func _process(_delta: float) -> void:
 	if Sfx.is_muted != _drawn_muted:
 		_drawn_muted = Sfx.is_muted
+		queue_redraw()
+	# Same for full screen while the menu is up: a browser goes full screen a
+	# moment after the press, and the player can leave it with Esc or a swipe.
+	if get_tree().paused and is_fullscreen() != _drawn_fullscreen:
+		_drawn_fullscreen = is_fullscreen()
 		queue_redraw()

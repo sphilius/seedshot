@@ -552,6 +552,12 @@ extends Resource
 @export var bramble_recharge_seconds: float = 6.0
 ## Colour of the thorns.
 @export var bramble_color: Color = Color(0.40, 0.62, 0.30)
+## SKILL UNLOCKS (s24): a run starts WITHOUT Bramble Seeds and without the Vine
+## Trip Line. Both are upgrade cards, first dealt on the card screen after this
+## wave is cleared. That screen always shows both (plus random cards to fill
+## the row); one the player skips stays in the random deck afterwards.
+## 0 = both are there from the start and their cards are never dealt.
+@export var skill_unlock_after_wave: int = 3
 ## s19: the faint ring that shows where a Bramble Seed would land, while Seven has
 ## a charge. Its alpha (0 = invisible, 1 = solid); the disc inside is a third as strong.
 @export_range(0.0, 1.0) var bramble_preview_alpha: float = 0.45
@@ -827,7 +833,8 @@ extends Resource
 	"Ha! It rooted! A Helios machine, now a tree. Spitter shots die on bark, so get behind it.",
 	"Oh, and Seven? Tap any tree. The vine zips you straight to it.",
 ]
-## Canopy FM, on wave 2 (not in New Game +): the Bramble Seed. Keyboard and touch.
+## Canopy FM explains the Bramble Seed at the start of the wave after its card is
+## picked (s24; before that it was wave 2). Keyboard and touch. New Game + too.
 ## s19: says what it does and when to use it, and names the key. (Sasha: "Thorns
 ## was unclear", and the counter sat at 3 / 3 for two runs.)
 @export var dj_bramble: Array[String] = [
@@ -838,7 +845,15 @@ extends Resource
 	"Okay, new toy: tap the bramble button, right side, to throw a Bramble Seed. Thorns grow where it lands, and every machine inside slows down and takes damage.",
 	"Lob it at a crowd, or into a gateway they all have to squeeze through. You hold three, and they grow back.",
 ]
-## The Bramble Seed's intro clip (once, the first time a seed is in hand in wave 2):
+## Canopy FM explains the Vine Trip Line at the start of the wave after its card
+## is picked (s24). No recorded voice yet: the words show on the radio only.
+@export var dj_trip_line: Array[String] = [
+	"New trick: stand right beside a tree and right click another one. The vine you zip along stays strung between them, and any machine that walks into it gets tripped up and slowed.",
+]
+@export var dj_trip_line_touch: Array[String] = [
+	"New trick: stand right beside a tree and tap another one. The vine you zip along stays strung between them, and any machine that walks into it gets tripped up and slowed.",
+]
+## The Bramble Seed's intro clip (once, the first moment a seed is in hand after its card is picked):
 ## the machines' clip style, with this text. The touch version names the button.
 @export var bramble_intro_title_touch: String = "BRAMBLE SEED\nTap the bramble button to throw it.\nThorns slow a crowd and chew it up. Best in a gateway."
 ## Canopy FM, the first time a Sawbot is sent in.
@@ -959,6 +974,11 @@ extends Resource
 ## On touch there is no pointer to draw the reticle at, so it floats this far in
 ## front of the bot, along the aim direction.
 @export var touch_reticle_distance_cells: float = 2.5
+## FULL SCREEN (s23, pause menu). In a web browser, once the game is full screen,
+## also ask the phone to hold the screen sideways (landscape), so turning the
+## phone does not squash the lot. Android Chrome honours this; most other browsers
+## ignore it, which is harmless.
+@export var fullscreen_lock_landscape: bool = true
 
 @export_group("Contact")
 ## s19: touching a machine hurts. How many pips one touch costs Seven.
