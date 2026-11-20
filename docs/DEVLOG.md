@@ -384,6 +384,13 @@ From the kickoff. `config/game_config.tres` holds every speed, cooldown and size
 - The thunk and spit candidates came back very quiet (mean below -36 dB) and need a lot of gain; listen for hiss.
 - The listening page now plays every take evened out to its in-game loudness.
 
+## D-055: The intro clip plays as the web loading screen (Made, 2026-11-19)
+
+Sasha's 7.8 s clip (`web/intro.mp4`, a copy of `art/video/opening sequence/intro_v7_hard_cut_web_720p.mp4`; the original is untouched) plays over Godot's loading screen in the web build. Done the small way: the Web preset's `html/head_include` adds two tags to Godot's default page, which load `web/intro.css` and `web/intro.js`; `tools\godot.ps1 export` copies the three files next to `index.html` after the export. No custom HTML shell and no game script changed.
+
+"Game ready" is detected by watching for Godot's own `#status` element leaving the page (its page script calls `statusOverlay.remove()` once the engine has started). The clip is muted and inline, letterboxed on black, and Godot's own progress bar stays visible as a thin bar over it. If the game is ready first, the clip finishes; if the clip ends first, its last frame holds. Once the game is ready a click, tap or key skips it, and that press is swallowed so it does not also press Play. Every failure (missing file, refused autoplay, never starts within 4 s, stalls 10 s after ready, Godot showing an error) removes the clip and leaves the page exactly as before; the reason is written to the browser console.
+
+Seen in the preview: the clip played, the title screen appeared after it, a skip worked, a renamed `intro.mp4` still loaded the game, and a 740 x 360 landscape window letterboxed correctly. One thing to know: the clip pauses for a few seconds while the engine starts (the single-threaded build blocks the page then), so on a fast connection it takes about 12 s rather than 8 unless skipped. Not tested on a real phone or on itch.
 ## D-054: Round 4, from Sasha's playtest of round 3 (Made, 2026-11-19)
 
 Sasha played the round 3 build to the end of the regular game and sent 22 notes plus three in chat. What was built, and what each choice rests on:
