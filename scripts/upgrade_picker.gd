@@ -22,7 +22,7 @@ const CONFIG: GameConfig = preload("res://config/game_config.tres")
 ## filled in from the config in _describe(), so they always match the game.
 const CATALOG: Dictionary[StringName, Array] = {
 	&"seed_pouch": ["Seed Loader Pouch", "Fire %d%% faster. Stacks."],
-	&"heavy_seeds": ["Heavy Seeds", "Seed pods hit %d harder. Stacks."],
+	&"heavy_seeds": ["Heavy Seeds", "Seed pods hit %s harder. Stacks."],
 	# The id is still "thick_plating" (its picture file is named after it), but
 	# since s18 the card is a repair, not extra max health.
 	&"thick_plating": ["Patch Kit", "Repairs %d to %d pips, by luck. Does not stack."],
@@ -172,7 +172,8 @@ static func _describe(id: StringName) -> String:
 		&"seed_pouch":
 			return template % roundi((1.0 - CONFIG.upgrade_fire_cooldown_factor) * 100.0)
 		&"heavy_seeds":
-			return template % CONFIG.upgrade_seed_damage
+			# "%.1f" writes 0.5 as "0.5"; the card says "+0.5".
+			return template % ("+%.1f" % CONFIG.upgrade_seed_damage)
 		&"thick_plating":
 			# Two numbers to fill in, so they go in a list.
 			return template % [CONFIG.upgrade_repair_min_pips, CONFIG.upgrade_repair_max_pips]

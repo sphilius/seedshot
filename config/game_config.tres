@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="GameConfig" load_steps=17 format=3]
+[gd_resource type="Resource" script_class="GameConfig" load_steps=19 format=3]
 
 [ext_resource type="Script" path="res://config/game_config.gd" id="1_config"]
 [ext_resource type="Texture2D" path="res://art/sprites/gardener_bot.png" id="2_player"]
@@ -16,10 +16,14 @@
 [ext_resource type="Texture2D" path="res://art/sprites/tree_big.png" id="14_tree_great"]
 [ext_resource type="Texture2D" path="res://art/sprites/props.png" id="15_props"]
 [ext_resource type="Texture2D" path="res://art/sprites/lucky_cat_wave.png" id="16_cat_wave"]
+[ext_resource type="Texture2D" path="res://art/sprites/repair_icon.png" id="repair_icon"]
+[ext_resource type="Texture2D" path="res://art/sprites/gardener_bot_facings.png" id="player_facings"]
 
 [resource]
 script = ExtResource("1_config")
 player_texture = ExtResource("2_player")
+repair_icon_texture = ExtResource("repair_icon")
+player_facings_texture = ExtResource("player_facings")
 scrapper_texture = ExtResource("3_scrapper")
 sawbot_texture = ExtResource("4_sawbot")
 spitter_texture = ExtResource("5_spitter")

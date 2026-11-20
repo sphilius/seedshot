@@ -137,9 +137,17 @@ func _ready() -> void:
 	hp = max_hp
 	(_collision.shape as CircleShape2D).radius = CONFIG.player_radius_cells * CONFIG.cell_size
 	_sprite.texture = CONFIG.player_texture
+	if CONFIG.player_facings_texture != null:
+		# A strip of facings: the Sprite2D cuts it into equal frames (hframes), and
+		# _update_aim picks the frame that points the way Seven is aiming.
+		_sprite.texture = CONFIG.player_facings_texture
+		_sprite.hframes = CONFIG.player_facing_count
+		_sprite.frame = facing_frame(Vector2.DOWN, CONFIG.player_facing_count)
 	if _sprite.texture != null:
 		var wanted_px: float = CONFIG.sprite_size_cells * CONFIG.cell_size
-		_sprite.scale = Vector2.ONE * (wanted_px / float(_sprite.texture.get_width()))
+		# One frame's width, not the whole strip's.
+		var frame_width: float = float(_sprite.texture.get_width()) / float(_sprite.hframes)
+		_sprite.scale = Vector2.ONE * (wanted_px / frame_width)
 	_sprite_base_scale = _sprite.scale
 	# The nozzle must show in front of the sprite. A node's own _draw is painted
 	# behind its children, so the nozzle gets a child node of its own, with a
@@ -231,6 +239,11 @@ func _draw() -> void:
 		var at := Vector2(-80.0, CONFIG.cell_size * 1.15)
 		draw_string_outline(ThemeDB.fallback_font, at, words, HORIZONTAL_ALIGNMENT_CENTER, 160.0, 14, 4, Color(0.0, 0.0, 0.0, 0.85))
 		draw_string(ThemeDB.fallback_font, at, words, HORIZONTAL_ALIGNMENT_CENTER, 160.0, 14, shade)
+		# While repairing, a small spanner-and-sprout icon sits just left of the words.
+		if is_resting and CONFIG.repair_icon_texture != null:
+			var words_width: float = ThemeDB.fallback_font.get_string_size(words, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 14).x
+			var icon_px: float = CONFIG.repair_icon_px
+			draw_texture_rect(CONFIG.repair_icon_texture, Rect2(Vector2(-words_width / 2.0 - icon_px - 4.0, at.y - icon_px + 3.0), Vector2.ONE * icon_px), false)
 	if is_zipping:
 		# to_local converts a world position into this node's own coordinates.
 		draw_line(Vector2.ZERO, to_local(_vine_anchor), VINE_COLOR, 4.0)
@@ -458,7 +471,7 @@ func _play_knockout() -> void:
 	_knockout_left = CONFIG.knockout_seconds
 	var total: float = CONFIG.knockout_seconds
 	# Fall away from the way Seven was facing: +1 tips right, -1 tips left.
-	var side: float = -1.0 if _sprite.flip_h else 1.0
+	var side: float = -1.0 if aim_direction.x < 0.0 else 1.0
 	_body_tween = create_tween()
 	# 1. The jolt: a quick hop up and a swell, like a shock going through.
 	_body_tween.set_parallel(true)
@@ -669,9 +682,16 @@ func _update_aim() -> void:
 		var to_mouse: Vector2 = get_global_mouse_position() - global_position
 		if to_mouse.length() > 1.0:
 			aim_direction = to_mouse.normalized()
-	# Seven stands facing the viewer (the locked design, tools/seven_sprite.py),
-	# so it does not spin round: it turns to look left or right with the aim.
-	# flip_h mirrors the picture; the drawing holds its seedling on the right.
+	# With the facings strip (tools/seven_facings.py) Seven is drawn turned to each of
+	# eight ways, so we just pick the frame that matches the aim. No mirroring, no
+	# lean: the turn is in the picture.
+	if _sprite.hframes > 1:
+		_sprite.frame = facing_frame(aim_direction, _sprite.hframes)
+		_sprite.rotation = 0.0
+		return
+	# Without it, Seven stands facing the viewer (the locked design,
+	# tools/seven_sprite.py) and does not spin round: it turns to look left or right
+	# with the aim. flip_h mirrors the picture; the drawing holds its seedling on the right.
 	if absf(aim_direction.x) > 0.1:
 		_sprite.flip_h = aim_direction.x < 0.0
 	# ...and it leans a little toward the aim: forward-and-down when aiming down,
@@ -679,6 +699,15 @@ func _update_aim() -> void:
 	# always tips the head toward the target.
 	var facing: float = -1.0 if _sprite.flip_h else 1.0
 	_sprite.rotation = aim_direction.y * CONFIG.aim_lean_radians * facing
+
+
+## Which frame of a facings strip points along `direction`. Frames are evenly spaced
+## round the compass starting at East (angle 0) and going clockwise on screen, which
+## is the way Godot's angles count (y points down), so South = down the screen = 2.
+## roundi() picks the nearest frame; posmod() wraps a negative angle (up the screen)
+## round to the end of the strip. `static`: needs no Player to exist. Public for tests.
+static func facing_frame(direction: Vector2, frames: int) -> int:
+	return posmod(roundi(direction.angle() / (TAU / float(frames))), frames)
 
 
 ## True while the aim line and nozzle should show: not when down, and not while

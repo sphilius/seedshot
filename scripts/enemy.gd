@@ -54,6 +54,8 @@ var hp: int = 0
 ## The hit points it started with (for the Linebreaker's armour ring).
 var max_hp: int = 0
 var is_dead: bool = false
+## Part of a point of damage not yet taken off the hit points (see take_damage).
+var _damage_carry: float = 0.0
 ## True while the machine is still arriving (rolling out of a gate, or falling):
 ## it does nothing until it is in. Public so the tests can read it.
 var is_entering: bool = false
@@ -101,10 +103,16 @@ func setup(grid: ArenaGrid) -> void:
 
 
 ## Removes HP; at zero the machine announces its death and deletes itself.
-func take_damage(amount: int) -> void:
+## `amount` may be a fraction (a Heavy Seeds pod does 1.5). Hit points are whole
+## numbers, so the part of a hit that does not make a whole point is kept in
+## _damage_carry and added to this machine's next hit: two 1.5 hits do 1 + 2 = 3.
+func take_damage(amount: float) -> void:
 	if is_dead:
 		return
-	hp -= amount
+	var total: float = amount + _damage_carry
+	var whole: int = floori(total)  # floori: round down to a whole number
+	_damage_carry = total - float(whole)
+	hp -= whole
 	queue_redraw()  # the Linebreaker's armour ring shows hit points left
 	if hp <= 0:
 		is_dead = true
