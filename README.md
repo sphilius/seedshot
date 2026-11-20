@@ -24,7 +24,7 @@ The itch page is `kingriot/seedshot` (channel `html5`).
 
 **Play in the browser: https://sphilius.github.io/seedshot/** (GitHub Pages, from the `gh-pages` branch). `.\tools\publish_pages.ps1` updates it with the build in `build\web`, or `-Export` to export first. Pages only works while the repo is public; it is planned to go private again on November 28, 2026, and the link stops then.
 
-Each web build is also attached to a GitHub Release as a zip (the newest: [web-4e0fa3f](https://github.com/sphilius/seedshot/releases/tag/web-4e0fa3f)). Unzip it, run `python -m http.server 8079` inside the folder, and open http://127.0.0.1:8079. Opening `index.html` directly does not work: browsers block the game files from a `file://` address.
+Each web build is also attached to a GitHub Release as a zip (the newest: [web-a953fcd](https://github.com/sphilius/seedshot/releases/tag/web-a953fcd)). Unzip it, run `python -m http.server 8079` inside the folder, and open http://127.0.0.1:8079. Opening `index.html` directly does not work: browsers block the game files from a `file://` address.
 
 ### Touch (phones and tablets, landscape)
 
