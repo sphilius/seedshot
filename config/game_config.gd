@@ -168,7 +168,7 @@ extends Resource
 ## half the time (x ripsaw_saw_interval_factor), so trees fall twice as fast.
 @export var ripsaw_hp: int = 14
 @export var ripsaw_scale: float = 1.4
-@export var ripsaw_speed_factor: float = 1.3
+@export var ripsaw_speed_factor: float = 1.2
 @export var ripsaw_saw_interval_factor: float = 0.5
 ## Its tint: hot red steel. (Values above 1 brighten.)
 @export var ripsaw_tint: Color = Color(1.5, 0.75, 0.6)
@@ -275,7 +275,7 @@ extends Resource
 ## great sunroot standing.
 @export var sunburst_intro_title: String = "GREAT SUNROOT\nRight-click it to vine there: that sets off a SUNBURST.\nGold trees are ready. Nearby great sunroots chain."
 @export var sunburst_intro_title_touch: String = "GREAT SUNROOT\nVine to it: that sets off a SUNBURST.\nGold trees are ready. Nearby great sunroots chain."
-@export var lucky_intro_seconds: float = 5.0
+@export var lucky_intro_seconds: float = 8.0
 @export var lucky_intro_slow_scale: float = 0.03
 @export var lucky_intro_title: String = "LUCKY'S GIFT\nRight-click a machine to bind it with the vine.\nOne spare fuse: it saves Seven once this run."
 @export var lucky_intro_title_touch: String = "LUCKY'S GIFT\nVine a machine to bind it.\nOne spare fuse: it saves Seven once this run."
@@ -541,7 +541,7 @@ extends Resource
 ## Colour of the flare: a soft gold wash that spreads and fades.
 @export var sunburst_flare_color: Color = Color(1.6, 1.3, 0.55)
 ## Sunbursts Seven gets each wave. Shown on the HUD; refilled when a wave starts.
-@export var sunburst_charges_per_wave: int = 2
+@export var sunburst_charges_per_wave: int = 1
 ## While a Sunburst is ready, every great sunroot turns gold: its picture is
 ## multiplied by the sheen colour (values above 1 brighten) and its pool of
 ## light switches to the glow colour. (s18: this was a hard gold ring with rays
@@ -714,8 +714,23 @@ extends Resource
 @export var helios_end_line: String = "Account closed."
 ## CANOPY FM IN THE DARK: with no light the song is this many decibels quieter
 ## and a radio hiss plays at radio_hiss_db; both fade away as the block lights.
-@export var music_dark_drop_db: float = 7.0
-@export var radio_hiss_db: float = -19.0
+@export var music_dark_drop_db: float = 13.0
+@export var radio_hiss_db: float = -11.0
+## While the lot's light is below this (0 to 1), Canopy FM's lines are shown
+## with a "[static]" break in them: the signal is still weak.
+@export var radio_static_clear_light: float = 0.45
+## A RESTARTED WAVE gives Seven the health it began the wave with plus
+## restart_bonus_pips, but never more than restart_hp_cap_share of full health.
+@export var restart_bonus_pips: int = 1
+@export var restart_hp_cap_share: float = 0.8
+## THE HEART TREE UNDER ATTACK: a short, gentle slow-and-zoom on it
+## (heart_clip_seconds at heart_clip_slow_scale speed, zoomed heart_clip_zoom),
+## and then not again for heart_clip_cooldown seconds.
+@export var heart_clip_seconds: float = 0.9
+@export var heart_clip_slow_scale: float = 0.55
+@export var heart_clip_zoom: float = 1.15
+@export var heart_clip_cooldown: float = 3.0
+@export var heart_clip_title: String = "THE HEART TREE IS UNDER ATTACK"
 ## The dark panel behind the end screen's words (the last number is how solid
 ## it is: 0 = invisible, 1 = solid).
 @export var end_panel_color: Color = Color(0.03, 0.04, 0.06, 0.84)
@@ -723,12 +738,12 @@ extends Resource
 @export var dj_music_hint_wave: int = 4
 @export var dj_music_hint: String = "Not your sound? Canopy FM has four stations. Pick another on the title screen."
 ## Seconds each radio line stays on the air once it has finished typing.
-@export var story_line_seconds: float = 4.5
+@export var story_line_seconds: float = 6.0
 
 @export_group("Radio")
 ## THE RADIO PANEL (radio.gd): Helios's broadcasts and Canopy FM's DJ.
 ## How fast words "type" onto the panel, in letters per second.
-@export var radio_chars_per_second: float = 28.0
+@export var radio_chars_per_second: float = 22.0
 ## Chance (0 to 1) that a letter of Helios's broadcast flickers into static.
 @export var radio_helios_static: float = 0.03
 ## Canopy FM's DJ, wave 1 (keyboard and mouse): the tutorial. Feeble signal.

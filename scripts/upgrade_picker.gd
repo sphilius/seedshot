@@ -21,7 +21,7 @@ const CONFIG: GameConfig = preload("res://config/game_config.tres")
 ## Every upgrade: id -> [name, description]. The numbers in the descriptions are
 ## filled in from the config in _describe(), so they always match the game.
 const CATALOG: Dictionary[StringName, Array] = {
-	&"seed_pouch": ["Seed Pouch", "Fire %d%% faster. Stacks."],
+	&"seed_pouch": ["Seed Loader Pouch", "Fire %d%% faster. Stacks."],
 	&"heavy_seeds": ["Heavy Seeds", "Seed pods hit %d harder. Stacks."],
 	# The id is still "thick_plating" (its picture file is named after it), but
 	# since s18 the card is a repair, not extra max health.

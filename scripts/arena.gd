@@ -122,6 +122,15 @@ var _drama_focus: Node2D
 var _restart_pending: bool = false
 ## Seven's health when the current wave first began. 0 = not known yet (full).
 var _hp_at_wave_start: int = 0
+## True only while a restart is starting its wave again (see _restart_current_wave).
+var _is_restarting: bool = false
+## Real seconds until the Heart Tree's "under attack" clip may play again.
+var _heart_clip_wait: float = 0.0
+## How far the camera pushes in during the clip that is playing (1 = not at all).
+var _clip_zoom: float = 1.0
+## Canopy FM's lines get a "[static]" break while the lot is dark. The older
+## tests switch it off: they compare the radio's words letter for letter.
+var radio_static_on: bool = true
 var _drama_seconds: float = 1.0
 ## The service gates in the side walls that ordinary machines roll out of
 ## (see gates.gd). Public so the tests can reach it.
@@ -451,6 +460,8 @@ func _process(delta: float) -> void:
 	# One shared value for every tree's markers (a static var, see forest_tree.gd).
 	ForestTree.light_boost = boost
 	_heart_alarm_left = maxf(_heart_alarm_left - delta, 0.0)
+	# Counted in real seconds (delta is slowed during a clip), like _tick_impact.
+	_heart_clip_wait = maxf(_heart_clip_wait - delta / maxf(Engine.time_scale, 0.01), 0.0)
 	_tick_impact(delta)
 	tick_grove_rest(delta)
 	if _beat_left > 0.0:
@@ -864,8 +875,14 @@ func _restart_current_wave() -> void:
 		start_cell = PLAYER_START_CELL
 	# Seven comes back with the health it had when this wave FIRST began, not at
 	# full health: dying is not a free repair (s18 round 4).
-	player.revive(grid.cell_to_world(start_cell), _hp_at_wave_start)
+	# s18 round 5: plus one pip (restart_bonus_pips), but never above 80% of full
+	# health (restart_hp_cap_share). floori rounds down to a whole number.
+	var cap: int = maxi(floori(float(player.max_hp) * CONFIG.restart_hp_cap_share), 1)
+	var began_with: int = _hp_at_wave_start if _hp_at_wave_start > 0 else player.max_hp
+	player.revive(grid.cell_to_world(start_cell), mini(began_with + CONFIG.restart_bonus_pips, cap))
+	_is_restarting = true  # so the wave start below does not note the new health
 	waves.restart_wave()
+	_is_restarting = false
 
 
 ## How many windows are lit once `cleared` waves have been cleared. It climbs
@@ -921,7 +938,7 @@ func _show_story_lines(lines: Array[Dictionary]) -> void:
 ## True if a line with this text is on the air or waiting, so it is not said twice
 ## (a restarted wave asks for its opening lines again).
 func _is_radio_pending(text: String) -> bool:
-	if radio.is_on() and radio.text == text:
+	if radio.is_on() and _current_line.get("text", "") == text:
 		return true
 	for line: Dictionary in _story_queue:
 		if line.text == text:
@@ -967,6 +984,12 @@ func _radio_urgent(line: Dictionary) -> void:
 ## Signal handler: a grown tree was hurt but still stands. If it is the Heart
 ## Tree, Canopy FM raises the alarm (not more often than heart_alarm_cooldown).
 func _on_tree_hurt(tree: ForestTree) -> void:
+	# A short, gentle slow-and-zoom on the Heart Tree, so the player cannot miss
+	# that it is being cut. Not while another clip plays, and not again until
+	# heart_clip_cooldown seconds after this one (see _process).
+	if tree.is_heart and intro_clips_on and waves.wave > 0 and clip_left <= 0.0 and _heart_clip_wait <= 0.0:
+		_heart_clip_wait = CONFIG.heart_clip_seconds + CONFIG.heart_clip_cooldown
+		start_clip(tree, CONFIG.heart_clip_title, CONFIG.heart_clip_seconds, CONFIG.heart_clip_slow_scale, CONFIG.heart_clip_zoom)
 	if not tree.is_heart or _heart_alarm_left > 0.0:
 		return
 	_heart_alarm_left = CONFIG.heart_alarm_cooldown
@@ -1017,7 +1040,12 @@ func _show_next_story_line() -> void:
 		return
 	var line: Dictionary = _story_queue.pop_front()  # pop_front removes and returns the first entry
 	_current_line = line
-	radio.say(line.speaker, line.text)
+	# While the block is still dark, Canopy FM's signal breaks up: its words are
+	# shown with a "[static]" gap (see with_static). Other speakers are clear.
+	var shown: String = line.text
+	if radio_static_on and line.speaker == Radio.CANOPY:
+		shown = with_static(shown, light_level())
+	radio.say(line.speaker, shown)
 	_story_time_left = CONFIG.story_line_seconds + float(line.text.length()) / CONFIG.radio_chars_per_second
 
 
@@ -1032,6 +1060,24 @@ func skip_radio_line() -> void:
 		_story_time_left = CONFIG.story_line_seconds
 	else:
 		_show_next_story_line()
+
+
+## `text` as a weak signal carries it: with "[static]" put in after the middle
+## word, and after the first quarter too when it is very dark. Whole words are
+## kept, so it stays easy to read. With enough light the text comes back
+## unchanged. `static`: it needs nothing from the arena, so tests can call it.
+static func with_static(text: String, light: float) -> String:
+	var words: PackedStringArray = text.split(" ")
+	if light >= CONFIG.radio_static_clear_light or words.size() < 6:
+		return text
+	var out: Array[String] = []
+	for i: int in words.size():
+		out.append(words[i])
+		var is_middle: bool = i == words.size() / 2 - 1  # whole-number division
+		var is_quarter: bool = light < CONFIG.radio_static_clear_light / 2.0 and words.size() >= 12 and i == words.size() / 4 - 1
+		if is_middle or is_quarter:
+			out.append("[static]")
+	return " ".join(out)
 
 
 ## What Helios says as wave `number` starts, ready to show. Empty if the config
@@ -1080,7 +1126,7 @@ func _on_wave_started(number: int, total: int) -> void:
 			_great_trees_at_wave_start.append(cell)
 	# Remember Seven's health too: a restarted wave gives back exactly this much.
 	# (A restart calls this again, right after the revive, so the number stays.)
-	if not player.is_dead:
+	if not player.is_dead and not _is_restarting:
 		_hp_at_wave_start = player.hp
 	_choose_tap_points(number)
 	_show_banner("Wave %d" % number, 1.5)
@@ -1236,10 +1282,13 @@ func _play_intro_once(kind: StringName, machine: Enemy) -> void:
 		return
 	# The three everyday machines only get a clip in a first (regular) run: a
 	# New Game + player has met them.
-	var is_heavy_kind: bool = kind == WaveDirector.LINEBREAKER or kind == WaveDirector.ARC_SPITTER
-	if ng_plus and not is_heavy_kind:
-		return
+	# (s18 round 5: New Game + shows them all too, the same as a regular game.)
 	if not CONFIG.intro_titles.has(kind):
+		return
+	# Another clip is still playing (two new kinds in one wave, or the Sunburst
+	# clip): this machine's would cut it off, and Sasha saw a Linebreaker arrive
+	# with no introduction. So wait: the NEXT machine of this kind gets the clip.
+	if clip_left > 0.0:
 		return
 	_intro_done[kind] = true
 	start_clip(machine, CONFIG.intro_titles[kind], CONFIG.heavy_intro_seconds)
@@ -1251,12 +1300,14 @@ func _play_intro_once(kind: StringName, machine: Enemy) -> void:
 ## `slow_scale` (optional) is how slow the game runs meanwhile; left out, it is
 ## the config's heavy_intro_slow_scale. Lucky's clip passes a tiny number, which
 ## all but freezes the game while the player reads.
-func start_clip(target: Node2D, title: String, seconds: float, slow_scale: float = -1.0) -> void:
+## `zoom` (optional) is how far the camera pushes in; left out, heavy_intro_zoom.
+func start_clip(target: Node2D, title: String, seconds: float, slow_scale: float = -1.0, zoom: float = -1.0) -> void:
 	if seconds <= 0.0:
 		return
 	_clip_target = target
 	_clip_at = target.global_position
 	_clip_seconds = seconds
+	_clip_zoom = CONFIG.heavy_intro_zoom if zoom <= 0.0 else zoom
 	clip_left = seconds
 	Engine.time_scale = CONFIG.heavy_intro_slow_scale if slow_scale <= 0.0 else slow_scale
 	clip_label.text = title
@@ -1364,7 +1415,7 @@ func _tick_impact(delta: float) -> void:
 		var push: float = smoothstep(0.0, 1.0, clampf(minf(done / 0.18, (1.0 - done) / 0.22), 0.0, 1.0))
 		if is_instance_valid(_clip_target):
 			_clip_at = _clip_target.global_position
-		var zoom: float = lerpf(1.0, CONFIG.heavy_intro_zoom, push)
+		var zoom: float = lerpf(1.0, _clip_zoom, push)
 		# A point on screen is world * zoom + origin. This origin puts the
 		# machine in the middle of the screen when `push` is 1.
 		var centre: Vector2 = get_viewport_rect().size / 2.0

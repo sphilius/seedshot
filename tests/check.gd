@@ -20,6 +20,13 @@ var _arena: Arena
 ## Functions that use `await` pause until something happens (a physics step, a
 ## signal), so the scene tests can let the game run for a moment between checks.
 func _ready() -> void:
+	# The radio's pace is a matter of taste and was slowed twice in s18; the
+	# checks below were timed for the original pace, so they run at that pace.
+	# (CONFIG is one shared object, so this reaches the arena too. Only this
+	# test run is changed: nothing is saved.)
+	# (.set() is used because GDScript will not assign to a field of a constant.)
+	CONFIG.set(&"radio_chars_per_second", 40.0)
+	CONFIG.set(&"story_line_seconds", 3.0)
 	# Layer 1: pure logic, no scene needed.
 	_test_grid_coordinates()
 	_test_grid_walls_and_paths()
@@ -162,6 +169,8 @@ func _fresh_arena(with_heart: bool = false) -> void:
 	# Saplings wait between waves in the real game; the older checks grow trees
 	# in the breaks, so only the test written for the rule switches it on.
 	_arena.pause_growth_between_waves = false
+	# Canopy FM's "[static]" breaks change the words; the checks compare them exactly.
+	_arena.radio_static_on = false
 	add_child(_arena)
 	# Give the physics engine two steps to register the new bodies.
 	await get_tree().physics_frame
@@ -882,7 +891,8 @@ func _test_going_down_restarts_the_wave_with_its_forest() -> void:
 	_check(_arena.player.is_dead, "the player goes down")
 	var back_up: Callable = func() -> bool: return not _arena.player.is_dead
 	_check(await _wait_until(back_up, CONFIG.death_restart_delay + 1.0), "after a moment the player is back up")
-	_check(_arena.player.hp == CONFIG.player_max_hp, "with full health")
+	# s18 round 5: a restart gives at most 80% of full health (restart_hp_cap_share).
+	_check(_arena.player.hp == floori(float(CONFIG.player_max_hp) * CONFIG.restart_hp_cap_share), "with health capped at 80%")
 	var start: Vector2 = _arena.grid.cell_to_world(Arena.PLAYER_START_CELL)
 	_check(_arena.player.global_position.distance_to(start) < 1.0, "back at the starting spot")
 	_check(_arena.waves.wave == 2, "still on wave 2")
@@ -1155,6 +1165,9 @@ func _test_story_words() -> void:
 	_check(_arena.helios_line_for(99) == "", "a wave with no line gets none")
 
 	# Start wave 2 directly. The very first wave start of a run shows the hook.
+	# Seven stands still through this whole test while wave 2 walks in. Make it
+	# unhittable, or a knock-out (and its slow motion) would upset the timing.
+	_arena.player._invulnerable_left = 999.0
 	_arena.waves.time_scale = 20.0
 	_arena.waves.start_wave(2)
 	_check(radio.speaker == Radio.CANOPY and radio.text == CONFIG.story_hook, "the first wave start: Canopy FM says the opening line")
@@ -1641,6 +1654,7 @@ func _test_great_powers() -> void:
 	_check(not is_instance_valid(near) or near.is_dead or near.is_bound, "the machine in range is stunned (or downed)")
 	_check(powers.sunburst(a.global_position) == -1, "a second Sunburst waits for the cooldown")
 	powers.sunburst_cooldown_left = 0.0
+	powers.sunburst_charges = 1  # a fresh charge (a wave now gives one, not two)
 	_arena.player.zip_tree = b
 	_arena._on_player_zip_finished()
 	_check(powers.sunburst_cooldown_left > 0.0, "a zip that ends at a great sunroot sets off its Sunburst")
@@ -2300,7 +2314,7 @@ func _test_pause_menu() -> void:
 	pause.choose(PauseOverlay.Item.RESTART)
 	_check(get_tree().paused and pause.menu_label(PauseOverlay.Item.RESTART).contains("Sure"), "Restart asks 'Sure?' on the first press")
 	pause.choose(PauseOverlay.Item.RESTART)
-	_check(not get_tree().paused and _arena.player.hp == _arena.player.max_hp and _arena.waves.wave == 2, "the second press restarts the wave with Seven at full health")
+	_check(not get_tree().paused and _arena.player.hp == floori(float(_arena.player.max_hp) * CONFIG.restart_hp_cap_share) and _arena.waves.wave == 2, "the second press restarts the wave with Seven at the 80% cap")
 
 	# Quit: asks first; a different button in between disarms it.
 	pause.set_paused(true)
@@ -2820,7 +2834,8 @@ func _test_s18_round_4() -> void:
 	_arena.waves.hold_break = true
 	_arena.upgrade_picker.offer(CONFIG.upgrade_choices)
 	_arena._restart_current_wave()
-	_check(player.hp == 2 and not player.is_dead, "a restarted wave gives Seven the 2 pips it began the wave with, not full health")
+	_check(player.hp == 2 + CONFIG.restart_bonus_pips and not player.is_dead, "a restarted wave gives Seven the 2 pips it began the wave with plus %d, not full health" % CONFIG.restart_bonus_pips)
+	_check(_arena._hp_at_wave_start == 2, "and a second restart would give the same again, not one more each time")
 	_check(not player.has_fuse, "and no new fuse")
 	_check(not _arena.upgrade_picker.is_open() and not _arena.waves.hold_break and not player.locked, "a restart takes the upgrade cards away and frees Seven")
 
@@ -2963,3 +2978,29 @@ func _test_s18_round_4() -> void:
 	_check(_arena.radio.speaker == Radio.HELIOS, "the next tap goes on to the next line")
 	_check(Sfx.stream_for(&"static") != null, "a Helios notice has a burst of static to cut in and out with")
 	_check(CanopyFM.hiss_for(0.0) > CanopyFM.hiss_for(1.0) + 20.0, "Canopy FM hisses in the dark (%.0f dB) and is clear once the block is lit (%.0f dB)" % [CanopyFM.hiss_for(0.0), CanopyFM.hiss_for(1.0)])
+
+	# s18 round 5: weak-signal text, the restart cap, and clips that do not cut each other off.
+	var plain_line: String = "Seven, this is Canopy FM, the only station still on the air tonight."
+	_check(Arena.with_static(plain_line, 0.0).contains("[static]") and Arena.with_static(plain_line, 1.0) == plain_line, "Canopy FM's words break up with [static] in the dark and are whole once the block is lit")
+	_check(Arena.with_static(plain_line, 0.0).replace(" [static]", "") == plain_line, "the [static] is only added between whole words")
+	await _fresh_arena(true)
+	_arena.waves.start_wave(3)
+	_arena._restart_current_wave()
+	var cap: int = floori(float(_arena.player.max_hp) * CONFIG.restart_hp_cap_share)
+	_check(_arena.player.hp == cap and cap < _arena.player.max_hp, "a restart from full health comes back capped at %d of %d pips" % [cap, _arena.player.max_hp])
+	_arena.intro_clips_on = true
+	_arena._on_spawn_requested(WaveDirector.SAWBOT, 4)
+	_arena._on_spawn_requested(WaveDirector.LINEBREAKER, 6)
+	_check(_arena.clip_label.text == CONFIG.intro_titles[WaveDirector.SAWBOT] and not _arena._intro_done.has(WaveDirector.LINEBREAKER), "a Linebreaker landing during another clip keeps its own clip for the next one")
+	_arena.clip_left = 0.0
+	_arena._on_spawn_requested(WaveDirector.LINEBREAKER, 6)
+	_check(_arena.clip_left > 0.0 and _arena.clip_label.text == CONFIG.intro_titles[WaveDirector.LINEBREAKER], "which then gets it")
+	_arena.clip_left = 0.0
+	_arena._heart_clip_wait = 0.0
+	_arena.heart_tree.take_damage(1)
+	_check(_arena.clip_left > 0.0 and _arena.clip_label.text == CONFIG.heart_clip_title and is_equal_approx(_arena._clip_zoom, CONFIG.heart_clip_zoom), "a cut into the Heart Tree plays a short, gentler clip on it")
+	_arena.clip_left = 0.0
+	_arena.heart_tree.take_damage(1)
+	_check(_arena.clip_left <= 0.0, "and not again straight away")
+	_arena.intro_clips_on = false
+	Engine.time_scale = 1.0
