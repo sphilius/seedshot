@@ -123,6 +123,7 @@ func _ready() -> void:
 	await _test_s18_machine_roles()
 	await _test_s18_sunburst_chain()
 	await _test_s18_wear_and_big_moments()
+	await _test_s18_entrances()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -151,6 +152,9 @@ func _fresh_arena(with_heart: bool = false) -> void:
 	_arena.plant_heart_tree = with_heart
 	# No slow-motion beat at the end of a wave: the checks deal the cards at once.
 	_arena.wave_end_beat_seconds = 0.0
+	# The heavy machines' intro clips slow the whole game down; only the test
+	# written for them switches them back on.
+	_arena.intro_clips_on = false
 	add_child(_arena)
 	# Give the physics engine two steps to register the new bodies.
 	await get_tree().physics_frame
@@ -2511,7 +2515,9 @@ func _test_s18_machine_roles() -> void:
 			heavy = node as Scrapper
 		elif node is Spitter:
 			escorts.append(node as Spitter)
-	_check(heavy != null and heavy.heavy and escorts.size() == CONFIG.linebreaker_escorts, "a Linebreaker walks in with %d Spitters" % CONFIG.linebreaker_escorts)
+	_check(heavy != null and heavy.heavy and escorts.size() == CONFIG.linebreaker_escorts, "a Linebreaker arrives with %d Spitters" % CONFIG.linebreaker_escorts)
+	# Let the escorts finish rolling out of their gates before moving them by hand.
+	await _wait_frames(int(CONFIG.gate_walk_in_seconds * 60.0) + 10)
 	var all_guard: bool = true
 	for escort: Spitter in escorts:
 		all_guard = all_guard and escort.ward == heavy
@@ -2656,3 +2662,67 @@ func _test_s18_wear_and_big_moments() -> void:
 	player.take_damage(1)
 	_check(player.is_dead and _arena.drama_left > 0.0, "a knock-out also slows and darkens the game")
 	_check(await _wait_until(normal_again, CONFIG.knockout_drama_seconds + 1.0) and is_equal_approx(Engine.time_scale, 1.0), "and then lets go of it")
+
+
+## s18 round 3: ordinary machines roll out of gates in the side walls, the two
+## heavy kinds drop in from above, and the first of each heavy kind gets a clip.
+func _test_s18_entrances() -> void:
+	await _fresh_arena()
+	var gates: Gates = _arena.gates
+	_check(gates.gate_cells().size() == CONFIG.gate_rows.size() * 2, "each side wall has a gate on every gate row (%d gates)" % gates.gate_cells().size())
+	var all_in_walls: bool = true
+	for gate: Vector2i in gates.gate_cells():
+		# A gate is a wall cell (solid); the cell in front of it is open floor.
+		all_in_walls = all_in_walls and _arena.grid.is_solid(gate) and not _arena.grid.is_solid(gates.floor_cell_of(gate))
+	_check(all_in_walls, "every gate is in a wall with open floor in front of it")
+
+	# A Scrapper sent in by the wave director starts inside a gate and rolls out.
+	_arena.waves.wave = 2
+	_arena.waves.state = WaveDirector.State.FIGHTING
+	_arena._on_spawn_requested(WaveDirector.SCRAPPER, 2)
+	var scrapper := get_tree().get_first_node_in_group(Enemy.GROUP) as Scrapper
+	var start_cell: Vector2i = _arena.grid.world_to_cell(scrapper.global_position)
+	_check(gates.gate_cells().has(start_cell) and scrapper.is_entering, "a Scrapper starts inside a gate, still arriving")
+	_check(gates.is_lit(start_cell), "and that gate's warning lamp lights")
+	var is_out: Callable = func() -> bool: return not scrapper.is_entering
+	_check(await _wait_until(is_out, CONFIG.gate_walk_in_seconds + 1.0), "it rolls out onto the floor")
+	_check(_arena.grid.world_to_cell(scrapper.global_position) == gates.floor_cell_of(start_cell), "and ends on the cell in front of that gate")
+
+	# A tree never grows in a gateway: a machine downed there roots one cell over.
+	scrapper.take_damage(999)
+	await _wait_frames(3)
+	_check(_arena.tree_at(gates.floor_cell_of(start_cell)) == null, "a machine downed in a gateway does not plant its tree there")
+	_check(_arena.trees_planted == 1, "its tree is planted beside the gateway instead")
+
+	# A Linebreaker drops in: no gate, a fall, then a landing with a hard shake.
+	await _fresh_arena()
+	gates = _arena.gates
+	_arena.intro_clips_on = true
+	_arena.waves.wave = 6
+	_arena.waves.state = WaveDirector.State.FIGHTING
+	# A one-item box the lambda can write into: how many landings were announced.
+	var landings: Array[int] = [0]
+	_arena._on_spawn_requested(WaveDirector.LINEBREAKER, 6)
+	var heavy: Scrapper = null
+	for node: Node in get_tree().get_nodes_in_group(Enemy.GROUP):
+		if node is Scrapper:
+			heavy = node as Scrapper
+	heavy.landed.connect(func(_machine: Enemy) -> void: landings[0] += 1)
+	var heavy_cell: Vector2i = _arena.grid.world_to_cell(heavy.global_position)
+	_check(heavy.is_entering and gates.gate_for(heavy_cell) == ArenaGrid.NO_CELL, "a Linebreaker does not use a gate: it is falling")
+	_check(heavy._sprite.position.y < -100.0, "its picture starts high above its landing spot")
+	_check(_arena.clip_left > 0.0 and is_equal_approx(Engine.time_scale, CONFIG.heavy_intro_slow_scale), "the first Linebreaker gets an intro clip in slow motion")
+	_check(_arena.clip_label.visible and _arena.clip_label.text == CONFIG.linebreaker_intro_title, "with its name on screen")
+	var has_landed: Callable = func() -> bool: return landings[0] == 1
+	_check(await _wait_until(has_landed, CONFIG.drop_seconds + 2.0), "it lands")
+	_check(not heavy.is_entering and heavy._sprite.position.is_zero_approx() and heavy.land_fx_left > 0.0, "on its landing spot, awake, in a ring of dust")
+	_check(_arena._shake_px >= CONFIG.shake_land_px * CONFIG.shake_scale, "and the landing shakes the screen hard")
+	# The clip ends by itself and gives the game its speed back.
+	var clip_over: Callable = func() -> bool: return _arena.clip_left <= 0.0
+	_check(await _wait_until(clip_over, CONFIG.heavy_intro_seconds + 2.0), "the clip ends")
+	await _wait_drawn_frames(3)
+	_check(is_equal_approx(Engine.time_scale, 1.0) and is_zero_approx(_arena._bar_top.size.y) and not _arena.clip_label.visible, "at normal speed, with the black bars and the name gone")
+	# The second Linebreaker of the run still drops, but gets no clip.
+	_arena._on_spawn_requested(WaveDirector.LINEBREAKER, 6)
+	_check(_arena.clip_left <= 0.0, "a second Linebreaker drops in without a clip")
+	_check(Sfx.stream_for(&"crash") != null and Sfx.stream_for(&"drop") != null and Sfx.stream_for(&"gate") != null, "the crash, the falling whistle and the gate each have a sound")

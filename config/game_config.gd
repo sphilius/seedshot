@@ -85,8 +85,9 @@ extends Resource
 ## Hit points of a grown tree. Nothing damages trees yet; Sawbots will (waves 5+).
 @export var tree_hp: int = 6
 ## A downed enemy is a walk-through sapling for this long, then a solid tree.
-## s18 (Sasha): doubled from 1.0, so the Quick Roots upgrade has something to speed up.
-@export var sapling_time: float = 2.0
+## s18 (Sasha): doubled from 1.0 so the Quick Roots upgrade has something to
+## speed up, then doubled again to 4.0 (half the growth rate once more).
+@export var sapling_time: float = 4.0
 ## If someone is standing on a sapling when it should turn solid, it waits this
 ## long and tries again (so nobody gets trapped inside a tree).
 @export var sapling_retry_time: float = 0.25
@@ -196,6 +197,40 @@ extends Resource
 @export var spit_radius: float = 7.0
 ## A shot that hits nothing deletes itself after this long.
 @export var spit_lifetime: float = 3.0
+
+@export_group("Entrances")
+## HOW MACHINES ARRIVE (s18 round 3, gates.gd and Enemy.drop_in).
+## GATES: each side wall has a gateway on these grid rows. Ordinary machines
+## (Scrappers, Spitters, Sawbots) roll out of one.
+@export var gate_rows: Array[int] = [3, 7, 11]
+## Seconds a machine takes to roll from inside the gate onto the floor.
+@export var gate_walk_in_seconds: float = 0.45
+## Seconds a gate's red lamp stays lit when a machine comes through.
+@export var gate_lamp_seconds: float = 1.2
+## A machine uses a gate at least this many cells from Seven, if there is one.
+@export var gate_min_player_cells: float = 6.0
+## THE DROP: the two heavy machines (Linebreaker, Arc Spitter) fall in from
+## above. Seconds the fall takes, how far above its landing spot the picture
+## starts (pixels), and how far from Seven it must land (cells).
+@export var drop_seconds: float = 0.7
+@export var drop_height_px: float = 460.0
+@export var drop_min_player_cells: float = 5.0
+## The landing: how hard the screen shakes (pixels; a kill is 3, a hit on Seven
+## 7), and how long the dust ring and the cracks in the concrete show.
+@export var shake_land_px: float = 12.0
+@export var land_fx_seconds: float = 0.6
+## THE INTRO CLIP: the FIRST Linebreaker and the FIRST Arc Spitter of a run get
+## a short clip as they drop in. The game runs at heavy_intro_slow_scale speed,
+## the camera pushes in on the landing spot by heavy_intro_zoom (1.35 = 35%
+## closer), black bars of heavy_intro_bar_px slide in at the top and bottom,
+## and the machine's name is shown. All of it lasts heavy_intro_seconds of real
+## time, then everything eases back.
+@export var heavy_intro_seconds: float = 2.6
+@export var heavy_intro_slow_scale: float = 0.4
+@export var heavy_intro_zoom: float = 1.35
+@export var heavy_intro_bar_px: float = 64.0
+@export var linebreaker_intro_title: String = "LINEBREAKER\nHelios heavy recovery unit"
+@export var arc_spitter_intro_title: String = "ARC SPITTER\nHelios escort unit"
 
 @export_group("Lucky cat")
 ## Seed pods that must land on the shuttered shop before it opens.
@@ -556,8 +591,9 @@ extends Resource
 ## Quick Roots: each pick makes saplings root this much faster (0.15 = 15%), and
 ## the picks add up: two picks is 30% faster, so the time is divided by 1.30.
 @export var upgrade_sapling_rate_gain: float = 0.15
-## Long Trellis: extra seconds for every trellis vine.
-@export var upgrade_trellis_seconds: float = 4.0
+## Vine Trip Line (the card that was called Long Trellis): extra seconds for
+## every trellis vine, per pick; the picks add up. (s18 round 3: 1.5, was 4.)
+@export var upgrade_trellis_seconds: float = 1.5
 ## Linebreakers (heavy Scrappers) per wave. They arrive once the player has had
 ## a few upgrade picks to answer them with.
 @export var wave_linebreakers: Array[int] = [0, 0, 0, 0, 0, 1, 1, 2, 2, 3]

@@ -384,6 +384,16 @@ From the kickoff. `config/game_config.tres` holds every speed, cooldown and size
 - The thunk and spit candidates came back very quiet (mean below -36 dB) and need a lot of gain; listen for hiss.
 - The listening page now plays every take evened out to its in-game loudness.
 
+## D-053: Entrances: gates, drops and an intro clip; title screen; two more numbers (Made, 2026-11-19)
+
+Sasha, after round 2. Not played by a person yet.
+
+- **Gates.** Machines used to appear on a random edge cell. Each side wall now has a gateway on rows 3, 7 and 11 (`gate_rows`, `scripts/gates.gd`). Scrappers, Spitters, Sawbots and a Linebreaker's escorts start inside a gate and slide out onto the cell in front of it (`Enemy.walk_in_from`); the gate's red lamp lights as they come. A gate at least 6 cells from Seven is used if there is one. A tree never grows in a gateway (`_nearest_free_cell(cell, true)`), so the gates cannot be planted shut; if every gateway is somehow blocked, the old edge rule is the fallback. Top and bottom walls have no gates: they are the shop fronts and the homes.
+- **Drops.** Linebreakers and Arc Spitters fall in from above onto an open cell at least 5 cells from Seven (`Enemy.drop_in`): the picture falls 460 px over 0.7 s, a shadow grows under it, and on landing there is a dust ring, cracks, a 12 px shake and a crash. The machine does nothing until it has landed.
+- **Intro clip.** The first Linebreaker and the first Arc Spitter of a run get a clip (`Arena.start_clip`): 40% speed, the camera pushed in 35% on the landing spot (clamped so it never shows past the picture), black bars, and the machine's name low on the screen, for 2.6 real seconds. Seven can still move and shoot during it. The tests switch clips off (`intro_clips_on`), except the one written for them.
+- **Sounds.** `crash`, `drop` and `gate` are generated in code (`Sfx._make_crash`: a low thud, a burst of noise and a few inharmonic ringing tones). A real recording saved as `audio/sfx/crash.mp3` replaces it with no code change. Generating one with ElevenLabs spends credits, so it waits for Sasha's yes.
+- **Title screen.** Text on a dark rounded panel with a heavier outline; buttons are 280 x 42 pills in the interface's night, teal and amber palette; the New Game + note moved under its button.
+- **Numbers.** Saplings take 4 s (2 in round 2, 1 before). Long Trellis is renamed **Vine Trip Line** and adds 1.5 s per pick (was 4), still stacking.
 ## D-052: Playtest round 2: roles, shields, stacking upgrades, Sunburst chain (Made, 2026-11-19)
 
 From Sasha's playtest of build 9daf41a (ten chat notes and the S18 guidebook sheet: too easy, waves too short, hit flash too faint, could not tell what hurt Seven, wave end slow-down too short, Sunburst rings ugly, fuse revive too slight, lights 20% too bright). Built in six commits on `s18-playtest-fixes`; nothing below has been played by a person yet.

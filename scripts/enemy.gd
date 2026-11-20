@@ -16,6 +16,9 @@ extends CharacterBody2D
 
 ## Emitted once, when HP reaches zero. The arena plants a sapling where it fell.
 signal died(enemy: Enemy)
+## Emitted the moment a machine that dropped in hits the floor (see drop_in).
+## The arena answers with a screen shake and the crash sound.
+signal landed(enemy: Enemy)
 
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
 ## Group that every machine joins, so code can ask the scene tree for "all enemies".
@@ -42,6 +45,14 @@ var hp: int = 0
 ## The hit points it started with (for the Linebreaker's armour ring).
 var max_hp: int = 0
 var is_dead: bool = false
+## True while the machine is still arriving (rolling out of a gate, or falling):
+## it does nothing until it is in. Public so the tests can read it.
+var is_entering: bool = false
+## Seconds of the fall left, and how long the whole fall takes (see drop_in).
+var _drop_left: float = 0.0
+var _drop_total: float = 1.0
+## Seconds left of the dust ring and cracks after a landing. Public for the tests.
+var land_fx_left: float = 0.0
 ## Seconds left of the "I was hit" flash. Public so the tests can read it.
 var hit_flash_left: float = 0.0
 ## A small node drawn ABOVE the sprite, for the hit flash. (A node's own _draw
@@ -160,6 +171,71 @@ func _draw_hit_flash() -> void:
 	_hit_overlay.draw_arc(Vector2.ZERO, radius * lerpf(1.2, 2.0, left), 0.0, TAU, 24, color, 3.0)
 
 
+## ARRIVING BY GATE: the machine was created on its floor cell; this puts it
+## back inside the gate at `from` and slides it out to that cell over `seconds`.
+## Until it is out it does nothing (is_entering). Called by the arena.
+func walk_in_from(from: Vector2, seconds: float) -> void:
+	var target: Vector2 = global_position
+	global_position = from
+	is_entering = true
+	# A Tween changes a property smoothly over time. PHYSICS mode steps it in
+	# time with the physics engine, since it is moving a physics body.
+	var tween: Tween = create_tween()
+	tween.set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)
+	tween.tween_property(self, "global_position", target, seconds)
+	# tween_callback runs a function when the steps before it are done. The small
+	# function in brackets is a "lambda": it just switches the flag back off.
+	tween.tween_callback(func() -> void: is_entering = false)
+
+
+## ARRIVING BY AIR (the heavy machines): the machine is already standing on its
+## landing cell, but its PICTURE starts `height` pixels above and falls for
+## `seconds`, getting faster (EASE_IN), while a shadow grows on the floor under
+## it (see _draw_entrance). When it lands it emits `landed`. Called by the arena.
+func drop_in(seconds: float, height: float) -> void:
+	is_entering = true
+	_drop_total = maxf(seconds, 0.01)
+	_drop_left = _drop_total
+	_sprite.position = Vector2(0.0, -height)
+	_hit_overlay.visible = false  # no shield or flash drawn on the ground while it is in the air
+	var tween: Tween = create_tween()
+	tween.set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)
+	tween.tween_property(_sprite, "position", Vector2.ZERO, _drop_total).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.tween_callback(_land)
+
+
+## The fall is over: the machine wakes up, the dust flies, the arena is told.
+func _land() -> void:
+	is_entering = false
+	_drop_left = 0.0
+	_hit_overlay.visible = true
+	land_fx_left = CONFIG.land_fx_seconds
+	queue_redraw()
+	landed.emit(self)
+
+
+## Paints what belongs to an arrival, behind the machine:
+##   while falling  a round shadow that grows and darkens as the machine nears;
+##   after landing  a ring of dust spreading out, and cracks in the concrete.
+func _draw_entrance() -> void:
+	var radius: float = (_collision.shape as CircleShape2D).radius
+	if _drop_left > 0.0:
+		var near: float = 1.0 - _drop_left / _drop_total  # 0 high up, 1 about to land
+		draw_circle(Vector2.ZERO, radius * (0.5 + 0.8 * near), Color(0.0, 0.0, 0.0, 0.15 + 0.4 * near))
+	if land_fx_left > 0.0:
+		var done: float = 1.0 - land_fx_left / CONFIG.land_fx_seconds  # 0 at the landing, 1 when gone
+		var fade: float = 1.0 - done
+		# The cracks shoot out fast (done in the first third), then just fade.
+		var shoot: float = minf(done * 3.0, 1.0)
+		for i: int in 7:
+			# Seven directions round the circle, each a slightly different length.
+			var direction: Vector2 = Vector2.from_angle(TAU * float(i) / 7.0 + 0.4)
+			var reach: float = radius * (1.3 + (1.2 + 0.25 * float(i % 3)) * shoot)
+			draw_line(direction * radius * 0.7, direction * reach, Color(0.02, 0.02, 0.03, 0.85 * fade), 3.0)
+		draw_arc(Vector2.ZERO, radius * (1.0 + 2.4 * done), 0.0, TAU, 40, Color(0.80, 0.78, 0.70, 0.7 * fade), 5.0)
+		draw_arc(Vector2.ZERO, radius * (0.8 + 1.5 * done), 0.0, TAU, 40, Color(0.80, 0.78, 0.70, 0.35 * fade), 9.0)
+
+
 ## The vine's second use: drags this machine towards `puller` in a straight line,
 ## stopping `stop_distance` pixels short, and ties it up for `seconds`.
 ## Called by the player when the vine lands on a machine instead of a tree.
@@ -222,6 +298,14 @@ func _tick_bound(delta: float) -> bool:
 		_hit_overlay.queue_redraw()
 	elif _shield_color().a > 0.0:
 		_hit_overlay.queue_redraw()  # a force field is always moving
+	# The arrival: count the fall and the landing dust down, redrawing meanwhile.
+	if _drop_left > 0.0 or land_fx_left > 0.0:
+		_drop_left = maxf(_drop_left - delta, 0.0)
+		land_fx_left = maxf(land_fx_left - delta, 0.0)
+		queue_redraw()
+	if is_entering:
+		velocity = Vector2.ZERO
+		return true  # still rolling out of a gate or falling: do nothing yet
 	if not is_bound:
 		return false
 	_bound_time_left -= delta
@@ -238,6 +322,7 @@ func _draw() -> void:
 	if _sprite.texture == null:
 		var size: float = (_collision.shape as CircleShape2D).radius * 2.0
 		draw_rect(Rect2(-size / 2.0, -size / 2.0, size, size), _fallback_color)
+	_draw_entrance()
 	_draw_marks()
 
 

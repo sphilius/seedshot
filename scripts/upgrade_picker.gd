@@ -28,7 +28,8 @@ const CATALOG: Dictionary[StringName, Array] = {
 	&"thick_plating": ["Patch Kit", "Repairs %d to %d pips, by luck. Does not stack."],
 	&"hardwood": ["Hardwood", "Every tree gets +%d hit points. Stacks."],
 	&"quick_roots": ["Quick Roots", "Saplings root %d%% faster. Stacks."],
-	&"long_trellis": ["Long Trellis", "Trellis vines last %d s longer. Stacks."],
+	# The id is still "long_trellis" (its picture file is named after it).
+	&"long_trellis": ["Vine Trip Line", "Zip tree to tree: the vine left behind lasts %s s longer. Stacks."],
 }
 
 ## (Wider and taller since s18, to make room for the picture on the left.)
@@ -172,7 +173,8 @@ static func _describe(id: StringName) -> String:
 		&"quick_roots":
 			return template % roundi(CONFIG.upgrade_sapling_rate_gain * 100.0)
 		&"long_trellis":
-			return template % roundi(CONFIG.upgrade_trellis_seconds)
+			# "%.1f" writes the number with one digit after the point: 1.5.
+			return template % ("%.1f" % CONFIG.upgrade_trellis_seconds)
 	return template
 
 

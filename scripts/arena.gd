@@ -115,6 +115,26 @@ var hurt_flash_left: float = 0.0
 var dim_sheet: ColorRect
 var drama_left: float = 0.0
 var _drama_seconds: float = 1.0
+## The service gates in the side walls that ordinary machines roll out of
+## (see gates.gd). Public so the tests can reach it.
+var gates: Gates
+## THE INTRO CLIP for the first Linebreaker and the first Arc Spitter of a run.
+## intro_clips_on: the tests switch the clips off (they slow the whole game).
+## clip_left: real seconds of the clip left. Public for the tests.
+var intro_clips_on: bool = true
+var clip_left: float = 0.0
+var _clip_seconds: float = 1.0
+## The machine the camera pushes in on, and the last place it was seen.
+var _clip_target: Node2D
+var _clip_at: Vector2 = Vector2.ZERO
+## Which heavy kinds have had their clip this run (kind -> true).
+var _intro_done: Dictionary[StringName, bool] = {}
+## The two black bars that slide in at the top and bottom during a clip.
+var _bar_top: ColorRect
+var _bar_bottom: ColorRect
+## The machine's name, shown low on the screen during a clip (so it does not
+## cover the machine, which the camera holds in the middle). Public for the tests.
+var clip_label: Label
 ## True once the opening line has been shown, so a restarted wave 1 skips it.
 var _hook_shown: bool = false
 ## The cell of the most recent sapling planted by a downed machine.
@@ -240,10 +260,15 @@ func _ready() -> void:
 	add_child(props)
 	move_child(props, 0)  # draw right after the floor
 	props.setup(grid, Rect2(grid.origin, Vector2(grid.cols, grid.rows) * float(CONFIG.cell_size)))
+	# The gates in the side walls, drawn over the wall bricks (so after the props).
+	gates = Gates.new()
+	gates.setup(grid)
+	add_child(gates)
+	move_child(gates, 1)
 	_brambles = Node2D.new()
 	_brambles.name = "Brambles"
 	add_child(_brambles)
-	move_child(_brambles, 1)  # on the floor, just above the props, under everything else
+	move_child(_brambles, 2)  # on the floor, just above the props and gates, under everything else
 	lanterns = Lanterns.new()
 	lanterns.setup(Rect2(origin, arena_px).grow(-float(CONFIG.cell_size)))
 	add_child(lanterns)
@@ -325,6 +350,28 @@ func _ready() -> void:
 	dim_sheet.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	$Hud.add_child(dim_sheet)
 	$Hud.move_child(dim_sheet, 1)  # just above the red sheet, under everything else
+	# The intro clip's two black bars: full width, no height until a clip plays.
+	_bar_top = ColorRect.new()
+	_bar_bottom = ColorRect.new()
+	for bar: ColorRect in [_bar_top, _bar_bottom]:
+		bar.color = Color.BLACK
+		bar.size = Vector2(get_viewport_rect().size.x, 0.0)
+		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		$Hud.add_child(bar)
+		$Hud.move_child(bar, 2)  # over the two sheets, under the labels
+	# The clip's title: big pale letters with a black outline, centred, sitting
+	# just above the bottom bar. Hidden until a clip plays.
+	clip_label = Label.new()
+	clip_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	clip_label.add_theme_font_size_override(&"font_size", 34)
+	clip_label.add_theme_color_override(&"font_color", Color(1.0, 0.82, 0.50))
+	clip_label.add_theme_color_override(&"font_outline_color", Color.BLACK)
+	clip_label.add_theme_constant_override(&"outline_size", 10)
+	clip_label.size = Vector2(get_viewport_rect().size.x, 100.0)
+	clip_label.position = Vector2(0.0, get_viewport_rect().size.y - CONFIG.heavy_intro_bar_px - 120.0)
+	clip_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	clip_label.visible = false
+	$Hud.add_child(clip_label)
 	radio = Radio.new()
 	$Hud.add_child(radio)
 	upgrade_picker = UpgradePicker.new()
@@ -638,7 +685,9 @@ func _is_cell_occupied(cell: Vector2i) -> bool:
 
 ## The cell itself if it is free; otherwise the nearest free neighbour; otherwise
 ## ArenaGrid.NO_CELL. Used so two machines falling on one spot still give two trees.
-func _nearest_free_cell(cell: Vector2i) -> Vector2i:
+## With `for_tree` true, the cells in front of the gates are passed over too, so
+## a tree never grows in a gateway and blocks it.
+func _nearest_free_cell(cell: Vector2i, for_tree: bool = false) -> Vector2i:
 	var offsets: Array[Vector2i] = [
 		Vector2i(0, 0),
 		Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
@@ -646,6 +695,8 @@ func _nearest_free_cell(cell: Vector2i) -> Vector2i:
 	]
 	for offset: Vector2i in offsets:
 		var candidate: Vector2i = cell + offset
+		if for_tree and gates.gate_for(candidate) != ArenaGrid.NO_CELL:
+			continue  # a gateway: keep it clear
 		if not grid.is_solid(candidate) and not _trees_by_cell.has(candidate):
 			return candidate
 	return ArenaGrid.NO_CELL
@@ -677,8 +728,48 @@ func _pick_spawn_cell_behind(cover: Vector2) -> Vector2i:
 	return best
 
 
-## Every open cell on the edge of the floor that is far from the player.
+## Where an ordinary machine may walk in: the floor cell in front of each gate
+## (see gates.gd) that is open. Gates far enough from Seven come first; if every
+## gate is close, any open one will do; and if every gateway is blocked, the old
+## rule is the fallback (any open cell on the edge of the floor).
 func _spawn_candidates() -> Array[Vector2i]:
+	var player_cell: Vector2i = grid.world_to_cell(player.global_position)
+	var open: Array[Vector2i] = []
+	var far: Array[Vector2i] = []
+	for cell: Vector2i in gates.floor_cells():
+		if grid.is_solid(cell) or _trees_by_cell.has(cell):
+			continue
+		open.append(cell)
+		if (cell - player_cell).length() >= CONFIG.gate_min_player_cells:
+			far.append(cell)
+	if not far.is_empty():
+		return far
+	if not open.is_empty():
+		return open
+	return _edge_candidates()
+
+
+## Where a heavy machine drops in: a random open floor cell at least two cells
+## in from every wall and drop_min_player_cells from Seven. If there is none, it
+## falls back to a gate cell. NO_CELL if there is nowhere at all.
+func _pick_drop_cell() -> Vector2i:
+	var player_cell: Vector2i = grid.world_to_cell(player.global_position)
+	var candidates: Array[Vector2i] = []
+	for y: int in range(3, grid.rows - 3):
+		for x: int in range(3, grid.cols - 3):
+			var cell := Vector2i(x, y)
+			if grid.is_solid(cell) or _trees_by_cell.has(cell):
+				continue
+			if (cell - player_cell).length() >= CONFIG.drop_min_player_cells:
+				candidates.append(cell)
+	if candidates.is_empty():
+		return _pick_spawn_cell()
+	return candidates[_rng.randi_range(0, candidates.size() - 1)]
+
+
+## Every open cell on the edge of the floor that is far from the player. (How
+## machines arrived before the gates; kept as the fallback.)
+func _edge_candidates() -> Array[Vector2i]:
 	var player_cell: Vector2i = grid.world_to_cell(player.global_position)
 	var candidates: Array[Vector2i] = []
 	for x: int in range(1, grid.cols - 1):
@@ -952,7 +1043,9 @@ func _on_wave_started(number: int, total: int) -> void:
 
 ## Signal handler: the director wants one machine sent in.
 func _on_spawn_requested(kind: StringName, wave_number: int) -> void:
-	var cell: Vector2i = _pick_spawn_cell()
+	# The two heavy kinds drop in from above; everything else rolls out of a gate.
+	var drops_in: bool = kind == WaveDirector.LINEBREAKER or kind == WaveDirector.ARC_SPITTER
+	var cell: Vector2i = _pick_drop_cell() if drops_in else _pick_spawn_cell()
 	# STAGED WAVE 1: the Spitter arrives after the Scrapper has become a tree, and
 	# walks in from behind that tree, so its first shot visibly stops on it.
 	var is_staged: bool = wave_number <= waves.staged_wave_count()
@@ -978,6 +1071,14 @@ func _on_spawn_requested(kind: StringName, wave_number: int) -> void:
 		# Faster every wave: wave 1 is 1.0, wave 2 is 1.12, wave 3 is 1.24, ...
 		scrapper.speed_scale = 1.0 + CONFIG.scrapper_speed_gain_per_wave * (wave_number - 1)
 		machine = scrapper
+	# THE ENTRANCE (the machine exists and is in the scene by now).
+	if drops_in:
+		machine.landed.connect(_on_heavy_landed)
+		machine.drop_in(CONFIG.drop_seconds, CONFIG.drop_height_px)
+		Sfx.play(&"drop")  # the whistle of it falling
+		_play_intro_once(kind, machine)
+	else:
+		_walk_in(machine, cell)
 	# New Game +: everything walks faster, and the two heavy kinds are tougher.
 	if ng_plus and machine != null:
 		var is_heavy_kind: bool = kind == WaveDirector.LINEBREAKER or kind == WaveDirector.ARC_SPITTER
@@ -988,13 +1089,63 @@ func _on_spawn_requested(kind: StringName, wave_number: int) -> void:
 ## it and are told to guard it (see spitter.gd `ward`). The wave director did
 ## not ask for them, so it is told about each one (enemy_added), and they get
 ## the same New Game + toughening as every other machine.
+## The Linebreaker itself drops in at `cell`; its escorts roll out of a gate and
+## walk to it (a guard always heads for its ward).
 func _send_escorts(linebreaker: Scrapper, cell: Vector2i) -> void:
 	for i: int in CONFIG.linebreaker_escorts:
-		var escort: Spitter = spawn_spitter_at(cell)
+		var gate_cell: Vector2i = _pick_spawn_cell()
+		if gate_cell == ArenaGrid.NO_CELL:
+			gate_cell = cell  # nowhere else: appear beside the Linebreaker
+		var escort: Spitter = spawn_spitter_at(gate_cell)
 		escort.ward = linebreaker
+		_walk_in(escort, gate_cell)
 		waves.enemy_added()
 		if ng_plus:
 			escort.toughen(1.0, CONFIG.ng_plus_speed_multiplier)
+
+
+## Sends `machine` in through the gate beside floor cell `cell`: the gate's lamp
+## lights and the machine slides out of the tunnel. If `cell` is not in front
+## of a gate (the fallback spawn rule was used), the machine simply appears.
+func _walk_in(machine: Enemy, cell: Vector2i) -> void:
+	var gate: Vector2i = gates.gate_for(cell)
+	if gate == ArenaGrid.NO_CELL:
+		return
+	gates.open(gate)
+	machine.walk_in_from(grid.cell_to_world(gate), CONFIG.gate_walk_in_seconds)
+	Sfx.play(&"gate")
+
+
+## Signal handler: a heavy machine that dropped in has hit the floor. A hard
+## shake and the crash of metal on concrete.
+func _on_heavy_landed(_machine: Enemy) -> void:
+	shake(CONFIG.shake_land_px)
+	Sfx.play(&"crash")
+
+
+## Plays the intro clip for the first machine of heavy kind `kind` this run (and
+## never again for that kind, even after a restarted wave).
+func _play_intro_once(kind: StringName, machine: Enemy) -> void:
+	if not intro_clips_on or _intro_done.has(kind):
+		return
+	_intro_done[kind] = true
+	var title: String = CONFIG.linebreaker_intro_title if kind == WaveDirector.LINEBREAKER else CONFIG.arc_spitter_intro_title
+	start_clip(machine, title, CONFIG.heavy_intro_seconds)
+
+
+## Starts an INTRO CLIP on `target`: slow motion, the camera pushing in on it,
+## black bars top and bottom, and `title` on the banner, for `seconds` of real
+## time. _tick_impact moves it along every frame. Public for the tests.
+func start_clip(target: Node2D, title: String, seconds: float) -> void:
+	if seconds <= 0.0:
+		return
+	_clip_target = target
+	_clip_at = target.global_position
+	_clip_seconds = seconds
+	clip_left = seconds
+	Engine.time_scale = CONFIG.heavy_intro_slow_scale
+	clip_label.text = title
+	clip_label.visible = true
 
 
 ## Signal handler: every machine of a wave is down.
@@ -1074,15 +1225,54 @@ func shake(pixels: float) -> void:
 func _tick_impact(delta: float) -> void:
 	# `delta` is slowed by Engine.time_scale; dividing gives real seconds.
 	var real_delta: float = delta / maxf(Engine.time_scale, 0.01)
+	# THE CAMERA this frame: normally untouched (IDENTITY), pushed in during an
+	# intro clip, and then nudged aside by any shake.
+	var camera := Transform2D.IDENTITY
+	var camera_was_moved: bool = shake_offset != Vector2.ZERO or clip_left > 0.0
+	if clip_left > 0.0:
+		clip_left = maxf(clip_left - real_delta, 0.0)
+		var done: float = 1.0 - clip_left / _clip_seconds  # 0 at the start, 1 at the end
+		# `push` is how far into the clip's look we are: it rises 0 to 1 over the
+		# first 18% of the clip, holds, and falls back over the last 22%.
+		# smoothstep rounds off both ends so the camera eases instead of jerking.
+		var push: float = smoothstep(0.0, 1.0, clampf(minf(done / 0.18, (1.0 - done) / 0.22), 0.0, 1.0))
+		if is_instance_valid(_clip_target):
+			_clip_at = _clip_target.global_position
+		var zoom: float = lerpf(1.0, CONFIG.heavy_intro_zoom, push)
+		# A point on screen is world * zoom + origin. This origin puts the
+		# machine in the middle of the screen when `push` is 1.
+		var centre: Vector2 = get_viewport_rect().size / 2.0
+		var origin: Vector2 = centre - _clip_at * zoom
+		# Never show past the edge of the picture: with the view `zoom` times
+		# bigger, the origin may only lie between these two corners.
+		var screen: Vector2 = get_viewport_rect().size
+		origin = origin.clamp(screen - screen * zoom, Vector2.ZERO)
+		camera = Transform2D(0.0, Vector2(zoom, zoom), 0.0, origin * push)
+		# The title fades in and out with the push (modulate.a is see-through-ness).
+		clip_label.visible = push > 0.0
+		clip_label.modulate.a = push
+		# The black bars slide in and out with it.
+		var bar: float = CONFIG.heavy_intro_bar_px * push
+		_bar_top.size.y = bar
+		_bar_bottom.size.y = bar
+		_bar_bottom.position.y = get_viewport_rect().size.y - bar
+		if clip_left <= 0.0:
+			# Over: back to normal speed, unless another slow-down is still running.
+			Engine.time_scale = 1.0
+			if drama_left > 0.0:
+				Engine.time_scale = CONFIG.drama_slow_scale
+			elif _beat_left > 0.0:
+				Engine.time_scale = CONFIG.wave_end_slow_scale
+	shake_offset = Vector2.ZERO
 	if _shake_left > 0.0:
 		_shake_left = maxf(_shake_left - real_delta, 0.0)
 		var strength: float = _shake_px * (_shake_left / CONFIG.shake_seconds)
 		# A new random direction each frame; randf_range picks a number between two.
 		shake_offset = Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * strength
-		get_viewport().canvas_transform = Transform2D(0.0, shake_offset)
-	elif shake_offset != Vector2.ZERO:
-		shake_offset = Vector2.ZERO
-		get_viewport().canvas_transform = Transform2D.IDENTITY
+		camera.origin += shake_offset
+	# Only touch the viewport while something is (or just was) moving it.
+	if camera_was_moved or shake_offset != Vector2.ZERO:
+		get_viewport().canvas_transform = camera
 	if hurt_flash_left > 0.0:
 		hurt_flash_left = maxf(hurt_flash_left - real_delta, 0.0)
 		var share: float = hurt_flash_left / CONFIG.hurt_flash_seconds  # 1 at the hit, 0 when over
@@ -1135,6 +1325,10 @@ func _on_pause_restart_wave() -> void:
 	_beat_left = 0.0
 	drama_left = 0.0
 	dim_sheet.color = Color(0.0, 0.0, 0.0, 0.0)
+	clip_left = 0.0
+	clip_label.visible = false
+	_bar_top.size.y = 0.0
+	_bar_bottom.size.y = 0.0
 	player.locked = false
 	_restart_current_wave()
 
@@ -1484,7 +1678,7 @@ func _on_player_died() -> void:
 func _on_enemy_died(enemy: Enemy) -> void:
 	Sfx.play(&"enemy_down")
 	shake(CONFIG.shake_kill_px)  # a small jolt for every machine that goes down
-	var cell: Vector2i = _nearest_free_cell(grid.world_to_cell(enemy.global_position))
+	var cell: Vector2i = _nearest_free_cell(grid.world_to_cell(enemy.global_position), true)
 	if cell != ArenaGrid.NO_CELL:
 		# This handler runs in the middle of a physics step (the pod's overlap
 		# callback caused the death), and Godot forbids adding physics bodies at
