@@ -16,3 +16,6 @@ art/source/_cleaned_preview.png
 
 # Klad's working folders: rebuilt from the .ops.jsonl recipes by tools\klad_art.ps1.
 art/source/klad/*.klad/
+
+# Trailer cuts made by tools\make_trailer.ps1 (large video files).
+trailer/
