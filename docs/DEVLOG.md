@@ -384,6 +384,13 @@ From the kickoff. `config/game_config.tres` holds every speed, cooldown and size
 - The thunk and spit candidates came back very quiet (mean below -36 dB) and need a lot of gain; listen for hiss.
 - The listening page now plays every take evened out to its in-game loudness.
 
+## D-064: s20 merged and uploaded; corporate cheerful machines; radio voices generated, not wired (Made, 2026-11-20)
+
+- **s20 merged, pushed, uploaded.** Merge `351b8f5` into `main`, both pushed; itch build #2445318 (`56651ff`), uploaded at 2:53 AM ET, before the 3:00 AM Jam 4 close.
+- **Machines.** Sasha asked for mockups of three art directions for the Scrapper, Sawbot and Spitter (`art/concept/robot_redesign/`, `tools/robot_mockups.py`), locked brutalist, then switched to **option 2, corporate cheerful**. The three game sprites are now that look (same silhouettes; Helios blue and white, a smiley face plate, a sunny stripe). Originals are in `art/source/robot_base/`; `python tools/robot_mockups.py --apply` rebuilds the look from them. `tools/klad_art.ps1` would rebuild the OLD look; run `--apply` after it. Rendered in the real arena at night: `docs/s21/machines_night.png`; they read clearly. The Ripsaw's red tint now shows pinkish on the blue body, so the radio's "big red one" is loose. Silhouettes were not redrawn (no rounding yet).
+- **Voices.** `tools/gen_voices.py` reads every Helios and Canopy FM line from the config and speaks it (44 files in `audio/voice/`, `manifest.json` maps line id to file). Voice Design was refused (the API key lacks `voice_generation`), so stand-in library voices are used: Helios = Natasha, Canopy girl = Ember, Canopy boy = Fietroy Satoute. Chosen from labels only; nobody has listened. About 400 credits spent (Flash model, half price); the account was near its monthly limit. **Not wired into the radio**: the files ship in the build but nothing plays them yet.
+- **Upload #2445353 (`5d5f36d`)** went up at about 3:01 AM ET, a minute after the Jam 4 close, at Sasha's request.
+
 ## D-063: Phase 2: Seven turns, a longer saw, a Repairing icon, Heavy Seeds +0.5, new words (Made, 2026-11-20)
 
 Branch `s20-phase2-art-sound-words`, not merged. From Sasha's Phase 2 answers.
