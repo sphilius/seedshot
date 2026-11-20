@@ -122,9 +122,15 @@ extends Resource
 @export var linebreaker_damage: int = 2
 ## Hazard gold (s18: the old red-brown looked like any other Scrapper).
 @export var linebreaker_tint: Color = Color(1.45, 1.10, 0.35)
-## The Linebreaker's armour ring: the bright part is the hit points it has left.
+## The Linebreaker's FORCE FIELD (s18: it was a hard gold ring): a see-through
+## gold bubble. Its bright rim is the share of hit points left.
 @export var linebreaker_ring_color: Color = Color(1.60, 1.20, 0.20)
-@export var linebreaker_ring_lost_color: Color = Color(0.25, 0.20, 0.10, 0.85)
+## SHIELDS (enemy.gd _draw_shield), shared by the Linebreaker and the Arc Spitter.
+## Radius of the bubble in cells, how solid its inside is (0 = clear glass), and
+## how many times brighter it flares for a moment when a pod lands on it.
+@export var shield_radius_cells: float = 0.74
+@export var shield_fill_alpha: float = 0.13
+@export var shield_hit_flare: float = 2.2
 ## ARC SPITTER (spitter.gd `arc`): hit points, the angle between the shots of
 ## its three-shot fan, and colour.
 ## s18: 6 hit points (was 3), and 15% faster than before (115 px/s): 0.96 of
@@ -132,7 +138,8 @@ extends Resource
 @export var arc_spitter_hp: int = 6
 @export var arc_spitter_speed_factor: float = 0.96
 @export var arc_spitter_spread_degrees: float = 18.0
-## Electric cyan, with three sparks circling it (one per shot of its fan).
+## Electric cyan. Its force field is the same blue, with small lightning arcs
+## crawling over it, and its shots are bolts of that colour (spit_shot.gd).
 @export var arc_spitter_tint: Color = Color(0.55, 1.35, 1.45)
 @export var arc_spitter_spark_color: Color = Color(0.50, 1.70, 1.90)
 ## s18: 20% faster (was 90).
@@ -397,11 +404,15 @@ extends Resource
 @export var sunburst_cooldown: float = 1.0
 ## Sunbursts Seven gets each wave. Shown on the HUD; refilled when a wave starts.
 @export var sunburst_charges_per_wave: int = 2
-## The gold ring on every great sunroot while a Sunburst is ready.
-@export var sunburst_ready_color: Color = Color(1.7, 1.3, 0.3, 0.9)
+## While a Sunburst is ready, every great sunroot turns gold: its picture is
+## multiplied by the sheen colour (values above 1 brighten) and its pool of
+## light switches to the glow colour. (s18: this was a hard gold ring with rays
+## on every great tree, which made a late New Game + screen unreadable.)
+@export var sunburst_sheen_color: Color = Color(1.55, 1.25, 0.50)
+@export var sunburst_glow_color: Color = Color(1.0, 0.78, 0.30, 0.30)
 ## Canopy FM explains it the first time great sunroots stand at a wave start.
 ## %d is the number of charges.
-@export var sunburst_intro_line: String = "See the gold rings? Zip to a great sunroot for a Sunburst: it stuns every machine near it. You get %d each wave."
+@export var sunburst_intro_line: String = "See the great sunroots glow gold? Zip to one for a Sunburst: it stuns every machine near it. You get %d each wave."
 
 @export_group("Canopy FM")
 ## The block's pirate radio (scripts/canopy_fm.gd). How loud the song is, in

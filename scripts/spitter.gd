@@ -20,7 +20,8 @@ extends Enemy
 ## spawns it ("signal up").
 
 ## Emitted for every shot. `direction` is a unit vector (length 1).
-signal spat(origin: Vector2, direction: Vector2)
+## `electric` is true for an Arc Spitter's bolts.
+signal spat(origin: Vector2, direction: Vector2, electric: bool)
 
 const FALLBACK_COLOR: Color = Color(0.55, 0.50, 0.62)
 ## Tint during the windup. Values above 1.0 brighten.
@@ -58,25 +59,15 @@ func _speed() -> float:
 	return CONFIG.spitter_speed * (CONFIG.arc_spitter_speed_factor if arc else 1.0)
 
 
-## _process runs every drawn frame: the Arc Spitter's sparks keep circling.
-func _process(_delta: float) -> void:
-	if arc:
-		queue_redraw()
+## Overrides Enemy._shield_color: an Arc Spitter has an electric blue force
+## field (drawn by Enemy._draw_shield). A plain Spitter has none.
+func _shield_color() -> Color:
+	return CONFIG.arc_spitter_spark_color if arc else Color(0.0, 0.0, 0.0, 0.0)
 
 
-## Overrides Enemy._draw_marks: an Arc Spitter has three sparks circling it, one
-## for each shot of its fan, joined by a thin ring.
-func _draw_marks() -> void:
-	if not arc:
-		return
-	var radius: float = CONFIG.cell_size * 0.70
-	draw_arc(Vector2.ZERO, radius, 0.0, TAU, 40, Color(CONFIG.arc_spitter_spark_color, 0.35), 2.0, true)
-	# One full turn about every three seconds. Time.get_ticks_msec() is milliseconds.
-	var turn: float = float(Time.get_ticks_msec()) / 1000.0 * 2.0
-	for i: int in 3:
-		# TAU / 3 apart: the three sparks sit evenly round the circle.
-		var angle: float = turn + TAU * float(i) / 3.0
-		draw_circle(Vector2.from_angle(angle) * radius, 5.0, CONFIG.arc_spitter_spark_color)
+## Overrides Enemy._shield_sparks: small lightning arcs crawl over that field.
+func _shield_sparks() -> bool:
+	return arc
 
 
 ## Called by the arena: which node to shoot at ("call down").
@@ -148,13 +139,13 @@ func _fire(to_target: Vector2) -> void:
 	var direction: Vector2 = to_target.normalized()
 	# Start the shot just outside our own hit circle.
 	var muzzle_distance: float = CONFIG.spitter_radius_cells * CONFIG.cell_size + CONFIG.spit_radius
-	spat.emit(global_position + direction * muzzle_distance, direction)
+	spat.emit(global_position + direction * muzzle_distance, direction, arc)
 	if arc:
 		# An ARC SPITTER fires two more shots, turned a little to each side, in a fan.
 		var spread: float = deg_to_rad(CONFIG.arc_spitter_spread_degrees)
 		for turn: float in [-spread, spread]:
 			var side: Vector2 = direction.rotated(turn)
-			spat.emit(global_position + side * muzzle_distance, side)
+			spat.emit(global_position + side * muzzle_distance, side, true)
 	Sfx.play(&"spit")
 
 

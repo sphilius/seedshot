@@ -84,10 +84,71 @@ func take_damage(amount: int) -> void:
 		_hit_overlay.queue_redraw()
 
 
+## The colour of this machine's force field, or a fully see-through colour for
+## "no shield". Nothing here; the Linebreaker and the Arc Spitter write their
+## own versions ("overriding").
+func _shield_color() -> Color:
+	return Color(0.0, 0.0, 0.0, 0.0)
+
+
+## True if the shield should crackle with small lightning arcs (the Arc Spitter).
+func _shield_sparks() -> bool:
+	return false
+
+
+## Paints the force field on the overlay node, so it sits OVER the machine like
+## a glass bubble:
+##   1. a faint filled disc (the glass);
+##   2. three thin rings just inside the edge, each fainter, so the rim looks
+##      soft and thick instead of like a drawn circle;
+##   3. the bright rim, only as long as the share of hit points left;
+##   4. a glint that slides round it, so it reads as energy and not as paint;
+##   5. (Arc Spitter) short jagged arcs that jump about on the rim.
+## The whole bubble flares for a moment when a pod lands on it.
+func _draw_shield() -> void:
+	var color: Color = _shield_color()
+	if color.a <= 0.0 or is_dead:
+		return
+	var radius: float = CONFIG.shield_radius_cells * float(CONFIG.cell_size)
+	var seconds: float = float(Time.get_ticks_msec()) / 1000.0  # the clock, in seconds
+	# 1.0 normally, up to shield_hit_flare just after a hit.
+	var flare: float = 1.0
+	if hit_flash_left > 0.0:
+		flare = lerpf(1.0, CONFIG.shield_hit_flare, hit_flash_left / CONFIG.hit_flash_seconds)
+	# A slow breathing of the glass (sin swings -1..1).
+	var breath: float = 1.0 + 0.15 * sin(seconds * 2.2)
+	_hit_overlay.draw_circle(Vector2.ZERO, radius, Color(color, CONFIG.shield_fill_alpha * breath * flare))
+	for i: int in 3:
+		var inner: float = radius - 3.0 * float(i + 1)
+		_hit_overlay.draw_arc(Vector2.ZERO, inner, 0.0, TAU, 40, Color(color, 0.22 * flare / float(i + 1)), 3.0, true)
+	# The rim: from 12 o'clock (-PI / 2) clockwise; TAU is a full turn.
+	var share: float = clampf(float(hp) / float(maxi(max_hp, 1)), 0.0, 1.0)
+	_hit_overlay.draw_arc(Vector2.ZERO, radius, 0.0, TAU, 48, Color(color, 0.18), 2.0, true)
+	_hit_overlay.draw_arc(Vector2.ZERO, radius, -PI / 2.0, -PI / 2.0 + TAU * share, 48, Color(color * flare, 0.9), 3.0, true)
+	# The glint: a short, nearly white arc that travels round the bubble.
+	var glint: float = seconds * 1.6
+	_hit_overlay.draw_arc(Vector2.ZERO, radius - 2.0, glint, glint + 0.6, 10, Color(color.lightened(0.6), 0.75), 2.5, true)
+	if _shield_sparks():
+		# Three jagged arcs. Their places change eight times a second: floorf
+		# drops the part after the decimal point, so `tick` is a whole number
+		# that steps up, and each step gives new "random-looking" angles.
+		var tick: float = floorf(seconds * 8.0)
+		for i: int in 3:
+			var start: float = fmod(tick * 2.399 + float(i) * 2.1, TAU)
+			var points := PackedVector2Array()
+			for step: int in 5:
+				# Each point sits a little further round the rim, pushed in or
+				# out by a few pixels, which makes the line zigzag.
+				var wobble: float = 4.0 * sin(tick * 7.3 + float(i * 5 + step) * 2.7)
+				points.append(Vector2.from_angle(start + float(step) * 0.16) * (radius + wobble))
+			_hit_overlay.draw_polyline(points, Color(color.lightened(0.5), 0.95), 2.0, true)
+
+
 ## Paints the hit flash on the overlay node: a pale disc over the machine that
 ## fades out, and a ring that closes in on it. Connected to the overlay's `draw`
-## signal in _configure_body.
+## signal in _configure_body. (The force field, if any, is painted first.)
 func _draw_hit_flash() -> void:
+	_draw_shield()
 	if hit_flash_left <= 0.0:
 		return
 	var left: float = hit_flash_left / CONFIG.hit_flash_seconds  # 1 at the hit, 0 when over
@@ -159,6 +220,8 @@ func _tick_bound(delta: float) -> bool:
 	if hit_flash_left > 0.0:
 		hit_flash_left = maxf(hit_flash_left - delta, 0.0)
 		_hit_overlay.queue_redraw()
+	elif _shield_color().a > 0.0:
+		_hit_overlay.queue_redraw()  # a force field is always moving
 	if not is_bound:
 		return false
 	_bound_time_left -= delta

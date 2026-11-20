@@ -216,7 +216,7 @@ func _ready() -> void:
 	# The Block's graffiti: painted across the roofs of the homes on the bottom
 	# wall, so it is added AFTER the windows (later children draw on top).
 	graffiti = Graffiti.new()
-	graffiti.setup(Rect2(origin, arena_px), float(CONFIG.cell_size))
+	graffiti.setup(Rect2(origin, arena_px), float(CONFIG.cell_size), windows.roof_rects())
 	add_child(graffiti)
 	# The back (top) wall: a row of home and shop fronts. Lucky's shop is added
 	# further down and draws itself into the gap this leaves for it.
@@ -338,7 +338,7 @@ func _process(delta: float) -> void:
 		# Sunburst charges, once there is a great sunroot to use them on.
 		if count_great_trees() > 0:
 			_wave_label.text += "    Sunburst %d / %d" % [great_powers.sunburst_charges, CONFIG.sunburst_charges_per_wave]
-	# Great sunroots wear a gold ring while a Sunburst is ready.
+	# Great sunroots take on a gold sheen while a Sunburst is ready.
 	ForestTree.sunburst_ready = great_powers.is_sunburst_ready()
 	# Glide the lot's tint toward what the current light calls for.
 	var wanted_tint: Color = ambient_tint_for(light_level())
@@ -556,10 +556,12 @@ func spawn_spitter_at(cell: Vector2i, arc: bool = false) -> Spitter:
 
 ## Creates one enemy shot at `origin`, flying along `direction` (a unit vector).
 ## Connected to every Spitter's `spat` signal; public so tests can fire one too.
-func spawn_spit_shot(origin: Vector2, direction: Vector2) -> SpitShot:
+## `electric` (optional, false if left out) makes it an Arc Spitter's bolt.
+func spawn_spit_shot(origin: Vector2, direction: Vector2, electric: bool = false) -> SpitShot:
 	var shot: SpitShot = SPIT_SHOT_SCENE.instantiate()
 	shot.position = origin
 	shot.direction = direction
+	shot.electric = electric
 	_shots.add_child(shot)
 	return shot
 

@@ -119,6 +119,7 @@ func _ready() -> void:
 	await _test_back_wall_and_roof_graffiti()
 	await _test_harder_waves_aim_line_sunburst()
 	await _test_hit_feedback()
+	await _test_s18_shields_and_bolts()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -1672,7 +1673,7 @@ func _test_new_machines() -> void:
 	var arc: Spitter = _arena.spawn_spitter_at(Vector2i(20, 3), true)
 	await _wait_frames(1)
 	var shots: Array[Vector2] = []
-	arc.spat.connect(func(_origin: Vector2, direction: Vector2) -> void: shots.append(direction))
+	arc.spat.connect(func(_origin: Vector2, direction: Vector2, _electric: bool) -> void: shots.append(direction))
 	arc._fire(Vector2.LEFT * 100.0)
 	_check(shots.size() == 3, "an Arc Spitter fires a fan of three shots")
 	# The waves: none of either early on; both by the last wave.
@@ -2305,16 +2306,24 @@ func _test_back_wall_and_roof_graffiti() -> void:
 	var arena_rect := Rect2(_arena.grid.origin, Vector2(CONFIG.grid_cols, CONFIG.grid_rows) * float(CONFIG.cell_size))
 	var font: Font = CONFIG.graffiti_font
 	var all_fit: bool = true
+	var roofs_used: Dictionary[Rect2, bool] = {}  # which roofs carry a tag
 	for i: int in CONFIG.graffiti_lines.size():
-		var place: Array = graffiti.line_place(i)
-		var at: Vector2 = place[0]
-		var slot_width: float = place[1]
-		var text_width: float = font.get_string_size(CONFIG.graffiti_lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1.0, Graffiti.FONT_SIZE).x
-		var in_wall: bool = at.y > arena_rect.end.y - CONFIG.cell_size and at.y <= arena_rect.end.y
-		var in_arena: bool = at.x >= arena_rect.position.x and at.x + slot_width <= arena_rect.end.x + 0.5
-		if not in_wall or not in_arena or text_width > slot_width:
+		# tag_layout says how the line is painted: its rows, letter height and roof.
+		var layout: Dictionary = graffiti.tag_layout(i)
+		var roof: Rect2 = layout.roof
+		roofs_used[roof] = true  # a Dictionary used as a set: each roof is counted once
+		# The roof must lie inside the bottom wall cell and inside the arena's width.
+		var in_wall: bool = roof.position.y >= arena_rect.end.y - CONFIG.cell_size and roof.end.y <= arena_rect.end.y
+		var in_arena: bool = roof.position.x >= arena_rect.position.x and roof.end.x <= arena_rect.end.x + 0.5
+		if not in_wall or not in_arena or layout.size < Graffiti.MIN_FONT_SIZE:
 			all_fit = false
-	_check(all_fit, "every graffiti line fits its slot on the roofs of the bottom wall")
+		# Measure each row at the tag's own letter height: none may be wider than its roof.
+		for row: String in layout.rows:
+			if font.get_string_size(row, HORIZONTAL_ALIGNMENT_LEFT, -1.0, layout.size).x > roof.size.x:
+				all_fit = false
+	_check(all_fit, "every graffiti tag fits on a roof of the bottom wall")
+	_check(roofs_used.size() == CONFIG.graffiti_lines.size(), "each tag has a roof of its own, so no two run together")
+	_check(Graffiti.split_in_two("WE ARE THE NEIGHBOURS") == ["WE ARE THE", "NEIGHBOURS"], "a long tag is broken at the space nearest its middle")
 	_check(graffiti.get_index() > _arena.windows.get_index(), "and is painted over the roofs, not under them")
 
 ## s18 groups 6, 8 and 9: more machines per wave, a visible aim line, and
@@ -2355,14 +2364,14 @@ func _test_harder_waves_aim_line_sunburst() -> void:
 	var great: ForestTree = _arena.tree_at(here + Vector2i(3, 0))
 	great.mature()
 	await _wait_frames(3)
-	_check(powers.sunburst_charges == CONFIG.sunburst_charges_per_wave and ForestTree.sunburst_ready, "a wave starts with %d Sunbursts, and great sunroots show the gold ring" % CONFIG.sunburst_charges_per_wave)
+	_check(powers.sunburst_charges == CONFIG.sunburst_charges_per_wave and ForestTree.sunburst_ready, "a wave starts with %d Sunbursts, and great sunroots show the gold sheen" % CONFIG.sunburst_charges_per_wave)
 	for i: int in CONFIG.sunburst_charges_per_wave:
 		powers.sunburst_cooldown_left = 0.0
 		powers.sunburst(great.global_position)
 	powers.sunburst_cooldown_left = 0.0
 	_check(powers.sunburst_charges == 0 and not powers.is_sunburst_ready(), "using them all leaves none, whatever the cooldown says")
 	await _wait_frames(3)
-	_check(not ForestTree.sunburst_ready, "and the gold rings go out")
+	_check(not ForestTree.sunburst_ready, "and the gold sheen goes out")
 	_arena.waves.start_wave(3)
 	_check(powers.sunburst_charges == CONFIG.sunburst_charges_per_wave, "the next wave refills them")
 	_check(_arena._is_radio_pending(CONFIG.sunburst_intro_line % CONFIG.sunburst_charges_per_wave), "and Canopy FM explains Sunburst the first time a great sunroot is standing")
@@ -2419,3 +2428,40 @@ func _test_hit_feedback() -> void:
 	_arena.shake(CONFIG.shake_hurt_px)
 	_arena.shake(CONFIG.shake_kill_px)
 	_check(is_equal_approx(_arena._shake_px, CONFIG.shake_hurt_px * CONFIG.shake_scale), "a small shake does not cut a big one short")
+
+
+## s18 playtest round 2: the two heavy machines wear force fields instead of
+## hard rings, the Arc Spitter fires bolts, and a ready Sunburst is a gold sheen.
+func _test_s18_shields_and_bolts() -> void:
+	await _fresh_arena()
+	# One of each machine, far from Seven so nothing fights during the check.
+	var heavy: Scrapper = _arena.spawn_scrapper_at(Vector2i(22, 3), true)
+	var plain: Scrapper = _arena.spawn_scrapper_at(Vector2i(22, 5))
+	var arc: Spitter = _arena.spawn_spitter_at(Vector2i(22, 11), true)
+	var spitter: Spitter = _arena.spawn_spitter_at(Vector2i(20, 12))
+	await get_tree().physics_frame
+	# _shield_color() returns a see-through colour (alpha 0) for "no shield".
+	_check(heavy._shield_color().a > 0.0 and not heavy._shield_sparks(), "a Linebreaker has a force field (no sparks)")
+	_check(arc._shield_color().a > 0.0 and arc._shield_sparks(), "an Arc Spitter has one that crackles")
+	_check(plain._shield_color().a == 0.0 and spitter._shield_color().a == 0.0, "plain Scrappers and Spitters have none")
+	# The Arc Spitter's shots are electric; a plain Spitter's are not.
+	# A "lambda" (the func in brackets) collects what each `spat` signal carries.
+	var flags: Array[bool] = []
+	arc.spat.connect(func(_origin: Vector2, _direction: Vector2, electric: bool) -> void: flags.append(electric))
+	spitter.spat.connect(func(_origin: Vector2, _direction: Vector2, electric: bool) -> void: flags.append(electric))
+	arc._fire(Vector2.LEFT)
+	spitter._fire(Vector2.LEFT)
+	_check(flags == [true, true, true, false], "an Arc Spitter fires three bolts; a plain Spitter one ordinary shot")
+	var bolt: SpitShot = _arena.spawn_spit_shot(Vector2(300.0, 300.0), Vector2.RIGHT, true)
+	_check(bolt.electric and not _arena.spawn_spit_shot(Vector2(300.0, 340.0), Vector2.RIGHT).electric, "the arena makes a bolt only when asked to")
+
+	# A ready Sunburst turns great sunroots gold: no ring, a gold pool of light.
+	var great: ForestTree = _arena.spawn_tree(Vector2i(5, 11), true)
+	great.mature()
+	# (The arena sets ForestTree.sunburst_ready itself every frame, from the charges.)
+	await _wait_frames(2)
+	var glow := great.get_node(Glow.NODE_NAME) as Sprite2D
+	_check(glow.modulate.is_equal_approx(CONFIG.sunburst_glow_color), "a ready Sunburst turns a great sunroot's light gold")
+	_arena.great_powers.sunburst_charges = 0
+	await _wait_frames(2)
+	_check(glow.modulate.is_equal_approx(CONFIG.tree_glow_color), "and it goes back to green when none is ready")
