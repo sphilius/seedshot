@@ -44,7 +44,7 @@ const AIM_REST_SPOT: Vector2 = Vector2(0.87, 0.76)
 const MOVE_COLOR: Color = Color(1.0, 1.0, 1.0, 0.55)
 const AIM_COLOR: Color = Color(0.75, 0.95, 0.45, 0.60)
 const REST_ALPHA: float = 0.30
-const TOUCH_HINT: String = "Left thumb: move   |   Right thumb: aim + fire   |   Tap a tree: zip   |   Tap a machine: bind   |   Thorns button: bramble"
+const TOUCH_HINT: String = "Left thumb: move   |   Right thumb: aim + fire   |   Tap a tree: zip   |   Tap a machine: bind   |   Bramble button: slow a crowd"
 const ROTATE_TEXT: String = "Turn your phone sideways"
 ## The Bramble Seed button: a circle on the right side, above the aim stick's spot
 ## (as shares of the screen width and height), and its radius in pixels.
@@ -152,7 +152,7 @@ func _draw() -> void:
 	# The Bramble Seed button, with one small dot per seed in hand.
 	var button: Vector2 = BRAMBLE_SPOT * screen
 	draw_arc(button, BRAMBLE_RADIUS, 0.0, TAU, 40, BRAMBLE_COLOR, 3.0)
-	draw_string(ThemeDB.fallback_font, button + Vector2(-BRAMBLE_RADIUS, 6.0), "thorns", HORIZONTAL_ALIGNMENT_CENTER, BRAMBLE_RADIUS * 2.0, 16, BRAMBLE_COLOR)
+	draw_string(ThemeDB.fallback_font, button + Vector2(-BRAMBLE_RADIUS, 6.0), "bramble", HORIZONTAL_ALIGNMENT_CENTER, BRAMBLE_RADIUS * 2.0, 16, BRAMBLE_COLOR)
 	if _player != null:
 		for i: int in _player.bramble_charges:
 			draw_circle(button + Vector2((i - 1) * 12.0, BRAMBLE_RADIUS * 0.55), 4.0, BRAMBLE_COLOR)

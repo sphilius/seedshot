@@ -20,6 +20,8 @@ signal player_defeated
 signal heart_tree_felled
 
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
+## The key the Bramble Seed's intro clip uses in _intro_done and intro_titles.
+const BRAMBLE_KIND: StringName = &"bramble"
 ## preload() loads a scene file once, when the script itself loads. instantiate()
 ## then stamps out a fresh copy of that scene each time it is called.
 const PLAYER_SCENE: PackedScene = preload("res://scenes/player.tscn")
@@ -155,8 +157,15 @@ var _bar_bottom: ColorRect
 ## The machine's name, shown low on the screen during a clip (so it does not
 ## cover the machine, which the camera holds in the middle). Public for the tests.
 var clip_label: Label
-## True once the opening line has been shown, so a restarted wave 1 skips it.
+## True once the opening line has been shown. (A restarted wave 1 puts this back
+## to what it was when the wave began, so the hook is said again: see
+## _dj_said_at_wave_start.)
 var _hook_shown: bool = false
+## What _dj_said and _hook_shown were when the current wave began. A restart puts
+## them back, so a one-time line first said during a failed attempt is said again
+## instead of being lost for good (s19). Lines from EARLIER waves stay "said".
+var _dj_said_at_wave_start: Dictionary[StringName, bool] = {}
+var _hook_shown_at_wave_start: bool = false
 ## The cell of the most recent sapling planted by a downed machine.
 var _last_planted_cell: Vector2i = ArenaGrid.NO_CELL
 ## True once the player has zipped (or the hint is otherwise no longer needed).
@@ -314,6 +323,7 @@ func _ready() -> void:
 	great_powers = GreatPowers.new()
 	great_powers.z_index = 1
 	add_child(great_powers)
+	great_powers.line_formed.connect(_on_canopy_line_formed)
 	# CanvasModulate multiplies the colour of everything drawn in this scene
 	# (floor, walls, sprites, trees) by one colour. The HUD is on its own
 	# CanvasLayer, so it is not tinted and stays readable. This is how the
@@ -364,6 +374,7 @@ func _ready() -> void:
 
 	player.zip_finished.connect(_on_player_zip_finished)
 	player.bramble_thrown.connect(spawn_bramble)
+	player.bramble_bounds = bramble_floor_rect()
 
 	# Listen to the wave director: it says when, the arena does the spawning.
 	waves.wave_started.connect(_on_wave_started)
@@ -429,6 +440,7 @@ func _ready() -> void:
 
 ## _process runs every drawn frame: hide the banner when its time is up.
 func _process(delta: float) -> void:
+	_tick_bramble_clip()
 	# The corner label doubles as the score: every standing tree powers one home.
 	if waves.wave > 0:
 		# Bramble Seeds in hand, out of the most Seven can hold.
@@ -448,6 +460,8 @@ func _process(delta: float) -> void:
 	var wanted_tint: Color = ambient_tint_for(light_level())
 	if cat_shop != null:
 		cat_shop.show_talk_hint = is_near_lucky()
+		# On a phone the open shop shows a paw button instead of "E: talk".
+		cat_shop.show_tap_button = cat_shop.is_open and (player.touch_mode or _is_touch())
 	# Lights shine brighter than white while the lot is dark, and normally once
 	# it is fully lit; otherwise the end of the run turns into a yellow glare.
 	var boost: float = light_boost_for(light_level())
@@ -590,11 +604,17 @@ func spawn_tree(cell: Vector2i, grown: bool) -> ForestTree:
 	return tree
 
 
+## The floor a bramble can land on: the whole arena minus the one-cell wall ring.
+## The player draws its landing preview from the same rectangle.
+func bramble_floor_rect() -> Rect2:
+	return Rect2(grid.origin, Vector2(grid.cols, grid.rows) * float(CONFIG.cell_size)).grow(-float(CONFIG.cell_size))
+
+
 ## Grows a bramble patch where a Bramble Seed lands. The landing point is kept
 ## on the floor (one cell in from the walls), so a throw at a wall lands at its
 ## foot. Connected to the player's bramble_thrown signal; public for the tests.
 func spawn_bramble(at: Vector2) -> Bramble:
-	var floor_rect := Rect2(grid.origin, Vector2(grid.cols, grid.rows) * float(CONFIG.cell_size)).grow(-float(CONFIG.cell_size))
+	var floor_rect: Rect2 = bramble_floor_rect()
 	var bramble := Bramble.new()
 	bramble.position = at.clamp(floor_rect.position, floor_rect.end)
 	_brambles.add_child(bramble)
@@ -645,6 +665,7 @@ func spawn_sawbot_at(cell: Vector2i, big: bool = false) -> Sawbot:
 	sawbot.position = grid.cell_to_world(cell)
 	sawbot.setup(grid)
 	sawbot.died.connect(_on_enemy_died)
+	_hurt_player_on_touch(sawbot)
 	_enemies.add_child(sawbot)
 	return sawbot
 
@@ -660,8 +681,17 @@ func spawn_spitter_at(cell: Vector2i, arc: bool = false) -> Spitter:
 	spitter.died.connect(_on_enemy_died)
 	# The Spitter only announces "I fired"; the arena makes the shot appear.
 	spitter.spat.connect(spawn_spit_shot)
+	_hurt_player_on_touch(spitter)
 	_enemies.add_child(spitter)
 	return spitter
+
+
+## Makes touching `machine` hurt Seven: the machine only announces `touched`, and
+## the player's take_damage decides (it ignores a hit while Seven is blinking from
+## the one before, which is what keeps contact from draining health).
+func _hurt_player_on_touch(machine: Enemy) -> void:
+	machine.watch_contact(player)
+	machine.touched.connect(func(damage: int) -> void: player.take_damage(damage, machine.global_position))
 
 
 ## Creates one enemy shot at `origin`, flying along `direction` (a unit vector).
@@ -858,6 +888,16 @@ func _restart_current_wave() -> void:
 	waves.hold_break = false
 	upgrade_picker.cancel()
 	player.locked = false
+	# The radio goes back to how it was when the wave began: lines still waiting
+	# from the failed attempt are dropped (so nothing is said twice), and the
+	# one-time lines first said during that attempt count as unsaid again (the
+	# wave-start code below queues them afresh).
+	_story_queue.clear()
+	_current_line = {}
+	_story_time_left = 0.0
+	radio.clear()
+	_dj_said = _dj_said_at_wave_start.duplicate()
+	_hook_shown = _hook_shown_at_wave_start
 
 	# Replant the forest from the snapshot taken at wave start.
 	tap_points.clear()
@@ -1046,7 +1086,13 @@ func _show_next_story_line() -> void:
 	if radio_static_on and line.speaker == Radio.CANOPY:
 		shown = with_static(shown, light_level())
 	radio.say(line.speaker, shown)
-	_story_time_left = CONFIG.story_line_seconds + float(line.text.length()) / CONFIG.radio_chars_per_second
+	_story_time_left = _hold_seconds_for(line.speaker) + float(line.text.length()) / CONFIG.radio_chars_per_second
+
+
+## How long a line from `speaker` stays up after it has finished typing: Lucky's
+## own, longer hold, or the usual one for everyone else (s19).
+func _hold_seconds_for(speaker: StringName) -> float:
+	return CONFIG.lucky_line_seconds if speaker == Radio.LUCKY else CONFIG.story_line_seconds
 
 
 ## The player asked to move the radio along (a tap on its panel): finish typing
@@ -1057,7 +1103,7 @@ func skip_radio_line() -> void:
 		return
 	if not radio.is_fully_typed():
 		radio.finish_typing()
-		_story_time_left = CONFIG.story_line_seconds
+		_story_time_left = _hold_seconds_for(_current_line.get("speaker", &""))
 	else:
 		_show_next_story_line()
 
@@ -1128,6 +1174,13 @@ func _on_wave_started(number: int, total: int) -> void:
 	# (A restart calls this again, right after the revive, so the number stays.)
 	if not player.is_dead and not _is_restarting:
 		_hp_at_wave_start = player.hp
+	# Same idea for the radio: remember which one-time lines had been said. (A
+	# restart skips this, so the snapshot stays the one from the FIRST attempt.)
+	# .duplicate() makes a separate copy; without it both names would point at
+	# the same dictionary and the snapshot would change as the wave went on.
+	if not _is_restarting:
+		_dj_said_at_wave_start = _dj_said.duplicate()
+		_hook_shown_at_wave_start = _hook_shown
 	_choose_tap_points(number)
 	_show_banner("Wave %d" % number, 1.5)
 	# By now the controls are learned; the bottom wall belongs to the windows.
@@ -1168,6 +1221,18 @@ func _on_wave_started(number: int, total: int) -> void:
 					start_clip(tree, CONFIG.sunburst_intro_title_touch if _is_touch() else CONFIG.sunburst_intro_title, CONFIG.heavy_intro_seconds)
 					break
 	_show_story_lines(lines)
+
+
+## Signal handler: a canopy line just formed between two great sunroots. The
+## first time, Canopy FM says where these vines come from (s19: Sasha did not
+## know why vines appeared by themselves in New Game +). Not _dj_once: it is said
+## in New Game + even when the tutorial was skipped, since that is the only place
+## great sunroots exist. It is marked in _dj_said so a restarted wave says it again.
+func _on_canopy_line_formed() -> void:
+	if _dj_said.has(&"canopy_line"):
+		return
+	_dj_said[&"canopy_line"] = true
+	_radio_later([_radio_line(Radio.CANOPY, CONFIG.canopy_line_intro_line)])
 
 
 ## Signal handler: the director wants one machine sent in.
@@ -1292,6 +1357,20 @@ func _play_intro_once(kind: StringName, machine: Enemy) -> void:
 		return
 	_intro_done[kind] = true
 	start_clip(machine, CONFIG.intro_titles[kind], CONFIG.heavy_intro_seconds)
+
+
+## The Bramble Seed's intro clip (s19): once per run, the first moment in wave 2
+## that Seven holds a seed and no other clip is playing. It waits its turn like the
+## machines' clips do, and a restarted wave does not replay it (_intro_done).
+## In New Game + it plays too: that mode shows every intro (s18 round 5).
+func _tick_bramble_clip() -> void:
+	if not intro_clips_on or _intro_done.has(BRAMBLE_KIND) or waves.wave != 2 or clip_left > 0.0:
+		return
+	if player.is_dead or player.bramble_charges <= 0 or _restart_pending:
+		return
+	_intro_done[BRAMBLE_KIND] = true
+	var title: String = CONFIG.bramble_intro_title_touch if _is_touch() else CONFIG.intro_titles[BRAMBLE_KIND]
+	start_clip(player, title, CONFIG.heavy_intro_seconds)
 
 
 ## Starts an INTRO CLIP on `target`: slow motion, the camera pushing in on it,
@@ -1976,7 +2055,10 @@ func _on_tree_felled(tree: ForestTree) -> void:
 func _is_on_shop(screen_point: Vector2) -> bool:
 	var centre: Vector2 = cat_shop.get_global_transform_with_canvas().origin
 	var half := Vector2(CatShop.WIDTH_CELLS, 1.5) * float(CONFIG.cell_size) / 2.0
-	return Rect2(centre - half, half * 2.0).has_point(screen_point)
+	if Rect2(centre - half, half * 2.0).has_point(screen_point):
+		return true
+	# The paw button under the shop counts as the shop too (a phone shows it).
+	return cat_shop.show_tap_button and screen_point.distance_to(centre + CatShop.button_offset()) <= CONFIG.lucky_button_radius_px
 
 
 ## Extra windows lit by the tap trees standing right now (grown ones only).

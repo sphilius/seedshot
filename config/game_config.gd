@@ -261,6 +261,9 @@ extends Resource
 	&"linebreaker": "LINEBREAKER\nHeavy unit. Arrives with a Spitter escort.",
 	&"arc_spitter": "ARC SPITTER\nGuards the Sawbots. Fires three bolts.",
 	&"ripsaw": "RIPSAW\nUpgraded Sawbot. Faster, tougher, cuts twice as quick.",
+	# Not a machine: the Bramble Seed's clip uses the same table (s19). Keyboard
+	# text here; bramble_intro_title_touch is the phone version.
+	&"bramble": "BRAMBLE SEED\nPress Q or Space to throw it.\nThorns slow a crowd and chew it up. Best in a gateway.",
 }
 ## A Linebreaker's escorts drop in one after another, this many seconds apart.
 @export var escort_drop_gap: float = 0.18
@@ -349,6 +352,12 @@ extends Resource
 ## Talking to Lucky: Seven must be within this many cells of the open shop for
 ## the E key to work. (A tap on the shop works from anywhere.)
 @export var lucky_talk_range_cells: float = 3.5
+## Seconds one of Lucky's lines stays on the radio once it has finished typing
+## (s19: longer than story_line_seconds, which every other speaker uses).
+@export var lucky_line_seconds: float = 10.0
+## On a phone the open shop shows a paw button to tap, under its ledge. Its
+## radius in pixels. A tap on the button counts as a tap on Lucky.
+@export var lucky_button_radius_px: float = 24.0
 
 ## Lucky's greeting when the shutter opens, by the wave the cat was found in.
 ## Words only: nothing Lucky says changes the game. (Placeholders, STORY.md.)
@@ -423,14 +432,16 @@ extends Resource
 @export var tree_great_texture: Texture2D
 
 ## CANOPY LINE (great_powers.gd): two great sunroots within this many cells of
-## each other, with nothing between them, string a cable that binds machines.
+## each other, with nothing between them, string a cable that snares machines.
 @export var canopy_line_range_cells: float = 8.0
 ## How close (pixels) a machine's centre must come to the cable to be caught.
 @export var canopy_line_catch_px: float = 16.0
-## Seconds a caught machine stays bound.
-@export var canopy_line_bind_seconds: float = 2.5
-## Seconds a cable needs to recharge after catching a machine.
-@export var canopy_line_recharge: float = 4.0
+## Seconds a caught machine stays SNARED (slowed, not frozen; see snare_speed_factor).
+## s19 round 6: 1.5 (was 2.5), because the forest handled the machines so well
+## that New Game + nearly played itself.
+@export var canopy_line_bind_seconds: float = 1.5
+## Seconds a cable needs to recharge after catching a machine. s19: 8.0 (was 4.0).
+@export var canopy_line_recharge: float = 8.0
 ## Colour of a charged cable (alpha = how solid it looks).
 @export var canopy_line_color: Color = Color(0.75, 1.0, 0.45, 0.85)
 ## THE CAPS (s18). A late New Game + run had 70+ great sunroots and a cable
@@ -509,12 +520,16 @@ extends Resource
 @export var bramble_recharge_seconds: float = 6.0
 ## Colour of the thorns.
 @export var bramble_color: Color = Color(0.40, 0.62, 0.30)
+## s19: the faint ring that shows where a Bramble Seed would land, while Seven has
+## a charge. Its alpha (0 = invisible, 1 = solid); the disc inside is a third as strong.
+@export_range(0.0, 1.0) var bramble_preview_alpha: float = 0.45
 
 ## TRELLIS (great_powers.gd): a zip from beside one tree to another leaves the
 ## vine strung between them. Seconds it lasts:
 @export var trellis_seconds: float = 6.0
-## Seconds a machine snared by the trellis stays bound.
-@export var trellis_bind_seconds: float = 2.0
+## Seconds a machine snared by the trellis stays snared (slowed, not frozen).
+## s19: 1.2 (was 2.0).
+@export var trellis_bind_seconds: float = 1.2
 ## How close (cells) Seven must start a zip to a tree for it to count as "from" it.
 @export var trellis_start_reach_cells: float = 1.6
 ## Colour of a trellis vine.
@@ -548,7 +563,10 @@ extends Resource
 ## on every great tree, which made a late New Game + screen unreadable.)
 @export var sunburst_sheen_color: Color = Color(1.55, 1.25, 0.50)
 @export var sunburst_glow_color: Color = Color(1.0, 0.78, 0.30, 0.30)
-## Canopy FM explains it the first time great sunroots stand at a wave start.
+## Said once, the first time a canopy line forms between two great sunroots:
+## where the vines come from (s19).
+@export var canopy_line_intro_line: String = "Those glowing vines between the great sunroots? The roots string them on their own, and they snare any machine that crosses."
+## Canopy FM explains Sunburst the first time great sunroots stand at a wave start.
 ## %d is the number of charges.
 @export var sunburst_intro_line: String = "See the great sunroots glow gold? Zip to one for a Sunburst: it stuns every machine near it, and great sunroots close by catch and flare too. You get %d each wave."
 
@@ -678,7 +696,7 @@ extends Resource
 @export var story_hook: String = "Helios owns the sun. Your block stopped paying for it."
 ## What Helios customer service says as each wave starts. Entry 0 is wave 1.
 @export var helios_lines: Array[String] = [
-	"Courtesy notice: your account is 90 days past due.",
+	"Courtesy Notice: This sector's account is 90 minutes past due.",
 	"A technician is on the way to help you.",
 	"Unlicensed generation is theft of sunlight.",
 	"Disconnection crews dispatched. Thank you for your patience.",
@@ -767,12 +785,19 @@ extends Resource
 	"And kid? Tap any tree. The vine zips you straight to it.",
 ]
 ## Canopy FM, on wave 2 (not in New Game +): the Bramble Seed. Keyboard and touch.
+## s19: says what it does and when to use it, and names the key. (Sasha: "Thorns
+## was unclear", and the counter sat at 3 / 3 for two runs.)
 @export var dj_bramble: Array[String] = [
-	"One more trick. Press Q or Space: a bramble seed. Thorns slow them down and chew them up.",
+	"New trick, kid: press Q or Space to throw a Bramble Seed. It grows thorns where it lands, and every machine inside slows down and takes damage.",
+	"Throw it at a crowd, or into a gateway they all have to cross. You hold three, and they grow back.",
 ]
 @export var dj_bramble_touch: Array[String] = [
-	"One more trick. Tap the thorn button, right side: a bramble seed. Thorns slow them down and chew them up.",
+	"New trick, kid: tap the bramble button, right side, to throw a Bramble Seed. It grows thorns where it lands, and every machine inside slows down and takes damage.",
+	"Throw it at a crowd, or into a gateway they all have to cross. You hold three, and they grow back.",
 ]
+## The Bramble Seed's intro clip (once, the first time a seed is in hand in wave 2):
+## the machines' clip style, with this text. The touch version names the button.
+@export var bramble_intro_title_touch: String = "BRAMBLE SEED\nTap the bramble button to throw it.\nThorns slow a crowd and chew it up. Best in a gateway."
 ## Canopy FM, the first time a Sawbot is sent in.
 @export var dj_first_sawbot: Array[String] = [
 	"Sawbot on the lot! It doesn't want you. It wants the trees. Drop it first.",
@@ -892,6 +917,29 @@ extends Resource
 ## front of the bot, along the aim direction.
 @export var touch_reticle_distance_cells: float = 2.5
 
+@export_group("Contact")
+## s19: touching a machine hurts. How many pips one touch costs Seven.
+@export var contact_damage: int = 1
+## Seconds a machine waits before it can hurt Seven by touch again, in seconds.
+## (Seven's own blink after a hit, player_hit_invulnerable_time, also protects her.)
+@export var contact_damage_cooldown: float = 1.0
+## How close to touching counts as touching, in pixels: the gap allowed between
+## the machine's edge and Seven's edge. Seven cannot walk INTO a machine, so
+## "touching" is really "pressed against". A few pixels covers the physics
+## engine's own small safety gap.
+@export var contact_margin_px: float = 6.0
+
+@export_group("Snare")
+## s19: the forest's own vines (canopy lines and the Vine Trip Line) SNARE a
+## machine; only Seven's own vine on a machine fully BINDS it. A snared machine is
+## slowed to this share of its walking speed (0 = held in place, 1 = not slowed)
+## but can still wind up, swing, shoot and saw. How long a snare lasts is
+## canopy_line_bind_seconds and trellis_bind_seconds (in the New Game + group).
+@export_range(0.0, 1.0) var snare_speed_factor: float = 0.25
+## Colour of the net drawn over a snared machine (amber, so it never looks like
+## the green of a bound one or the red of an attack about to land).
+@export var snare_color: Color = Color(1.0, 0.78, 0.2, 0.55)
+
 @export_group("Art")
 ## The sprites are 64 x 64 pixel art drawn with Klad (recipes in art/source/klad).
 ## Leave a texture empty to fall back to a plain coloured rectangle.
@@ -913,6 +961,11 @@ extends Resource
 @export var graffiti_font: Font
 @export var tree_grown_texture: Texture2D
 @export var tree_cut_texture: Texture2D
+## s19: how much bigger than the normal sprite size a grown tree is DRAWN (1.0 =
+## the old 64 px; 1.5 = 96 px). Sasha: "trees are hard to see". DRAWING ONLY: the
+## collision square stays exactly one cell, so shots cannot slip between
+## neighbours and the grid's pathfinding is untouched. A sapling is not scaled.
+@export_range(1.0, 2.5) var tree_draw_scale: float = 1.5
 ## The floor slabs: one row of 48 x 48 tiles (one grid cell each), built from
 ## the concept floor sheet by tools/floor_tiles.ps1. Leave empty for the plain
 ## floor colour.

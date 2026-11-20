@@ -42,6 +42,9 @@ const RETICLE_COLOR: Color = Color(1.0, 1.0, 1.0, 0.8)
 ## How long the vine stays drawn after it lashes a machine.
 const LASH_SHOW_SECONDS: float = 0.25
 
+## The part of the floor a Bramble Seed can land on, in world pixels. The arena
+## fills this in (a bramble is kept off the walls). An empty Rect2 means "no limit".
+var bramble_bounds: Rect2 = Rect2()
 ## Unit vector from the bot towards the mouse pointer.
 var aim_direction: Vector2 = Vector2.RIGHT
 ## True while the bot is travelling along the vine. Walking is locked meanwhile.
@@ -144,6 +147,7 @@ func _ready() -> void:
 	_aim_overlay = Node2D.new()
 	_aim_overlay.z_index = 1
 	add_child(_aim_overlay)
+	_aim_overlay.draw.connect(_draw_bramble_preview)  # under the nozzle: connected first, drawn first
 	_aim_overlay.draw.connect(_draw_nozzle)
 	_aim_overlay.draw.connect(_draw_hurt_arc)  # a signal can call several functions
 	_aim_overlay.draw.connect(_draw_wear)
@@ -259,9 +263,38 @@ func throw_bramble() -> bool:
 	bramble_charges -= 1
 	if bramble_recharge_left <= 0.0:
 		bramble_recharge_left = CONFIG.bramble_recharge_seconds
-	bramble_thrown.emit(global_position + aim_direction * CONFIG.bramble_range_cells * CONFIG.cell_size)
+	bramble_thrown.emit(bramble_landing_point())
 	Sfx.play(&"grow")
 	return true
+
+
+## Where a Bramble Seed thrown right now would land: bramble_range_cells along
+## the aim, kept on the floor (inside bramble_bounds). The arena's spawn_bramble
+## clamps to the same floor, so what is drawn is where the patch grows.
+func bramble_landing_point() -> Vector2:
+	var spot: Vector2 = global_position + aim_direction * CONFIG.bramble_range_cells * CONFIG.cell_size
+	if bramble_bounds.has_area():
+		# Vector2.clamp(min, max) limits each of x and y to that range.
+		spot = spot.clamp(bramble_bounds.position, bramble_bounds.end)
+	return spot
+
+
+## True while the landing ring should show: Seven is up and has a seed in hand.
+func is_bramble_preview_shown() -> bool:
+	return is_aim_shown() and bramble_charges > 0
+
+
+## Draws a faint ring where the bramble would land, the size of the patch, while
+## Seven has a seed to throw. (On a phone the seed is thrown by tapping its
+## button, which gives no "held" state to show this on, so it is simply always
+## shown there while a charge is in hand.)
+func _draw_bramble_preview() -> void:
+	if not is_bramble_preview_shown():
+		return
+	var centre: Vector2 = to_local(bramble_landing_point())
+	var color: Color = Color(CONFIG.bramble_color.lightened(0.25), CONFIG.bramble_preview_alpha)
+	_aim_overlay.draw_circle(centre, Bramble.radius_px(), Color(color, color.a / 3.0))
+	_aim_overlay.draw_arc(centre, Bramble.radius_px(), 0.0, TAU, 40, color, 2.0)
 
 
 ## Grows Bramble Seeds back, one every bramble_recharge_seconds, up to the max.

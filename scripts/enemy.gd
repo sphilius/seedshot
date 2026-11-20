@@ -19,6 +19,9 @@ signal died(enemy: Enemy)
 ## Emitted the moment a machine that dropped in hits the floor (see drop_in).
 ## The arena answers with a screen shake and the crash sound.
 signal landed(enemy: Enemy)
+## Emitted when this machine is touching Seven and its contact cooldown is over.
+## The arena passes the damage on to the player ("signal up, call down").
+signal touched(damage: int)
 
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
 ## Group that every machine joins, so code can ask the scene tree for "all enemies".
@@ -39,6 +42,12 @@ var is_bound: bool = false
 ## Physics steps left walking slowly because of a bramble patch. Public so the
 ## tests can read it; bramble.gd renews it every step the machine stays inside.
 var _slowed_steps: int = 0
+## True while one of the FOREST's vines (a canopy line or the Vine Trip Line) has
+## snared this machine: it walks slowly (snare_speed_factor) but can still wind
+## up, swing, shoot and saw. Only Seven's own vine fully binds (is_bound).
+var is_snared: bool = false
+## Seconds of snare left.
+var _snared_time_left: float = 0.0
 ## Seconds of binding left.
 var _bound_time_left: float = 0.0
 var hp: int = 0
@@ -66,6 +75,11 @@ var shoulders_through: bool = false
 var _stuck_time: float = 0.0
 ## Seconds left of shouldering through. Public-ish for the tests.
 var _shoulder_left: float = 0.0
+
+## The body this machine hurts by touching (Seven). Handed in by watch_contact().
+var _contact_target: Node2D
+## Seconds until this machine may hurt by touch again.
+var _contact_left: float = 0.0
 
 ## The grid to find routes over. Handed in by setup().
 var _grid: ArenaGrid
@@ -163,11 +177,27 @@ func _draw_shield() -> void:
 			_hit_overlay.draw_polyline(points, Color(color.lightened(0.5), 0.95), 2.0, true)
 
 
+## Paints a faint amber net over a snared machine: a wash, a ring and two
+## crossing strands, so a snare reads differently from the green of a bind.
+## (Not a tint of the whole node: that is used for the red attack warning.)
+func _draw_snare() -> void:
+	if not is_snared or is_dead:
+		return
+	var radius: float = (_collision.shape as CircleShape2D).radius
+	var color: Color = CONFIG.snare_color
+	_hit_overlay.draw_circle(Vector2.ZERO, radius * 1.05, Color(color, color.a * 0.35))
+	_hit_overlay.draw_arc(Vector2.ZERO, radius * 1.1, 0.0, TAU, 28, color, 3.0)
+	var strand: Vector2 = Vector2(radius, radius) * 0.78
+	_hit_overlay.draw_line(-strand, strand, color, 2.5)
+	_hit_overlay.draw_line(Vector2(-strand.x, strand.y), Vector2(strand.x, -strand.y), color, 2.5)
+
+
 ## Paints the hit flash on the overlay node: a pale disc over the machine that
 ## fades out, and a ring that closes in on it. Connected to the overlay's `draw`
 ## signal in _configure_body. (The force field, if any, is painted first.)
 func _draw_hit_flash() -> void:
 	_draw_shield()
+	_draw_snare()
 	if hit_flash_left <= 0.0:
 		return
 	var left: float = hit_flash_left / CONFIG.hit_flash_seconds  # 1 at the hit, 0 when over
@@ -251,6 +281,8 @@ func yank_and_bind(puller: Vector2, stop_distance: float, seconds: float) -> voi
 	if is_dead:
 		return
 	is_bound = true
+	is_snared = false  # a full bind replaces a snare
+	_snared_time_left = 0.0
 	_bound_time_left = seconds
 	velocity = Vector2.ZERO
 	modulate = BOUND_TINT
@@ -280,6 +312,24 @@ func yank_and_bind(puller: Vector2, stop_distance: float, seconds: float) -> voi
 	tween.tween_property(self, "global_position", global_position + travel, travel.length() / CONFIG.vine_yank_speed)
 
 
+## The forest's vines hold this machine for `seconds`: it is slowed, not frozen
+## (see is_snared). Does nothing to a machine that is already bound, since a bind
+## is the stronger of the two.
+func snare_for(seconds: float) -> void:
+	if is_dead or is_bound:
+		return
+	is_snared = true
+	_snared_time_left = maxf(_snared_time_left, seconds)
+	if _hit_overlay != null:
+		_hit_overlay.queue_redraw()
+
+
+## How much of its walking speed this machine has right now: 1.0 normally,
+## snare_speed_factor while snared. (A bramble slows it separately, in _walk_towards.)
+func movement_factor() -> float:
+	return CONFIG.snare_speed_factor if is_snared else 1.0
+
+
 ## Called by a bramble patch: walk slowly for the next `steps` physics steps.
 func slow_for(steps: int) -> void:
 	_slowed_steps = maxi(_slowed_steps, steps)
@@ -306,6 +356,12 @@ func _tick_bound(delta: float) -> bool:
 		_hit_overlay.queue_redraw()
 	elif _shield_color().a > 0.0:
 		_hit_overlay.queue_redraw()  # a force field is always moving
+	# A snare counts down while the machine goes about its business.
+	if is_snared:
+		_snared_time_left -= delta
+		if _snared_time_left <= 0.0:
+			is_snared = false
+		_hit_overlay.queue_redraw()  # draws the net, or wipes it once the snare is over
 	# The arrival: count the fall and the landing dust down, redrawing meanwhile.
 	if _drop_left > 0.0 or land_fx_left > 0.0:
 		_drop_left = maxf(_drop_left - delta, 0.0)
@@ -315,14 +371,38 @@ func _tick_bound(delta: float) -> bool:
 		velocity = Vector2.ZERO
 		return true  # still rolling out of a gate or falling: do nothing yet
 	if not is_bound:
+		_check_contact(delta)
 		return false
 	_bound_time_left -= delta
 	if _bound_time_left <= 0.0:
 		is_bound = false
 		modulate = Color.WHITE  # white = "no tint"
+		_check_contact(delta)
 		return false
 	velocity = Vector2.ZERO
-	return true
+	return true  # a bound machine is tied up, so it does not hurt by touch either
+
+
+## Called by the arena: this machine should hurt `body` (Seven) by touch.
+func watch_contact(body: Node2D) -> void:
+	_contact_target = body
+
+
+## Touching Seven? Then announce it (at most once per contact_damage_cooldown).
+## Called from _tick_bound, so a machine that is still arriving (rolling out of a
+## gate or falling) or tied up never gets here: those do not hurt.
+func _check_contact(delta: float) -> void:
+	_contact_left = maxf(_contact_left - delta, 0.0)
+	if _contact_target == null or not is_instance_valid(_contact_target) or _contact_left > 0.0:
+		return
+	# Touching = the gap between the two edges is at most contact_margin_px.
+	# scale.x makes a big machine (the Linebreaker is scaled up) count its full size.
+	var machine_radius: float = (_collision.shape as CircleShape2D).radius * scale.x
+	var player_radius: float = CONFIG.player_radius_cells * float(CONFIG.cell_size)
+	var reach: float = machine_radius + player_radius + CONFIG.contact_margin_px
+	if global_position.distance_to(_contact_target.global_position) <= reach:
+		_contact_left = CONFIG.contact_damage_cooldown
+		touched.emit(CONFIG.contact_damage)
 
 
 ## _draw paints a plain square, only when there is no sprite texture.
@@ -409,7 +489,7 @@ func _next_goal(final_position: Vector2) -> Vector2:
 ## Takes one physics step towards `goal` at `speed` (times speed_scale), turning
 ## the sprite to face the way it is going.
 func _walk_towards(goal: Vector2, speed: float) -> void:
-	velocity = global_position.direction_to(goal) * speed * speed_scale
+	velocity = global_position.direction_to(goal) * speed * speed_scale * movement_factor()
 	# limit_length shortens a vector that is too long: the top speed for machines.
 	velocity = velocity.limit_length(CONFIG.player_speed * CONFIG.enemy_top_speed_share)
 	# In a bramble patch: walk slower, and count down the steps left in the thorns.

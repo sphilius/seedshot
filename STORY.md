@@ -98,7 +98,7 @@ Lucky has two kinds of line. Neither changes the game.
 
 | Wave | Helios (banner) | The Block (graffiti) | Beat |
 |---|---|---|---|
-| 1 | "Courtesy notice: your account is 90 days past due." | KEEP THE LIGHTS ON! | First light |
+| 1 | "Courtesy Notice: This sector's account is 90 minutes past due." | KEEP THE LIGHTS ON! | First light |
 | 2 | "A technician is on the way to help you." | NOT YOURS | Enforcement arrives |
 | 3 | "Unlicensed generation is theft of sunlight." | THE SUN IS FREE (and KNOCK x3, if the shop is shut) | You start choosing where trees go |
 | 4 | "Disconnection crews dispatched. Thank you for your patience." | GUARD THE TREES | First Sawbot, first blackout |

@@ -9,7 +9,7 @@ extends Node2D
 ##    Two great sunroots close enough (canopy_line_range_cells) that can SEE
 ##    each other (no wall or other tree between their centres) string a glowing
 ##    vine cable between them. A machine that walks across the cable is caught
-##    and bound in place for canopy_line_bind_seconds. Then that cable goes dim
+##    and snared for canopy_line_bind_seconds (slowed, but it can still act: s19). Then that cable goes dim
 ##    and must recharge (canopy_line_recharge) before it can catch again.
 ##    Strategy: plant and protect trees in pairs across the lanes machines walk.
 ##    LIMITS (s18): a tree holds at most canopy_line_links_per_tree cables and
@@ -31,7 +31,8 @@ extends Node2D
 ##
 ## 3. TRELLIS (DESIGN.md's "Overgrowth idea in one rule")
 ##    Zip from beside one tree to another and the vine stays strung between them
-##    for trellis_seconds. Each machine that crosses it is snared (bound) once.
+##    for trellis_seconds. Each machine that crosses it is snared once (slowed, but it
+##    can still shoot and saw: only Seven's own vine on a machine binds it).
 ##    Strategy: zip across a lane just before the machines walk into it.
 ##
 ## The arena calls sunburst() when the player's zip ends at a great tree, and
@@ -43,6 +44,10 @@ const CONFIG: GameConfig = preload("res://config/game_config.tres")
 const WORLD_MASK: int = 1
 ## How long the Sunburst's ring of light takes to spread and fade, in seconds.
 const BURST_SECONDS: float = 0.5
+
+## Emitted when a rebuild strings a cable that was not standing before. The
+## arena answers (once per run) with a Canopy FM line explaining the vines.
+signal line_formed
 
 ## One entry per cable standing right now: {a: ForestTree, b: ForestTree, key: String}.
 ## Public so the tests can read it.
@@ -159,6 +164,10 @@ func _forest_signature() -> int:
 ## So each tree ends up tied to its nearest neighbours, and short cables win.
 func _rebuild_lines() -> void:
 	rebuild_count += 1
+	# Remember which cables stood, so a NEW one can be announced below.
+	var stood_before: Dictionary[String, bool] = {}
+	for old_line: Dictionary in lines:
+		stood_before[old_line.key] = true
 	lines.clear()
 	var great: Array[ForestTree] = []
 	for node: Node in get_tree().get_nodes_in_group(ForestTree.GROUP):
@@ -199,8 +208,13 @@ func _rebuild_lines() -> void:
 
 	# Forget the recharge timers of cables that no longer stand.
 	var standing: Dictionary[String, bool] = {}
+	var any_new: bool = false
 	for line: Dictionary in lines:
 		standing[line.key] = true
+		if not stood_before.has(line.key):
+			any_new = true
+	if any_new:
+		line_formed.emit()
 	for key: String in _recharge.keys():
 		if not standing.has(key):
 			_recharge.erase(key)
@@ -223,13 +237,13 @@ func _catch_on(line: Dictionary) -> void:
 	var b: Vector2 = (line.b as ForestTree).global_position
 	for node: Node in get_tree().get_nodes_in_group(Enemy.GROUP):
 		var enemy := node as Enemy
-		if enemy == null or enemy.is_dead or enemy.is_bound or is_immune(enemy):
+		if enemy == null or enemy.is_dead or enemy.is_bound or enemy.is_snared or is_immune(enemy):
 			continue
 		# Geometry2D gives the point on the segment a-b nearest to the machine.
 		var nearest: Vector2 = Geometry2D.get_closest_point_to_segment(enemy.global_position, a, b)
 		if enemy.global_position.distance_to(nearest) <= CONFIG.canopy_line_catch_px:
-			# Binding "towards itself" ties it up right where it stands.
-			enemy.yank_and_bind(enemy.global_position, 0.0, CONFIG.canopy_line_bind_seconds)
+			# The forest's vine SNARES: slowed to a crawl, but not frozen (s19).
+			enemy.snare_for(CONFIG.canopy_line_bind_seconds)
 			_recharge[line.key] = CONFIG.canopy_line_recharge
 			# Immune from now until immunity_seconds AFTER the binding ends.
 			_immune[enemy.get_instance_id()] = CONFIG.canopy_line_bind_seconds + CONFIG.canopy_line_immunity_seconds
@@ -255,12 +269,12 @@ func _tick_trellises(delta: float) -> void:
 			continue
 		for node: Node in get_tree().get_nodes_in_group(Enemy.GROUP):
 			var enemy := node as Enemy
-			if enemy == null or enemy.is_dead or enemy.is_bound or vine.caught.has(enemy.get_instance_id()):
+			if enemy == null or enemy.is_dead or enemy.is_bound or enemy.is_snared or vine.caught.has(enemy.get_instance_id()):
 				continue
 			var nearest: Vector2 = Geometry2D.get_closest_point_to_segment(enemy.global_position, vine.a, vine.b)
 			if enemy.global_position.distance_to(nearest) <= CONFIG.canopy_line_catch_px:
 				vine.caught[enemy.get_instance_id()] = true
-				enemy.yank_and_bind(enemy.global_position, 0.0, CONFIG.trellis_bind_seconds)
+				enemy.snare_for(CONFIG.trellis_bind_seconds)
 				Sfx.play(&"bind")
 
 

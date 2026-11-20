@@ -133,6 +133,16 @@ func _ready() -> void:
 	await _test_s18_entrances()
 	await _test_s18_lucky_moves()
 	await _test_s18_round_4()
+	# s19: phase 1 of the post-jam backlog.
+	await _test_s19_phase1()
+	await _test_s19_contact()
+	await _test_s19_snare()
+	await _test_s19_canopy_line_line()
+	await _test_s19_bramble_preview()
+	await _test_s19_bramble_intro()
+	await _test_s19_lucky()
+	await _test_s19_bigger_trees()
+	await _test_s19_fuse_saves_once()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -1630,7 +1640,7 @@ func _test_great_powers() -> void:
 	# A machine walking across the cable is caught, and the cable recharges.
 	var scrapper: Scrapper = _arena.spawn_scrapper_at(Vector2i(6, 12))
 	await _wait_frames(2)
-	_check(scrapper.is_bound, "a machine on the Canopy line is bound")
+	_check(scrapper.is_snared, "a machine on the Canopy line is snared")
 	_check(not powers.is_charged(powers.lines[0]), "then the line recharges before it catches again")
 
 	# A wall of wood between them: a third (ordinary) tree blocks the view.
@@ -1678,7 +1688,7 @@ func _test_trellis() -> void:
 	_check(powers.trellises.size() == 1, "a zip from one tree to another strings a trellis")
 	var scrapper: Scrapper = _arena.spawn_scrapper_at(Vector2i(6, 12))
 	await _wait_frames(2)
-	_check(scrapper.is_bound, "a machine crossing the trellis is snared")
+	_check(scrapper.is_snared, "a machine crossing the trellis is snared")
 	# A zip that did not start beside a tree strings nothing.
 	_arena.player.zip_from = _arena.grid.cell_to_world(Vector2i(20, 7))
 	_arena._on_player_zip_finished()
@@ -1945,20 +1955,20 @@ func _test_canopy_line_caps() -> void:
 	b.mature()
 	var scrapper: Scrapper = _arena.spawn_scrapper_at(Vector2i(6, 12))
 	await _wait_frames(3)
-	_check(scrapper.is_bound and powers.is_immune(scrapper), "a machine on the Canopy line is bound")
-	var released: Callable = func() -> bool: return not scrapper.is_bound
+	_check(scrapper.is_snared and powers.is_immune(scrapper), "a machine on the Canopy line is snared")
+	var released: Callable = func() -> bool: return not scrapper.is_snared
 	_check(await _wait_until(released, CONFIG.canopy_line_bind_seconds + 1.0), "the line lets it go after %.1f s" % CONFIG.canopy_line_bind_seconds)
 	# Put it straight back on the cable with the cable fully charged: before s18
 	# it would be caught again at once, for ever.
 	powers._recharge.clear()
 	scrapper.global_position = _arena.grid.cell_to_world(Vector2i(6, 12))
 	await _wait_frames(3)
-	_check(powers.is_charged(powers.lines[0]) and not scrapper.is_bound, "a machine just let go is not snared again: it can walk free")
+	_check(powers.is_charged(powers.lines[0]) and not scrapper.is_snared, "a machine just let go is not snared again: it can walk free")
 	# Once the immunity has run out, the cable can catch it again.
 	powers._immune.clear()
 	scrapper.global_position = _arena.grid.cell_to_world(Vector2i(6, 12))
 	await _wait_frames(3)
-	_check(scrapper.is_bound, "after %.0f s it can be caught again" % CONFIG.canopy_line_immunity_seconds)
+	_check(scrapper.is_snared, "after %.0f s it can be caught again" % CONFIG.canopy_line_immunity_seconds)
 
 
 ## s18, "must fix before I submit": Sasha forgot the Heart Tree existed, could
@@ -2307,6 +2317,16 @@ func _test_pause_menu() -> void:
 	_check(not CanopyFM.music_on and not Sfx.is_muted, "the Music button switches only the music off")
 	pause.choose(PauseOverlay.Item.MUSIC)
 	_check(CanopyFM.music_on, "and on again")
+
+	# s19: while the game is muted, both sound rows say so; each keeps its own setting.
+	Sfx.set_muted(true)
+	_check(pause.menu_label(PauseOverlay.Item.EFFECTS).contains("muted") and pause.menu_label(PauseOverlay.Item.MUSIC).contains("muted"), "while muted, the Sound and Music rows say so")
+	_check(pause.menu_label(PauseOverlay.Item.EFFECTS).contains("On") and pause.menu_label(PauseOverlay.Item.MUSIC).contains("On"), "and still show their own On / Off setting")
+	pause.choose(PauseOverlay.Item.MUSIC)
+	_check(not CanopyFM.music_on and Sfx.is_muted and pause.menu_label(PauseOverlay.Item.MUSIC).contains("Off"), "a switch still changes only itself while muted")
+	pause.choose(PauseOverlay.Item.MUSIC)
+	Sfx.set_muted(false)
+	_check(not pause.menu_label(PauseOverlay.Item.EFFECTS).contains("muted") and not pause.menu_label(PauseOverlay.Item.MUSIC).contains("muted"), "unmuted, the note goes away")
 
 	# Restart this wave: asks first, then puts the wave back.
 	_arena.waves.start_wave(2)
@@ -3004,3 +3024,399 @@ func _test_s18_round_4() -> void:
 	_check(_arena.clip_left <= 0.0, "and not again straight away")
 	_arena.intro_clips_on = false
 	Engine.time_scale = 1.0
+
+## How many times `text` is on the radio or waiting in its queue (for the s19
+## restart checks: a restart must never leave a line said twice).
+func _radio_copies_of(text: String) -> int:
+	var copies: int = 0
+	if _arena.radio.is_on() and _arena._current_line.get("text", "") == text:
+		copies += 1
+	for line: Dictionary in _arena._story_queue:
+		if line.text == text:
+			copies += 1
+	return copies
+
+
+## s19 phase 1: the post-jam fixes, one group per item.
+func _test_s19_phase1() -> void:
+	# ITEM 1: a restarted wave says its one-time radio lines again.
+	# In wave 1 the opening hook and a tutorial line (said through _dj_once) are
+	# first said during the wave; after a restart both must come round again.
+	await _fresh_arena()
+	_arena.player._invulnerable_left = 999.0
+	_arena.waves.time_scale = 20.0
+	_arena.tutorial_on = true
+	_arena.waves.start_wave(1)
+	_check(_arena._hook_shown and _radio_copies_of(CONFIG.story_hook) == 1, "wave 1 start: the opening hook is on the air")
+	_arena._dj_once(&"s19_test_moment", ["S19 one-time line."])
+	_check(_arena._dj_said.has(&"s19_test_moment"), "a one-time line is marked as said")
+	_arena._story_queue.append(Arena._radio_line(Radio.CANOPY, "S19 stale line from the failed attempt."))
+	_arena._restart_current_wave()
+	_check(not _arena._dj_said.has(&"s19_test_moment"), "a restart in wave 1 forgets the one-time line first said in that wave")
+	_check(_radio_copies_of(CONFIG.story_hook) == 1 and _arena._hook_shown, "and the opening hook is said again, once")
+	_check(_radio_copies_of("S19 stale line from the failed attempt.") == 0, "lines still waiting from the failed attempt are dropped")
+	_check(_radio_copies_of(_arena.helios_line_for(1)) == 1, "Helios's notice is not doubled")
+	_arena._dj_once(&"s19_test_moment", ["S19 one-time line."])
+	_check(_radio_copies_of("S19 one-time line.") == 1, "the forgotten line can be said again, once")
+	_arena._restart_current_wave()
+	_arena._restart_current_wave()
+	_check(_radio_copies_of(CONFIG.story_hook) == 1, "restarting twice still leaves the hook said once")
+
+	# In a LATER wave: lines from earlier waves are not repeated, this wave's are.
+	await _fresh_arena()
+	_arena.player._invulnerable_left = 999.0
+	_arena.waves.time_scale = 20.0
+	_arena.tutorial_on = true
+	_arena.waves.start_wave(1)
+	_arena._dj_once(&"s19_early", ["S19 early line."])
+	_arena.waves.start_wave(3)  # the snapshot is taken here: "s19_early" is from an earlier wave
+	_arena._dj_once(&"s19_this_wave", ["S19 this-wave line."])
+	_arena._restart_current_wave()
+	_check(_arena._dj_said.has(&"s19_early"), "a restart in wave 3 keeps lines from earlier waves as said")
+	_check(not _arena._dj_said.has(&"s19_this_wave"), "but forgets the ones first said in wave 3")
+	_check(_radio_copies_of(CONFIG.story_hook) == 0, "the hook (said in wave 1) is not repeated in wave 3")
+	_check(_radio_copies_of("S19 early line.") == 0, "an earlier wave's line is not repeated")
+	_check(_radio_copies_of(_arena.helios_line_for(3)) == 1, "wave 3's own notice is queued once")
+	_arena._dj_once(&"s19_this_wave", ["S19 this-wave line."])
+	_check(_radio_copies_of("S19 this-wave line.") == 1, "wave 3's one-time line plays again after the restart")
+
+	# ITEM 2: Helios's opening line.
+	_check(CONFIG.helios_lines[0] == "Courtesy Notice: This sector's account is 90 minutes past due.", "Helios's opening line is the new text")
+	for line: String in CONFIG.helios_lines:
+		_check(not line.contains("90 days"), "no Helios line still says 90 days")
+
+
+## s19 item 3: machines are solid to Seven and hurt on contact (not while they
+## are arriving or tied up), and Seven can never be pinned by one.
+func _test_s19_contact() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	player._invulnerable_left = 0.0
+	player.global_position = _arena.grid.cell_to_world(Vector2i(5, 12))
+	# A machine tied up by the vine stands still, so it makes a fixed obstacle.
+	# (Binding with the puller at its own spot binds it without dragging it.)
+	var wall_bot: Scrapper = _arena.spawn_scrapper_at(Vector2i(8, 12))
+	await _wait_frames(2)
+	wall_bot.yank_and_bind(wall_bot.global_position, 0.0, 999.0)
+	var wall_x: float = wall_bot.global_position.x
+	Input.action_press(&"move_right")
+	await _wait_frames(120)  # two seconds: far more than enough to cross three cells
+	Input.action_release(&"move_right")
+	var gap: float = wall_x - player.global_position.x
+	var radii: float = (CONFIG.player_radius_cells + CONFIG.scrapper_radius_cells) * float(CONFIG.cell_size)
+	_check(player.global_position.x < wall_x and gap > radii - 3.0, "Seven cannot walk through a machine (stopped %.0f px short; the two bodies are %.0f px wide together)" % [gap, radii])
+	_check(player.hp == CONFIG.player_max_hp, "pushing against a tied-up machine does not hurt")
+
+	# A free machine that is touching Seven hurts her, once per cooldown.
+	await _fresh_arena()
+	player = _arena.player
+	player._invulnerable_left = 0.0
+	player.global_position = _arena.grid.cell_to_world(Vector2i(5, 12))
+	var toucher: Sawbot = _arena.spawn_sawbot_at(Vector2i(8, 12))
+	await _wait_frames(2)
+	toucher.is_entering = false
+	toucher.global_position = player.global_position + Vector2(radii + 2.0, 0.0)  # edges 2 px apart
+	player.hp = player.max_hp
+	player._invulnerable_left = 0.0
+	toucher._contact_left = 0.0
+	toucher._tick_bound(0.0)  # what the machine does at the top of every physics step
+	_check(player.hp == player.max_hp - CONFIG.contact_damage, "touching a machine costs %d pip" % CONFIG.contact_damage)
+	toucher._tick_bound(0.0)
+	_check(player.hp == player.max_hp - CONFIG.contact_damage, "and not again straight away")
+	# Even with the machine's cooldown over, Seven's own blink protects her.
+	toucher._contact_left = 0.0
+	toucher._tick_bound(0.0)
+	_check(player.hp == player.max_hp - CONFIG.contact_damage, "Seven's blink after a hit blocks another touch")
+	player._invulnerable_left = 0.0
+	toucher._contact_left = 0.0
+	toucher._tick_bound(0.0)
+	_check(player.hp == player.max_hp - 2 * CONFIG.contact_damage, "once the blink and the cooldown are over, a touch hurts again")
+
+	# Not while it is arriving, not while it is tied up, not when merely near.
+	player.hp = player.max_hp
+	player._invulnerable_left = 0.0
+	toucher._contact_left = 0.0
+	toucher.is_entering = true
+	toucher._tick_bound(0.0)
+	_check(player.hp == player.max_hp, "a machine still rolling out of a gate or dropping in does not hurt")
+	toucher.is_entering = false
+	toucher.is_bound = true
+	toucher._bound_time_left = 5.0
+	toucher._tick_bound(0.0)
+	_check(player.hp == player.max_hp, "a bound machine does not hurt")
+	toucher.is_bound = false
+	toucher.global_position = player.global_position + Vector2(radii + CONFIG.contact_margin_px + 10.0, 0.0)
+	toucher._tick_bound(0.0)
+	_check(player.hp == player.max_hp, "standing close but not touching does not hurt")
+
+	# Never pinned: Seven stands between a tree and a tied-up machine and can walk out.
+	await _fresh_arena()
+	player = _arena.player
+	_arena.spawn_tree(Vector2i(10, 12), true)
+	player.global_position = _arena.grid.cell_to_world(Vector2i(9, 12))
+	var jammer: Scrapper = _arena.spawn_scrapper_at(Vector2i(7, 12))
+	await _wait_frames(2)
+	jammer.yank_and_bind(jammer.global_position, 0.0, 999.0)
+	jammer.global_position = player.global_position + Vector2(-radii - 1.0, 0.0)  # pressed against her left side
+	var start_y: float = player.global_position.y
+	Input.action_press(&"move_up")
+	await _wait_frames(30)
+	Input.action_release(&"move_up")
+	_check(start_y - player.global_position.y > 15.0, "pressed between a machine and a tree, Seven can still walk out sideways (%.0f px)" % (start_y - player.global_position.y))
+
+	# The vine zip passes over machines.
+	await _fresh_arena()
+	player = _arena.player
+	player.global_position = _arena.grid.cell_to_world(Vector2i(4, 12))
+	var tree: ForestTree = _arena.spawn_tree(Vector2i(14, 12), true)
+	var in_the_way: Scrapper = _arena.spawn_scrapper_at(Vector2i(8, 12))
+	await _wait_frames(2)
+	in_the_way.yank_and_bind(in_the_way.global_position, 0.0, 999.0)
+	_check(player.try_vine(tree.global_position), "the vine still latches a tree with a machine in the line")
+	var landed_past: Callable = func() -> bool: return not player.is_zipping
+	await _wait_until(landed_past, 3.0)
+	_check(player.global_position.x > in_the_way.global_position.x + 20.0, "and the zip carries Seven past the machine")
+
+
+## s19 items 4 and 5: the forest's vines SNARE (slowed, can still act); only
+## Seven's own vine BINDS (frozen, cannot act).
+func _test_s19_snare() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	player._invulnerable_left = 999.0  # the shots are not what these checks are about
+	player.global_position = _arena.grid.cell_to_world(Vector2i(5, 12))
+	var snared: Spitter = _arena.spawn_spitter_at(Vector2i(10, 12))
+	var bound: Spitter = _arena.spawn_spitter_at(Vector2i(10, 14))
+	await _wait_frames(2)
+	snared.snare_for(30.0)
+	bound.yank_and_bind(bound.global_position, 0.0, 30.0)
+	_check(snared.is_snared and not snared.is_bound, "a snared machine is snared, not bound")
+	_check(bound.is_bound and not bound.is_snared, "a bound machine is bound, not snared")
+	_check(is_equal_approx(snared.movement_factor(), CONFIG.snare_speed_factor) and is_equal_approx(bound.movement_factor(), 1.0), "snaring slows walking; a bind is handled separately")
+
+	# The snared Spitter still winds up and fires; the bound one never does.
+	var shots: Node = _arena.get_node("Shots")
+	var winding: Callable = func() -> bool: return snared.is_winding_up
+	_check(await _wait_until(winding, CONFIG.spitter_cooldown + 2.0), "a Spitter caught on a forest vine still winds up")
+	var fired: Callable = func() -> bool: return shots.get_child_count() >= 1
+	_check(await _wait_until(fired, CONFIG.spitter_windup + 1.0), "and still fires")
+	_check(not bound.is_winding_up, "a Spitter bound by Seven's vine never winds up")
+	_check(snared.is_snared, "and the snare was still holding when it fired")
+
+	# A snare slows a walker; the same walk unsnared goes further.
+	await _fresh_arena()
+	player = _arena.player
+	player._invulnerable_left = 999.0
+	player.global_position = _arena.grid.cell_to_world(Vector2i(3, 12))
+	var held: Scrapper = _arena.spawn_scrapper_at(Vector2i(20, 12))
+	var free: Scrapper = _arena.spawn_scrapper_at(Vector2i(20, 8))
+	await _wait_frames(2)
+	held.snare_for(30.0)
+	var held_start: Vector2 = held.global_position
+	var free_start: Vector2 = free.global_position
+	await _wait_frames(30)
+	var held_walked: float = held.global_position.distance_to(held_start)
+	var free_walked: float = free.global_position.distance_to(free_start)
+	_check(free_walked > 20.0 and held_walked < free_walked * 0.5, "a snared Scrapper crawls (%.0f px against %.0f px)" % [held_walked, free_walked])
+
+	# A snare wears off, and Seven's vine on a snared machine binds it outright.
+	held._snared_time_left = 0.0
+	held._tick_bound(0.016)
+	_check(not held.is_snared, "a snare wears off")
+	held.snare_for(30.0)
+	held.yank_and_bind(held.global_position, 0.0, 5.0)
+	_check(held.is_bound and not held.is_snared, "Seven's vine on a snared machine binds it and ends the snare")
+	held.snare_for(30.0)
+	_check(not held.is_snared, "a bound machine cannot also be snared")
+
+	# Item 5 (numbers only): the forest's grip is shorter than it was.
+	_check(CONFIG.canopy_line_bind_seconds < 2.5 and CONFIG.trellis_bind_seconds < 2.0, "the forest's snares are shorter than the old binds (%.1f s and %.1f s)" % [CONFIG.canopy_line_bind_seconds, CONFIG.trellis_bind_seconds])
+
+
+## s19 item 6: Canopy FM explains the forest's vines the first time one forms.
+func _test_s19_canopy_line_line() -> void:
+	await _fresh_arena()
+	_arena.ng_plus = true
+	_arena.tutorial_on = false  # New Game +, no reminder: the line must still come
+	var a: ForestTree = _arena.spawn_tree(Vector2i(3, 12), true)
+	var b: ForestTree = _arena.spawn_tree(Vector2i(9, 12), true)
+	_check(_radio_copies_of(CONFIG.canopy_line_intro_line) == 0, "nothing is said before a line forms")
+	a.mature()
+	b.mature()
+	await _wait_frames(3)
+	_check(_arena.great_powers.lines.size() == 1, "two great sunroots string a canopy line")
+	_check(_radio_copies_of(CONFIG.canopy_line_intro_line) == 1, "the first canopy line makes Canopy FM explain the vines")
+	_check(not CONFIG.canopy_line_intro_line.contains("\n") and CONFIG.canopy_line_intro_line.count(". ") == 0, "and it is one sentence")
+	# Said once: clear the radio, then form another line between two more trees.
+	_arena._story_queue.clear()
+	_arena.radio.clear()
+	_arena._current_line = {}
+	var c: ForestTree = _arena.spawn_tree(Vector2i(3, 6), true)
+	var d: ForestTree = _arena.spawn_tree(Vector2i(9, 6), true)
+	c.mature()
+	d.mature()
+	await _wait_frames(3)
+	_check(_arena.great_powers.lines.size() >= 2 and _radio_copies_of(CONFIG.canopy_line_intro_line) == 0, "a later line says nothing more")
+
+
+## s19 item 7: a faint ring shows where the Bramble Seed will land.
+func _test_s19_bramble_preview() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	var floor_rect: Rect2 = _arena.bramble_floor_rect()
+	_check(player.bramble_bounds == floor_rect, "the player knows the floor a bramble can land on")
+	# In the open: exactly bramble_range_cells along the aim.
+	player.global_position = _arena.grid.cell_to_world(Vector2i(10, 7))
+	player.aim_direction = Vector2.RIGHT
+	var open_spot: Vector2 = player.global_position + Vector2.RIGHT * CONFIG.bramble_range_cells * CONFIG.cell_size
+	_check(player.bramble_landing_point().is_equal_approx(open_spot), "in the open the ring sits bramble_range_cells away")
+	# Aimed at a wall: the ring sits at the clamped spot, one cell in from the wall.
+	player.global_position = _arena.grid.cell_to_world(Vector2i(22, 7))
+	var wall_spot: Vector2 = player.bramble_landing_point()
+	_check(floor_rect.has_point(wall_spot) or is_equal_approx(wall_spot.x, floor_rect.end.x), "aimed at a wall the ring is kept on the floor")
+	_check(is_equal_approx(wall_spot.x, floor_rect.end.x), "at the foot of the wall (x = %.0f)" % wall_spot.x)
+	# What is drawn is where the patch grows.
+	var thrown_at: Array[Vector2] = []
+	player.bramble_thrown.connect(func(at: Vector2) -> void: thrown_at.append(at))
+	var patches_before: int = _arena._brambles.get_child_count()
+	_check(player.throw_bramble() and thrown_at.size() == 1, "a throw is announced")
+	_check(thrown_at[0].is_equal_approx(wall_spot), "the seed is announced at the spot the ring showed")
+	_check(_arena._brambles.get_child_count() == patches_before + 1 and _arena._brambles.get_child(patches_before).position.is_equal_approx(wall_spot), "and the patch grows exactly there")
+	# The ring shows only while there is a seed in hand, and Seven is up and free.
+	player.bramble_charges = 2
+	_check(player.is_bramble_preview_shown(), "the ring shows while Seven holds a seed")
+	player.bramble_charges = 0
+	_check(not player.is_bramble_preview_shown(), "and not when there is none to throw")
+	player.bramble_charges = 1
+	player.locked = true
+	_check(not player.is_bramble_preview_shown(), "nor while the upgrade cards have Seven locked")
+	player.locked = false
+	_check(Bramble.radius_px() == CONFIG.bramble_radius_cells * CONFIG.cell_size, "the ring is the size of the patch")
+
+
+## s19 item 8: the Bramble Seed is introduced clearly, once, with a clip.
+func _test_s19_bramble_intro() -> void:
+	# The words say what it does, when to use it, and name the key.
+	var keys_text: String = " ".join(CONFIG.dj_bramble)
+	_check(keys_text.contains("Q or Space") and keys_text.contains("slows down") and keys_text.contains("gateway"), "the wave 2 radio lines name the key, say what it does and when to use it")
+	_check(" ".join(CONFIG.dj_bramble_touch).contains("bramble button") and not keys_text.to_lower().contains("trick."), "the touch lines name the button")
+	_check(CONFIG.intro_titles.has(Arena.BRAMBLE_KIND) and CONFIG.intro_titles[Arena.BRAMBLE_KIND].contains("Q or Space"), "the clip's title is in intro_titles and names the key")
+
+	await _fresh_arena()
+	_arena.intro_clips_on = true
+	_arena.waves.time_scale = 0.0  # no machines arrive: only the bramble clip is under test
+	_arena.waves.start_wave(1)
+	await _wait_drawn_frames(3)
+	_check(_arena.clip_left <= 0.0, "no clip in wave 1")
+	# Wave 2, but another clip is playing: the bramble clip waits its turn.
+	_arena.clip_left = 5.0
+	_arena.waves.start_wave(2)
+	await _wait_drawn_frames(3)
+	_check(not _arena._intro_done.has(Arena.BRAMBLE_KIND), "it waits while another clip is playing")
+	_arena.clip_left = 0.0
+	# No seed in hand yet: still waits ("the first time a charge is available").
+	_arena.player.bramble_charges = 0
+	_arena.player.bramble_recharge_left = 100.0  # or the next physics step would grow one back
+	await _wait_drawn_frames(3)
+	_check(_arena.clip_left <= 0.0, "and while Seven has no seed")
+	_arena.player.bramble_charges = 1
+	await _wait_drawn_frames(3)
+	_check(_arena.clip_left > 0.0 and _arena.clip_label.text == CONFIG.intro_titles[Arena.BRAMBLE_KIND], "wave 2 with a seed in hand: the clip plays, with its title")
+	# Once only, even after the wave restarts.
+	_arena.clip_left = 0.0
+	Engine.time_scale = 1.0
+	_arena._restart_current_wave()
+	await _wait_drawn_frames(3)
+	_check(_arena.clip_left <= 0.0, "it does not play again after a restart")
+	_arena.intro_clips_on = false
+	Engine.time_scale = 1.0
+
+
+## s19 item 9: Lucky's lines stay up longer, and on a phone the open shop shows
+## a paw "Tap" button that counts as a tap on Lucky.
+func _test_s19_lucky() -> void:
+	# The shipped numbers (the checks shorten the shared config's holds, so ask a
+	# fresh GameConfig for the defaults).
+	var shipped := GameConfig.new()
+	_check(shipped.lucky_line_seconds > shipped.story_line_seconds, "Lucky's lines are held longer than everyone else's (%.0f s against %.0f s)" % [shipped.lucky_line_seconds, shipped.story_line_seconds])
+
+	await _fresh_arena()
+	# (CONFIG.set() from the test scene does not reach the arena's config, so these
+	# checks use the numbers as shipped.)
+	_check(is_equal_approx(_arena._hold_seconds_for(Radio.LUCKY), shipped.lucky_line_seconds), "Lucky's hold is her own number")
+	_check(is_equal_approx(_arena._hold_seconds_for(Radio.CANOPY), shipped.story_line_seconds) and is_equal_approx(_arena._hold_seconds_for(Radio.HELIOS), shipped.story_line_seconds), "Canopy FM and Helios keep the usual hold")
+	var line: String = "Hello, kid."
+	var typing: float = float(line.length()) / shipped.radio_chars_per_second
+	_arena._radio_interrupt(_arena._lucky_says(line))
+	_check(is_equal_approx(_arena._story_time_left, shipped.lucky_line_seconds + typing), "a Lucky line is on the air for her hold plus its typing time")
+	_arena._radio_interrupt(Arena._radio_line(Radio.CANOPY, line))
+	_check(is_equal_approx(_arena._story_time_left, shipped.story_line_seconds + typing), "a Canopy FM line is on the air for the usual hold")
+
+	# The tap button: only when the shop is open and the player is on a phone.
+	await _fresh_arena()
+	var shop: CatShop = _arena.cat_shop
+	_arena.player.touch_mode = true
+	await _wait_drawn_frames(2)
+	_check(not shop.show_tap_button, "a shut shop shows no button")
+	for i: int in CONFIG.cat_hits_needed:
+		shop.hit_by_seed()
+	await _wait_drawn_frames(2)
+	_check(shop.show_tap_button, "the open shop shows the paw button on a phone")
+	var button_at: Vector2 = shop.get_global_transform_with_canvas().origin + CatShop.button_offset()
+	_check(_arena._is_on_shop(button_at), "a tap on the button counts as a tap on Lucky")
+	_check(_arena._is_on_shop(button_at + Vector2(CONFIG.lucky_button_radius_px - 2.0, 0.0)), "also near its edge")
+	_check(not _arena._is_on_shop(button_at + Vector2(CONFIG.lucky_button_radius_px + 40.0, 0.0)), "but not well outside it")
+	_check(CatShop.button_offset().y > float(CONFIG.cell_size) / 2.0 + CatShop.STICK_OUT, "the button sits below the shop's ledge")
+	_arena.player.touch_mode = false
+	await _wait_drawn_frames(2)
+	_check(not shop.show_tap_button, "on a desktop the button is not shown (the shop says 'E: talk' instead)")
+
+
+## s19 item 10: trees are DRAWN bigger, but what they block stays exactly one cell.
+func _test_s19_bigger_trees() -> void:
+	await _fresh_arena(true)
+	_check(CONFIG.tree_draw_scale > 1.0, "a grown tree is drawn bigger than before (%.2f x)" % CONFIG.tree_draw_scale)
+	var grown: ForestTree = _arena.spawn_tree(Vector2i(8, 12), true)
+	var young: ForestTree = _arena.spawn_tree(Vector2i(12, 12), false)
+	await _wait_frames(2)
+	_check(is_equal_approx(grown.drawn_scale(), CONFIG.tree_draw_scale), "a grown tree is drawn at the new scale")
+	_check(is_equal_approx(young.drawn_scale(), 1.0), "a sapling keeps its size")
+	grown.mature()
+	_check(is_equal_approx(grown.drawn_scale(), CONFIG.tree_draw_scale), "so does a great sunroot")
+	# The collision square is exactly one cell for every kind of tree, whatever is drawn.
+	var cell_px: float = float(CONFIG.cell_size)
+	var trees: Array[ForestTree] = [grown, young, _arena.heart_tree]
+	for tree: ForestTree in trees:
+		var square: Vector2 = (tree.get_node("CollisionShape2D") as CollisionShape2D).shape.get_rect().size
+		_check(square.is_equal_approx(Vector2(cell_px, cell_px)), "a tree's collision square is exactly one cell (%.0f x %.0f)" % [square.x, square.y])
+	_check((grown.get_node("CollisionShape2D") as CollisionShape2D).scale.is_equal_approx(Vector2.ONE) and grown.scale.is_equal_approx(Vector2.ONE), "the tree itself is not scaled, only its picture")
+
+
+## s19 open note: "the fuse saved Seven more than once". Not reproduced by reading
+## the code (one fuse per shop opening, never refitted); this tries to make it
+## happen by going down again and again, through restarts and extra pods on the shop.
+func _test_s19_fuse_saves_once() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	var saves: Array[int] = [0]  # an Array so the lambda below can change it
+	player.fuse_used.connect(func() -> void: saves[0] += 1)
+	_arena.waves.wave = 3
+	_arena.waves.state = WaveDirector.State.FIGHTING
+	for i: int in CONFIG.cat_hits_needed:
+		_arena.cat_shop.hit_by_seed()
+	_check(player.has_fuse, "opening the shop fits one fuse")
+	# Go down five times in a row, restarting the wave in between each time.
+	for attempt: int in 5:
+		player.hp = 1
+		player._invulnerable_left = 0.0
+		player.fuse_shield_left = 0.0
+		player.take_damage(1)
+		if player.is_dead:
+			_arena._restart_current_wave()
+	_check(saves[0] == 1, "five knock-outs in a row used the fuse exactly once (%d)" % saves[0])
+	_check(not player.has_fuse, "and no fuse is fitted again after it blows")
+	# More pods on an already-open shop, and a restart, give nothing back either.
+	for i: int in 6:
+		_arena.cat_shop.hit_by_seed()
+	_arena._restart_current_wave()
+	_check(not player.has_fuse and saves[0] == 1, "more pods on the open shop and another restart do not refit it")

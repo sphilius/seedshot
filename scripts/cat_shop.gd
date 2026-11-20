@@ -49,6 +49,9 @@ const PAW_COLOR: Color = Color(0.94, 0.90, 0.78, 0.16)
 ## The cat's eyes: amber, brighter than 1 so they read through the night tint.
 const EYES_COLOR: Color = Color(1.6, 1.15, 0.35)
 const TALK_COLOR: Color = Color(1.0, 1.0, 1.0, 0.9)
+## The phone's paw button: Lucky's pink on the radio, with a dark paw on it.
+const BUTTON_COLOR: Color = Color(1.0, 0.55, 0.75)
+const BUTTON_PAW_COLOR: Color = Color(0.30, 0.08, 0.16)
 
 ## How many pods have landed so far, and whether the shutter is up.
 ## Public (no underscore) so the tests can read them.
@@ -56,6 +59,9 @@ var hits: int = 0
 var is_open: bool = false
 ## Set by the arena while Seven stands close enough to talk: shows "E: talk".
 var show_talk_hint: bool = false
+## Set by the arena on a phone or tablet while the shop is open: draws a paw
+## button with "Tap" under the shop, in place of "E: talk".
+var show_tap_button: bool = false
 
 ## Seconds until the cat's eyes next open / left of the current look.
 ## eyes_left is public so the tests can see when the eyes are showing.
@@ -160,12 +166,40 @@ func _draw() -> void:
 		draw_circle(Vector2(vine_x - 2.0, 2.0), 3.5, VINE_COLOR)
 
 	# "E: talk", just under the ledge, while Seven is close to the open shop.
-	if is_open and show_talk_hint:
+	# (Not on a phone: there the paw button below says "Tap" instead.)
+	if is_open and show_talk_hint and not show_tap_button:
 		var font: Font = ThemeDB.fallback_font
 		draw_string(font, Vector2(-half.x, half.y + STICK_OUT + 16.0), "E: talk", HORIZONTAL_ALIGNMENT_CENTER, half.x * 2.0, 14, TALK_COLOR)
+	if is_open and show_tap_button:
+		_draw_tap_button()
 
 	# The other hint: a faded paw print on the wall just right of the shop.
-	var paw := Vector2(half.x + 16.0, 4.0)
-	draw_circle(paw, 5.5, PAW_COLOR)
+	_draw_paw(Vector2(half.x + 16.0, 4.0), 1.0, PAW_COLOR)
+
+
+## Where the tap button's centre sits, relative to the shop's centre: just under
+## the ledge. Static, so the arena can test a tap against it too.
+static func button_offset() -> Vector2:
+	var cell_px: float = float(CONFIG.cell_size)
+	return Vector2(0.0, cell_px / 2.0 + STICK_OUT + CONFIG.lucky_button_radius_px + 6.0)
+
+
+## A paw print: one pad and three toes, `scale` times the wall print's size.
+func _draw_paw(at: Vector2, scale: float, color: Color) -> void:
+	draw_circle(at, 5.5 * scale, color)
 	for toe: Vector2 in [Vector2(-6.0, -8.0), Vector2(0.0, -10.5), Vector2(6.0, -8.0)]:
-		draw_circle(paw + toe, 2.6, PAW_COLOR)
+		draw_circle(at + toe * scale, 2.6 * scale, color)
+
+
+## The phone's "talk to Lucky" button: a pink disc with a dark paw print and the
+## word "Tap", pulsing gently so it reads as something to press.
+func _draw_tap_button() -> void:
+	var centre: Vector2 = button_offset()
+	var radius: float = CONFIG.lucky_button_radius_px
+	# sin(...) swings -1..1; scaled, it makes the button breathe by up to 6%.
+	var pulse: float = 1.0 + 0.06 * sin(_time * 4.0)
+	draw_circle(centre, radius * pulse, Color(BUTTON_COLOR, 0.92))
+	draw_arc(centre, radius * pulse, 0.0, TAU, 32, Color.WHITE, 2.5)
+	_draw_paw(centre + Vector2(0.0, 3.0), radius / 12.0, BUTTON_PAW_COLOR)
+	var font: Font = ThemeDB.fallback_font
+	draw_string(font, centre + Vector2(-radius, radius + 14.0), "Tap", HORIZONTAL_ALIGNMENT_CENTER, radius * 2.0, 16, Color.WHITE)
