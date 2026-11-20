@@ -142,6 +142,7 @@ func _ready() -> void:
 	await _test_s19_bramble_intro()
 	await _test_s19_lucky()
 	await _test_s19_bigger_trees()
+	await _test_s19_fuse_saves_once()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -3379,3 +3380,33 @@ func _test_s19_bigger_trees() -> void:
 		var square: Vector2 = (tree.get_node("CollisionShape2D") as CollisionShape2D).shape.get_rect().size
 		_check(square.is_equal_approx(Vector2(cell_px, cell_px)), "a tree's collision square is exactly one cell (%.0f x %.0f)" % [square.x, square.y])
 	_check((grown.get_node("CollisionShape2D") as CollisionShape2D).scale.is_equal_approx(Vector2.ONE) and grown.scale.is_equal_approx(Vector2.ONE), "the tree itself is not scaled, only its picture")
+
+
+## s19 open note: "the fuse saved Seven more than once". Not reproduced by reading
+## the code (one fuse per shop opening, never refitted); this tries to make it
+## happen by going down again and again, through restarts and extra pods on the shop.
+func _test_s19_fuse_saves_once() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	var saves: Array[int] = [0]  # an Array so the lambda below can change it
+	player.fuse_used.connect(func() -> void: saves[0] += 1)
+	_arena.waves.wave = 3
+	_arena.waves.state = WaveDirector.State.FIGHTING
+	for i: int in CONFIG.cat_hits_needed:
+		_arena.cat_shop.hit_by_seed()
+	_check(player.has_fuse, "opening the shop fits one fuse")
+	# Go down five times in a row, restarting the wave in between each time.
+	for attempt: int in 5:
+		player.hp = 1
+		player._invulnerable_left = 0.0
+		player.fuse_shield_left = 0.0
+		player.take_damage(1)
+		if player.is_dead:
+			_arena._restart_current_wave()
+	_check(saves[0] == 1, "five knock-outs in a row used the fuse exactly once (%d)" % saves[0])
+	_check(not player.has_fuse, "and no fuse is fitted again after it blows")
+	# More pods on an already-open shop, and a restart, give nothing back either.
+	for i: int in 6:
+		_arena.cat_shop.hit_by_seed()
+	_arena._restart_current_wave()
+	_check(not player.has_fuse and saves[0] == 1, "more pods on the open shop and another restart do not refit it")
