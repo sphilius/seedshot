@@ -1005,6 +1005,11 @@ static func _is_touch() -> bool:
 ## Puts the next queued line on the radio, or takes the radio off the air when
 ## none are left. A line stays up for story_line_seconds after it finishes typing.
 func _show_next_story_line() -> void:
+	# A Helios notice cuts out with a burst of static, and cuts in with one.
+	var helios_was_on: bool = _current_line.get("speaker", &"") == Radio.HELIOS
+	var helios_is_next: bool = not _story_queue.is_empty() and _story_queue[0].speaker == Radio.HELIOS
+	if helios_was_on or helios_is_next:
+		Sfx.play(&"static")
 	if _story_queue.is_empty():
 		radio.clear()
 		_story_time_left = 0.0
@@ -1014,6 +1019,19 @@ func _show_next_story_line() -> void:
 	_current_line = line
 	radio.say(line.speaker, line.text)
 	_story_time_left = CONFIG.story_line_seconds + float(line.text.length()) / CONFIG.radio_chars_per_second
+
+
+## The player asked to move the radio along (a tap on its panel): finish typing
+## the line if it is still typing, otherwise go to the next line. Public for
+## the tests.
+func skip_radio_line() -> void:
+	if not radio.is_on():
+		return
+	if not radio.is_fully_typed():
+		radio.finish_typing()
+		_story_time_left = CONFIG.story_line_seconds
+	else:
+		_show_next_story_line()
 
 
 ## What Helios says as wave `number` starts, ready to show. Empty if the config
@@ -1090,6 +1108,14 @@ func _on_wave_started(number: int, total: int) -> void:
 	if count_great_trees() > 0 and not _dj_said.has(&"sunburst"):
 		_dj_said[&"sunburst"] = true
 		lines.append(_radio_line(Radio.CANOPY, CONFIG.sunburst_intro_line % CONFIG.sunburst_charges_per_wave))
+		# And SHOW it, with the same slow-and-zoom as a new machine: the camera
+		# goes to a great sunroot and the screen says what to do with it. It
+		# cannot be skipped (s18 round 4: the New Game + player must see this).
+		if intro_clips_on:
+			for tree: ForestTree in _trees_by_cell.values():
+				if is_instance_valid(tree) and tree.is_great:
+					start_clip(tree, CONFIG.sunburst_intro_title_touch if _is_touch() else CONFIG.sunburst_intro_title, CONFIG.heavy_intro_seconds)
+					break
 	_show_story_lines(lines)
 
 
@@ -1295,6 +1321,7 @@ func is_wave_end_beat_playing() -> bool:
 ## test finishing): never leave the game running in slow motion.
 func _exit_tree() -> void:
 	Engine.time_scale = 1.0
+	CanopyFM.set_light(1.0)  # off the lot (the title screen) the radio is clear
 	get_viewport().canvas_transform = Transform2D.IDENTITY  # and never leave it shaken
 
 
@@ -1586,6 +1613,17 @@ func _on_player_zip_finished() -> void:
 ## _unhandled_input receives input that nothing else used. After the last wave,
 ## R / Enter, or a tap or click on the banner, starts a fresh run.
 func _unhandled_input(event: InputEvent) -> void:
+	# A click or tap ON THE RADIO PANEL moves the broadcast along: the first one
+	# finishes typing the line, the next one goes to the next line.
+	var press_at: Vector2 = Vector2.INF  # INF = "this event is not a press"
+	if event is InputEventMouseButton and event.pressed and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+		press_at = (event as InputEventMouseButton).position
+	elif event is InputEventScreenTouch and event.pressed:
+		press_at = (event as InputEventScreenTouch).position
+	if press_at != Vector2.INF and not is_run_finished and radio.is_on() and radio.panel_rect().has_point(press_at):
+		skip_radio_line()
+		get_viewport().set_input_as_handled()  # this press is used up
+		return
 	# Talking to Lucky: the E key near the open shop, or a tap / click on it.
 	if not is_run_finished and cat_shop != null and cat_shop.is_open:
 		var wants_talk: bool = event.is_action_pressed(&"talk") and is_near_lucky()

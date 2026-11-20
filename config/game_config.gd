@@ -271,6 +271,10 @@ extends Resource
 ## LUCKY'S MOMENT: when the shop opens the game all but stops
 ## (lucky_intro_slow_scale; 1 = normal speed) for lucky_intro_seconds of real
 ## time, with the camera on the shop and this text on screen.
+## The Sunburst clip (New Game +): shown the first time a wave starts with a
+## great sunroot standing.
+@export var sunburst_intro_title: String = "GREAT SUNROOT\nRight-click it to vine there: that sets off a SUNBURST.\nGold trees are ready. Nearby great sunroots chain."
+@export var sunburst_intro_title_touch: String = "GREAT SUNROOT\nVine to it: that sets off a SUNBURST.\nGold trees are ready. Nearby great sunroots chain."
 @export var lucky_intro_seconds: float = 5.0
 @export var lucky_intro_slow_scale: float = 0.03
 @export var lucky_intro_title: String = "LUCKY'S GIFT\nRight-click a machine to bind it with the vine.\nOne spare fuse: it saves Seven once this run."
@@ -706,6 +710,10 @@ extends Resource
 ## Empty space kept on each side of the banner, in screen pixels.
 @export var banner_side_margin: float = 40.0
 @export var helios_end_line: String = "Account closed."
+## CANOPY FM IN THE DARK: with no light the song is this many decibels quieter
+## and a radio hiss plays at radio_hiss_db; both fade away as the block lights.
+@export var music_dark_drop_db: float = 7.0
+@export var radio_hiss_db: float = -19.0
 ## The dark panel behind the end screen's words (the last number is how solid
 ## it is: 0 = invisible, 1 = solid).
 @export var end_panel_color: Color = Color(0.03, 0.04, 0.06, 0.84)

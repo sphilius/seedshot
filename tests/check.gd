@@ -2952,3 +2952,14 @@ func _test_s18_round_4() -> void:
 		if cell.y > 1:
 			leaves_border = true
 	_check(leaves_border, "a route between two border cells swings in off the border")
+
+	# THE RADIO: a tap on the panel moves it along; Canopy FM hisses in the dark.
+	await _fresh_arena()
+	_arena._radio_later([Arena._radio_line(Radio.CANOPY, "First line, long enough to still be typing."), Arena._radio_line(Radio.HELIOS, "Second line.")])
+	_check(_arena.radio.is_on() and not _arena.radio.is_fully_typed(), "a radio line starts typing")
+	_arena.skip_radio_line()
+	_check(_arena.radio.is_fully_typed() and _arena.radio.speaker == Radio.CANOPY, "one tap on the panel finishes typing the line")
+	_arena.skip_radio_line()
+	_check(_arena.radio.speaker == Radio.HELIOS, "the next tap goes on to the next line")
+	_check(Sfx.stream_for(&"static") != null, "a Helios notice has a burst of static to cut in and out with")
+	_check(CanopyFM.hiss_for(0.0) > CanopyFM.hiss_for(1.0) + 20.0, "Canopy FM hisses in the dark (%.0f dB) and is clear once the block is lit (%.0f dB)" % [CanopyFM.hiss_for(0.0), CanopyFM.hiss_for(1.0)])

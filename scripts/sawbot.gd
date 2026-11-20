@@ -99,10 +99,11 @@ func _saw(tree: ForestTree, delta: float) -> void:
 		is_sawing = true
 		modulate = SAWING_TINT
 		_saw_time_left = _saw_interval()  # the first bite takes a moment
+	Sfx.play_steady(&"saw")  # the saw runs for as long as the blade is on the tree
 	_saw_time_left -= delta
 	if _saw_time_left <= 0.0:
 		_saw_time_left = _saw_interval()
-		Sfx.play(&"saw")
+
 		tree.take_damage(CONFIG.sawbot_saw_damage)  # at 0 HP the tree fells itself
 
 

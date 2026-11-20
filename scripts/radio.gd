@@ -87,6 +87,12 @@ func is_on() -> bool:
 	return speaker != &""
 
 
+## Types the rest of the line out at once (a tap on the panel does this).
+func finish_typing() -> void:
+	_typed = float(text.length())
+	queue_redraw()
+
+
 ## True once the whole line has been typed out. Used by the tests.
 func is_fully_typed() -> bool:
 	return int(_typed) >= text.length()
