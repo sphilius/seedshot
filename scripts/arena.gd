@@ -155,8 +155,15 @@ var _bar_bottom: ColorRect
 ## The machine's name, shown low on the screen during a clip (so it does not
 ## cover the machine, which the camera holds in the middle). Public for the tests.
 var clip_label: Label
-## True once the opening line has been shown, so a restarted wave 1 skips it.
+## True once the opening line has been shown. (A restarted wave 1 puts this back
+## to what it was when the wave began, so the hook is said again: see
+## _dj_said_at_wave_start.)
 var _hook_shown: bool = false
+## What _dj_said and _hook_shown were when the current wave began. A restart puts
+## them back, so a one-time line first said during a failed attempt is said again
+## instead of being lost for good (s19). Lines from EARLIER waves stay "said".
+var _dj_said_at_wave_start: Dictionary[StringName, bool] = {}
+var _hook_shown_at_wave_start: bool = false
 ## The cell of the most recent sapling planted by a downed machine.
 var _last_planted_cell: Vector2i = ArenaGrid.NO_CELL
 ## True once the player has zipped (or the hint is otherwise no longer needed).
@@ -858,6 +865,16 @@ func _restart_current_wave() -> void:
 	waves.hold_break = false
 	upgrade_picker.cancel()
 	player.locked = false
+	# The radio goes back to how it was when the wave began: lines still waiting
+	# from the failed attempt are dropped (so nothing is said twice), and the
+	# one-time lines first said during that attempt count as unsaid again (the
+	# wave-start code below queues them afresh).
+	_story_queue.clear()
+	_current_line = {}
+	_story_time_left = 0.0
+	radio.clear()
+	_dj_said = _dj_said_at_wave_start.duplicate()
+	_hook_shown = _hook_shown_at_wave_start
 
 	# Replant the forest from the snapshot taken at wave start.
 	tap_points.clear()
@@ -1128,6 +1145,13 @@ func _on_wave_started(number: int, total: int) -> void:
 	# (A restart calls this again, right after the revive, so the number stays.)
 	if not player.is_dead and not _is_restarting:
 		_hp_at_wave_start = player.hp
+	# Same idea for the radio: remember which one-time lines had been said. (A
+	# restart skips this, so the snapshot stays the one from the FIRST attempt.)
+	# .duplicate() makes a separate copy; without it both names would point at
+	# the same dictionary and the snapshot would change as the wave went on.
+	if not _is_restarting:
+		_dj_said_at_wave_start = _dj_said.duplicate()
+		_hook_shown_at_wave_start = _hook_shown
 	_choose_tap_points(number)
 	_show_banner("Wave %d" % number, 1.5)
 	# By now the controls are learned; the bottom wall belongs to the windows.

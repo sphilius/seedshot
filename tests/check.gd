@@ -133,6 +133,8 @@ func _ready() -> void:
 	await _test_s18_entrances()
 	await _test_s18_lucky_moves()
 	await _test_s18_round_4()
+	# s19: phase 1 of the post-jam backlog.
+	await _test_s19_phase1()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -3004,3 +3006,63 @@ func _test_s18_round_4() -> void:
 	_check(_arena.clip_left <= 0.0, "and not again straight away")
 	_arena.intro_clips_on = false
 	Engine.time_scale = 1.0
+
+## How many times `text` is on the radio or waiting in its queue (for the s19
+## restart checks: a restart must never leave a line said twice).
+func _radio_copies_of(text: String) -> int:
+	var copies: int = 0
+	if _arena.radio.is_on() and _arena._current_line.get("text", "") == text:
+		copies += 1
+	for line: Dictionary in _arena._story_queue:
+		if line.text == text:
+			copies += 1
+	return copies
+
+
+## s19 phase 1: the post-jam fixes, one group per item.
+func _test_s19_phase1() -> void:
+	# ITEM 1: a restarted wave says its one-time radio lines again.
+	# In wave 1 the opening hook and a tutorial line (said through _dj_once) are
+	# first said during the wave; after a restart both must come round again.
+	await _fresh_arena()
+	_arena.player._invulnerable_left = 999.0
+	_arena.waves.time_scale = 20.0
+	_arena.tutorial_on = true
+	_arena.waves.start_wave(1)
+	_check(_arena._hook_shown and _radio_copies_of(CONFIG.story_hook) == 1, "wave 1 start: the opening hook is on the air")
+	_arena._dj_once(&"s19_test_moment", ["S19 one-time line."])
+	_check(_arena._dj_said.has(&"s19_test_moment"), "a one-time line is marked as said")
+	_arena._story_queue.append(Arena._radio_line(Radio.CANOPY, "S19 stale line from the failed attempt."))
+	_arena._restart_current_wave()
+	_check(not _arena._dj_said.has(&"s19_test_moment"), "a restart in wave 1 forgets the one-time line first said in that wave")
+	_check(_radio_copies_of(CONFIG.story_hook) == 1 and _arena._hook_shown, "and the opening hook is said again, once")
+	_check(_radio_copies_of("S19 stale line from the failed attempt.") == 0, "lines still waiting from the failed attempt are dropped")
+	_check(_radio_copies_of(_arena.helios_line_for(1)) == 1, "Helios's notice is not doubled")
+	_arena._dj_once(&"s19_test_moment", ["S19 one-time line."])
+	_check(_radio_copies_of("S19 one-time line.") == 1, "the forgotten line can be said again, once")
+	_arena._restart_current_wave()
+	_arena._restart_current_wave()
+	_check(_radio_copies_of(CONFIG.story_hook) == 1, "restarting twice still leaves the hook said once")
+
+	# In a LATER wave: lines from earlier waves are not repeated, this wave's are.
+	await _fresh_arena()
+	_arena.player._invulnerable_left = 999.0
+	_arena.waves.time_scale = 20.0
+	_arena.tutorial_on = true
+	_arena.waves.start_wave(1)
+	_arena._dj_once(&"s19_early", ["S19 early line."])
+	_arena.waves.start_wave(3)  # the snapshot is taken here: "s19_early" is from an earlier wave
+	_arena._dj_once(&"s19_this_wave", ["S19 this-wave line."])
+	_arena._restart_current_wave()
+	_check(_arena._dj_said.has(&"s19_early"), "a restart in wave 3 keeps lines from earlier waves as said")
+	_check(not _arena._dj_said.has(&"s19_this_wave"), "but forgets the ones first said in wave 3")
+	_check(_radio_copies_of(CONFIG.story_hook) == 0, "the hook (said in wave 1) is not repeated in wave 3")
+	_check(_radio_copies_of("S19 early line.") == 0, "an earlier wave's line is not repeated")
+	_check(_radio_copies_of(_arena.helios_line_for(3)) == 1, "wave 3's own notice is queued once")
+	_arena._dj_once(&"s19_this_wave", ["S19 this-wave line."])
+	_check(_radio_copies_of("S19 this-wave line.") == 1, "wave 3's one-time line plays again after the restart")
+
+	# ITEM 2: Helios's opening line.
+	_check(CONFIG.helios_lines[0] == "Courtesy Notice: This sector's account is 90 minutes past due.", "Helios's opening line is the new text")
+	for line: String in CONFIG.helios_lines:
+		_check(not line.contains("90 days"), "no Helios line still says 90 days")
