@@ -1089,6 +1089,14 @@ func _test_three_pods_open_the_cat_shop() -> void:
 	var shop: CatShop = _arena.cat_shop
 	var pods: Node = _arena.get_node("Pods")
 	_check(shop != null and not shop.is_open and shop.hits == 0, "the arena has a closed shop")
+	_check(not shop.is_neon_showing(), "a closed shop shows no neon paw (it is not a clue)")
+	# The flicker: steady at full brightness, and a stutter between dim and bright at
+	# the start of every period.
+	var period: float = CONFIG.neon_flicker_period
+	var stutter: float = CONFIG.neon_flicker_seconds
+	_check(is_equal_approx(CatShop.neon_level(stutter + 0.1, period, stutter), 1.0), "the neon burns steady between flickers")
+	_check(is_equal_approx(CatShop.neon_level(0.0, period, stutter), 0.25) and is_equal_approx(CatShop.neon_level(CatShop.NEON_STUTTER_STEP * 1.5, period, stutter), 1.0), "the neon stutters dim, bright at the start of each period")
+	_check(is_equal_approx(CatShop.neon_level(period + 0.0, period, stutter), 0.25), "and it flickers again every period")
 	_check(not player.can_bind and not player.has_fuse, "no clamp and no fuse to begin with")
 
 	# A pod on the ordinary wall, well left of the shop, must not count.
@@ -1107,6 +1115,7 @@ func _test_three_pods_open_the_cat_shop() -> void:
 		if shot < CONFIG.cat_hits_needed - 1:
 			_check(not shop.is_open, "the shop stays shut after %d pod(s)" % (shot + 1))
 	_check(shop.is_open, "the third pod opens the shop")
+	_check(shop.is_neon_showing(), "once open, the neon paw sign shows")
 	_check(player.can_bind and player.has_fuse, "the cat's gift: the clamp and a spare fuse")
 	await _wait_until(func() -> bool: return pods.get_child_count() == 0, 1.5)
 
@@ -1785,10 +1794,13 @@ func _test_upgrades() -> void:
 	_check(player.max_hp == hp_before, "Patch Kit: no extra max health")
 	_arena.apply_upgrade(&"seed_pouch")
 	_check(player.fire_cooldown_scale < 1.0, "Seed Pouch: pods come faster")
+	# Compare with the bonus before: an earlier step in this test may have picked a
+	# random card, Heavy Seeds included, so the bonus does not always start at zero.
+	var bonus_before: float = _arena.seed_damage_bonus
 	_arena.apply_upgrade(&"heavy_seeds")
-	_check(is_equal_approx(_arena.seed_damage_bonus, CONFIG.upgrade_seed_damage), "Heavy Seeds: pods hit harder, by %.1f" % CONFIG.upgrade_seed_damage)
+	_check(is_equal_approx(_arena.seed_damage_bonus - bonus_before, CONFIG.upgrade_seed_damage), "Heavy Seeds: pods hit harder, by %.1f" % CONFIG.upgrade_seed_damage)
 	_arena.apply_upgrade(&"heavy_seeds")
-	_check(is_equal_approx(_arena.seed_damage_bonus, 2.0 * CONFIG.upgrade_seed_damage), "Heavy Seeds stacks: two picks add twice")
+	_check(is_equal_approx(_arena.seed_damage_bonus - bonus_before, 2.0 * CONFIG.upgrade_seed_damage), "Heavy Seeds stacks: two picks add twice")
 	_check(is_equal_approx(CONFIG.upgrade_seed_damage, 0.5), "Heavy Seeds adds half a point of damage")
 	# A fractional hit: the machine keeps the leftover half for its next hit.
 	var target: Scrapper = _arena.spawn_scrapper_at(Vector2i(20, 3))
@@ -2388,6 +2400,17 @@ func _test_back_wall_and_roof_graffiti() -> void:
 	var shop_front: int = Arena.CAT_SHOP_CELL.x / BackWall.FRONT_CELLS
 	_check(wall.front_count() * BackWall.FRONT_CELLS == CONFIG.grid_cols, "the fronts fill the back wall exactly (%d of them)" % wall.front_count())
 	_check(wall.is_shop_front(shop_front), "one front is left empty for Lucky's shop")
+	# Lit windows are small scenes: they take turns between a sprout and a hanging lamp,
+	# and only every second door / third windows front is lit (a few, not all).
+	_check(BackWall.lit_style(0) != BackWall.lit_style(1) and BackWall.lit_style(2) == BackWall.lit_style(0), "lit windows alternate between a sprout and a lamp")
+	var lit_doors: int = 0
+	var lit_window_fronts: int = 0
+	for i: int in wall.front_count():
+		if wall.kind_of(i) == BackWall.Kind.DOOR and BackWall.is_lit_door(i):
+			lit_doors += 1
+		if wall.kind_of(i) == BackWall.Kind.WINDOWS and BackWall.is_lit_windows(i):
+			lit_window_fronts += 1
+	_check(lit_doors >= 1 and lit_window_fronts >= 1, "the back wall has some lit homes (%d doors, %d window fronts)" % [lit_doors, lit_window_fronts])
 	_check(is_equal_approx(wall.front_rect(shop_front).get_center().x, _arena.cat_shop.global_position.x), "and the shop stands exactly in it")
 	_check(wall.kind_of(shop_front) == BackWall.Kind.SHUTTER, "that front would be a shutter anyway, so the pattern is unbroken")
 	var other_shutters: int = 0

@@ -289,6 +289,10 @@ extends Resource
 ## Seconds between blinks of the cat's eyes behind the shutter (the only visual
 ## hint that the shop is special). Long on purpose: the cat is meant to be hard.
 @export var cat_glint_interval: float = 7.0
+## The neon paw sign (shown only once the shop is open) flickers: every
+## neon_flicker_period seconds it stutters for neon_flicker_seconds, then burns steady.
+@export var neon_flicker_period: float = 3.2
+@export var neon_flicker_seconds: float = 0.4
 ## THE CAT'S GIFT (story step 3): the live clamp (right-click a machine to yank
 ## and bind it; locked until the cat is found) and a spare fuse. With a fuse
 ## fitted, the first time Seven would go down it gets back up instead, with this
