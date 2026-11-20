@@ -28,6 +28,8 @@ One line per asset or system: tool, date, what it did. This feeds the itch page'
 | 2026-11-20 | Claude Code | Repairing icon (`art/sprites/repair_icon.png`, `art/source/klad/upgrades/make_upgrade_icons.py`) | Drew a spanner and sprout in the upgrade-card icon style. |
 | 2026-11-20 | Claude Code | Dialogue rewrite (`config/game_config.gd`) and Heavy Seeds +0.5 | Rewrote Lucky, Helios and Canopy FM lines using the anti-ai-slop-writing skill's rules as a checklist; changed Heavy Seeds to half damage that stacks. |
 | 2026-11-20 | Claude Code | Mockups (`tests/capture_mockups.gd`, `docs/s20/`) | Staged proposed lit windows, a neon paw and a cat silhouette over the real arena for Sasha to choose from. Not in the game. |
+| 2026-11-20 | Claude Code | Robot mockups and corporate cheerful sprites (`tools/robot_mockups.py`, the Scrapper, Sawbot and Spitter pictures) | Recoloured and detailed the three machines from their originals in three options; Sasha locked option 2. |
+| 2026-11-20 | ElevenLabs Text to Speech | `audio/voice/*.mp3` (44 lines) | Spoke the Helios and Canopy FM lines with library stand-in voices via `tools/gen_voices.py`. Not in the game yet. |
 - Floor tiles (s14): 9 slabs pixelized by Klad from Sasha's Gemini concept sheet 02_floor_sheet_final (tools/floor_tiles.ps1), snapped to the game palette plus two floor-only steel steps.
 - Home roofs (s14): six roofs pixelized by Klad from Sasha's Gemini concept 03_wall_and_homes_b (tools/home_roofs.ps1), in narrow and wide versions; the game draws the front walls and windows.
 - Tree sprites (s14): sapling, grown, cut and big, cut out of Sasha's Gemini concept 04_sunroot_f and shrunk to 64 px by tools/tree_sprites.py (palette snap, speckle filter, outline).
