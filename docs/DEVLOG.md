@@ -384,6 +384,10 @@ From the kickoff. `config/game_config.tres` holds every speed, cooldown and size
 - The thunk and spit candidates came back very quiet (mean below -36 dB) and need a lot of gain; listen for hiss.
 - The listening page now plays every take evened out to its in-game loudness.
 
+## D-062: Phase 1 merged, pushed and uploaded to itch (Made, 2026-11-20)
+
+Sasha said "keep the branch, merge, push, and upload to itch" at about 1:45 AM ET, inside the jam window (it closes at 3:00 AM). `s19-phase1-fixes` was merged into `main` (merge `c6efa39`; one conflict, both sides appended to `AI_LOG.md`, both kept), `main` and the branch were pushed to GitHub, and the build exported from code commit `d52f2d1` went up with `butler push build\web kingriot/seedshot:html5 --userversion d52f2d1`: itch build #2444924, replacing #2444322 (`35d2323`). Status showed it processed. The branch is kept. Not done before the upload: a human playthrough of phase 1. It carries contact damage, snaring vines and the other nine items, all checked headlessly (827 checks) and the title screen seen loading on the local server, nothing more.
+
 ## D-061: Readability fixes: a ring for the bramble, a clearer intro, Lucky's button, bigger trees (Made, 2026-11-20)
 
 Four small changes from Sasha's round 5 notes, phase 1 of the post-jam backlog (s19).
