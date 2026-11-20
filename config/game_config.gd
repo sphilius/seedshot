@@ -61,10 +61,11 @@ extends Resource
 ## Seconds a reload takes before any Quick Reload cards (they take time off this).
 @export var reload_seconds: float = 3.0
 ## The ring that fills round Seven while reloading, and the small pips under
-## Seven that show the pods left (full pips, then dim empty ones).
-@export var reload_ring_color: Color = Color(1.0, 0.82, 0.40, 0.9)
+## Seven that show the pods left (full pips, then dim empty ones). Values above 1
+## stay bright under the night tint (like the grove rest glow).
+@export var reload_ring_color: Color = Color(1.5, 1.15, 0.45, 0.95)
 @export var reload_ring_radius_cells: float = 0.62
-@export var clip_pip_color: Color = Color(1.0, 0.92, 0.65, 0.95)
+@export var clip_pip_color: Color = Color(1.5, 1.35, 0.8, 1.0)
 @export var clip_pip_empty_color: Color = Color(0.2, 0.2, 0.2, 0.55)
 ## How far below Seven's centre the pips sit, in cells, and the gap between them in pixels.
 @export var clip_pips_below_cells: float = 0.62
