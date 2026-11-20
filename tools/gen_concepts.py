@@ -48,6 +48,11 @@ ROUND 4: THE PICK (Sasha chose Split A, 2026-11-20)
     with new shapes that differ from every machine above (python tools/gen_concepts.py
     --set split --machine scrapper).
 
+ROUND 5: THE SCRAPPER, NOT HUMANOID (python tools/gen_concepts.py --scrapper-shapes)
+    Sasha picked Spitter take 2 and Sawbot take 2, and rejected both humanoid Scrapper takes:
+    "it shouldn't be humanoid at all". This makes the Scrapper again in the same Split A style
+    with three non-humanoid shapes (a crab crawler, a flail roller, a hammer ram), 2 takes each.
+
 USAGE (from the project root; needs the GEMINI_API_KEY user environment variable)
     python tools/gen_concepts.py                       all machines, both directions, 2 takes
     python tools/gen_concepts.py --set split           the two even-split styles (round 3)
@@ -424,6 +429,49 @@ def generate(prompt: str, key: str, references: tuple = ()) -> bytes:
     sys.exit("no picture returned: " + " ".join(texts)[:400] + " " + json.dumps(data.get("promptFeedback", {}))[:300])
 
 
+# The Scrapper's job again, now with the one hard rule Sasha added: nothing humanoid.
+SCRAPPER_JOB = (
+    "MACHINE: the SCRAPPER, Helios's basic melee grunt. It crawls up to the player's tiny "
+    "gardener robot and smashes it with a telegraphed swing. It is the most common machine. "
+    "HARD RULE: it must NOT be humanoid in any way: no torso with two arms and two legs, no head "
+    "on shoulders, no biped stance, nothing that reads as a robot person or a mech suit. It should "
+    "look like a work machine or a creature-like tool. The smiling face plate is a flat plate set "
+    "into the front of its body, not a head."
+)
+SCRAPPER_SHAPES = {
+    "crab": (
+        "SHAPE: a crab crawler. A low, wide, flat armoured body that sits close to the ground on "
+        "six short bent legs, with two big hydraulic pincer claws held out in front like a crab's. "
+        "The smiling face plate is set in the front slab of the body between the claws."
+    ),
+    "flail": (
+        "SHAPE: a flail roller. A fat horizontal drum body that rolls on two big wide drum wheels "
+        "at its sides, with a long jointed boom arm rising from the top that swings a heavy "
+        "wrecking-ball mace on a chain. The smiling face plate is set in the front of the drum."
+    ),
+    "ram": (
+        "SHAPE: a hammer ram. A low, squat slab body on four stubby crawler pods, with one huge "
+        "piston hammer head on a thick boom that arches over the body like a stamping press, ready "
+        "to smash straight down in front of it. The smiling face plate is set in the front slab."
+    ),
+}
+
+
+def make_scrapper_shapes(key: str, takes: int) -> None:
+    """Generate the non-humanoid Scrapper: every shape, the Split A look, `takes` pictures each.
+    Files: scrapper_split_a_<shape>_<take>.png. Existing files are skipped, so a stopped
+    run can be started again without paying twice."""
+    for shape, text in SCRAPPER_SHAPES.items():
+        prompt = "\n\n".join([STYLE, SPLIT_DIRECTIONS["split_a"], SCRAPPER_JOB, text])
+        for take in range(1, takes + 1):
+            file = OUT_SPLIT / f"scrapper_split_a_{shape}_{take}.png"
+            if file.exists():
+                print(f"skip {file.name} (exists)")
+                continue
+            file.write_bytes(generate(prompt, key))
+            print(f"made {file.name}")
+
+
 MERGE_PROMPT = (
     "You are given two reference concept pictures of the SAME enemy machine, the RIPSAW, made in the "
     "same art style.\n"
@@ -516,6 +564,7 @@ def main() -> None:
     parser.add_argument("--force", action="store_true", help="redo pictures that already exist")
     parser.add_argument("--sheet", action="store_true", help="only rebuild the contact sheet")
     parser.add_argument("--merge-ripsaw", action="store_true", help="round 4: merge Ripsaw takes 1 and 2")
+    parser.add_argument("--scrapper-shapes", action="store_true", help="round 5: non-humanoid Scrapper, 3 shapes")
     args = parser.parse_args()
     # Pick the set: which art directions, and which folder the pictures go to.
     # A dictionary used as a lookup table: set name -> (its art directions, its folder).
@@ -526,6 +575,9 @@ def main() -> None:
         return
     out.mkdir(parents=True, exist_ok=True)
     key = get_key()
+    if args.scrapper_shapes:
+        make_scrapper_shapes(key, args.takes)
+        return
     if args.merge_ripsaw:
         merge_ripsaw(key, args.takes)
         build_sheet(OUT_SPLIT)
