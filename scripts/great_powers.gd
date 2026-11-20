@@ -20,8 +20,12 @@ extends Node2D
 ## 2. SUNBURST
 ##    Zip to a great sunroot and it flares: every machine within
 ##    sunburst_radius_cells is stunned (bound) for sunburst_stun_seconds and takes
-##    sunburst_damage. One shared cooldown (sunburst_cooldown) for all trees.
-##    Strategy: your great trees are escape hatches; zip in when swarmed.
+##    sunburst_damage. sunburst_charges_per_wave of them each wave.
+##    THE CHAIN (s18 round 2): the flare sets off every other great sunroot
+##    within sunburst_chain_range_cells, a moment later, and each of those sets
+##    off its own neighbours: dominoes. One charge pays for the whole chain.
+##    Strategy: your great trees are escape hatches; grow them in a line and
+##    one zip sweeps the lot.
 ##
 ## And one for EVERY tree, in any run:
 ##
@@ -71,9 +75,18 @@ var _immune: Dictionary[int, float] = {}
 ## A number that stands for the forest as it was when the cables were last
 ## worked out (see _forest_signature). -1 = never worked out.
 var _signature: int = -1
-## The most recent Sunburst: where, and seconds since it went off (-1 = none showing).
-var _burst_at: Vector2 = Vector2.ZERO
-var _burst_time: float = -1.0
+## The flares showing right now, for drawing: each is {at: Vector2, time: float}
+## (time = seconds since it went off).
+var _bursts: Array[Dictionary] = []
+## Great sunroots waiting their turn in the chain: {tree: ForestTree, left: float}
+## (left = seconds until it flares).
+var _chain: Array[Dictionary] = []
+## Ids of the trees that have already flared in the chain running now, so each
+## flares only once and the chain always ends.
+var _chain_done: Dictionary[int, bool] = {}
+## How many trees flared in the last chain, the first one included. Public for
+## the tests.
+var chain_size: int = 0
 
 
 ## _physics_process runs every physics step: count down the timers, rebuild the
@@ -98,10 +111,13 @@ func _physics_process(delta: float) -> void:
 		if is_charged(line):
 			_catch_on(line)
 	_tick_trellises(delta)
-	if _burst_time >= 0.0:
-		_burst_time += delta
-		if _burst_time > BURST_SECONDS:
-			_burst_time = -1.0
+	_tick_chain(delta)
+	# Age the flares on screen and drop the ones that have faded out.
+	# (Walk backwards, so removing an entry does not skip the next one.)
+	for i: int in range(_bursts.size() - 1, -1, -1):
+		_bursts[i].time += delta
+		if _bursts[i].time > BURST_SECONDS:
+			_bursts.remove_at(i)
 	queue_redraw()  # cables and the burst ring change every step
 
 
@@ -253,15 +269,70 @@ func is_sunburst_ready() -> bool:
 	return sunburst_charges > 0 and sunburst_cooldown_left <= 0.0
 
 
-## The player's zip ended at a great sunroot standing at `at`: stun and hurt every
-## machine nearby. Returns how many machines it caught (0 while cooling down).
+## The player's zip ended at a great sunroot standing at `at`: it flares, and the
+## chain starts. Returns how many machines the first flare caught, or -1 if no
+## Sunburst went off (no charge left, or still cooling down).
 func sunburst(at: Vector2) -> int:
 	if sunburst_charges <= 0 or sunburst_cooldown_left > 0.0:
-		return 0
+		return -1
 	sunburst_charges -= 1
 	sunburst_cooldown_left = CONFIG.sunburst_cooldown
-	_burst_at = at
-	_burst_time = 0.0
+	# A new chain: forget the last one, and note the tree it starts from as done.
+	_chain.clear()
+	_chain_done.clear()
+	chain_size = 1
+	for tree: ForestTree in _great_trees():
+		if tree.global_position.distance_to(at) < 1.0:
+			_chain_done[tree.get_instance_id()] = true
+	var caught: int = _flare(at)
+	_spread_chain(at)
+	return caught
+
+
+## Every great sunroot standing right now.
+func _great_trees() -> Array[ForestTree]:
+	var great: Array[ForestTree] = []
+	for node: Node in get_tree().get_nodes_in_group(ForestTree.GROUP):
+		var tree := node as ForestTree
+		if tree != null and not tree.is_queued_for_deletion() and tree.is_great and tree.stage == ForestTree.Stage.GROWN:
+			great.append(tree)
+	return great
+
+
+## Queues every great sunroot within chain range of `from` that has not flared
+## yet in this chain. Each is marked done at once, so two neighbours cannot
+## both queue the same tree.
+func _spread_chain(from: Vector2) -> void:
+	var reach: float = CONFIG.sunburst_chain_range_cells * CONFIG.cell_size
+	for tree: ForestTree in _great_trees():
+		var id: int = tree.get_instance_id()
+		if _chain_done.has(id) or tree.global_position.distance_to(from) > reach:
+			continue
+		_chain_done[id] = true
+		_chain.append({tree = tree, left = CONFIG.sunburst_chain_delay})
+
+
+## Counts the waiting trees down. When one's turn comes it flares and passes
+## the chain on to its own neighbours.
+func _tick_chain(delta: float) -> void:
+	# duplicate() copies the list: _spread_chain adds to _chain while we loop.
+	for link: Dictionary in _chain.duplicate():
+		link.left -= delta
+		if link.left > 0.0:
+			continue
+		_chain.erase(link)
+		# The tree may have been cut down while it waited: never touch a freed node.
+		if is_instance_valid(link.tree) and not (link.tree as ForestTree).is_queued_for_deletion():
+			var at: Vector2 = (link.tree as ForestTree).global_position
+			chain_size += 1
+			_flare(at)
+			_spread_chain(at)
+
+
+## One tree flares: every machine within the Sunburst radius of `at` is stunned
+## and hurt, and the flare is put on screen. Returns how many machines it caught.
+func _flare(at: Vector2) -> int:
+	_bursts.append({at = at, time = 0.0})
 	Sfx.play(&"wave_clear")
 	var reach: float = CONFIG.sunburst_radius_cells * CONFIG.cell_size
 	var caught: int = 0
@@ -304,8 +375,13 @@ func _draw() -> void:
 		draw_line(vine.a, vine.b, Color(green * light_boost, green.a * fade), 2.0, true)
 		for t: float in [0.2, 0.4, 0.6, 0.8]:
 			draw_circle(vine.a.lerp(vine.b, t), 2.5, Color(green * light_boost, green.a * fade))
-	if _burst_time >= 0.0:
-		var share: float = _burst_time / BURST_SECONDS  # 0 at the flash, 1 when gone
+	# Sunburst flares: a soft gold wash that spreads out and fades, with a thin
+	# bright edge. (It was one hard ring; Sasha asked for a softer glow.)
+	for burst: Dictionary in _bursts:
+		var share: float = burst.time / BURST_SECONDS  # 0 at the flash, 1 when gone
 		var radius: float = CONFIG.sunburst_radius_cells * CONFIG.cell_size * share
-		var ring := Color(1.0 * light_boost, 0.85 * light_boost, 0.4, 1.0 - share)
-		draw_arc(_burst_at, radius, 0.0, TAU, 48, ring, 6.0, true)
+		var gold: Color = CONFIG.sunburst_flare_color
+		# Three discs, each smaller than the last: a glow with a soft edge.
+		for layer: int in 3:
+			draw_circle(burst.at, radius * (1.0 - 0.25 * float(layer)), Color(gold, 0.10 * (1.0 - share)))
+		draw_arc(burst.at, radius, 0.0, TAU, 48, Color(gold * light_boost, 0.7 * (1.0 - share)), 2.5, true)

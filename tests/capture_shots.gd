@@ -50,6 +50,7 @@ func _ready() -> void:
 	await _shot_mid_fight()
 	await _shot_upgrade_cards()
 	await _shot_block_lit()
+	await _shot_linebreaker_drop()
 	get_tree().quit()
 
 
@@ -135,7 +136,7 @@ func _shot_upgrade_cards() -> void:
 
 
 ## Picture 3: late in New Game +. The block nearly lit, great sunroots with
-## their gold Sunburst rings and Canopy lines, graffiti across the roofs.
+## their gold Sunburst sheen and Canopy lines, a graffiti tag on every roof.
 func _shot_block_lit() -> void:
 	await _fresh_arena()
 	_arena.apply_ng_plus()
@@ -156,3 +157,21 @@ func _shot_block_lit() -> void:
 	player.aim_direction = Vector2.RIGHT
 	await _run_for(1.6)
 	await _save("screenshot_3_block_lit.png")
+
+
+## Picture 4: the first Linebreaker's intro clip, a moment after it lands. The
+## camera is pushed in, the black bars are up and its name is on the banner.
+func _shot_linebreaker_drop() -> void:
+	await _fresh_arena()
+	_plant(FOREST_CELLS)
+	_set_progress(5, 6)
+	_arena.waves.state = WaveDirector.State.FIGHTING
+	# Ask for a Linebreaker the way the wave director does, so it drops in with
+	# its clip and its three escorts roll out of the gates.
+	_arena._on_spawn_requested(WaveDirector.LINEBREAKER, 6)
+	# The clip runs in slow motion, so wait in REAL seconds: the last `true`
+	# tells the timer to ignore the game's slowed clock. 1.9 s is just after the
+	# landing (a 0.7 s fall at 40% speed takes 1.75 s).
+	await get_tree().create_timer(1.9, true, false, true).timeout
+	await _save("screenshot_4_linebreaker_drop.png")
+	Engine.time_scale = 1.0

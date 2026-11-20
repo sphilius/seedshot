@@ -53,6 +53,9 @@ var is_great: bool = false
 ## whole block's roots run through. Lots of hit points, Sawbots go for it first,
 ## and if it falls the wave starts again. Set by the arena before the tree is added.
 var is_heart: bool = false
+## How many whole waves this tree has stood through, grown (New Game + only).
+## At great_sunroot_waves_needed it may mature. Counted by the arena.
+var waves_stood: int = 0
 ## Extra hit points from Hardwood upgrades. Set by the arena.
 var bonus_hp: int = 0
 ## Multiplies how long the sapling takes to root (Quick Roots makes it smaller).
@@ -70,9 +73,14 @@ static var light_boost: float = 1.0
 ## How strongly every Heart Tree marker (ring and label) is drawn, 0 to 1. The
 ## arena fades it out after the first wave. Shared, like light_boost.
 static var heart_marker_fade: float = 1.0
-## True while a Sunburst is ready: every great sunroot then wears a gold ring.
+## True while a Sunburst is ready: every great sunroot then has a gold sheen.
 ## Shared by all trees and set by the arena each frame, like light_boost.
 static var sunburst_ready: bool = false
+## True between waves (and while the upgrade cards are up): saplings wait and
+## do not grow. Shared by all trees and set by the arena each frame.
+static var growth_paused: bool = false
+## Seconds until this sapling asks to become a tree. 0 or less = not counting.
+var _timer_left: float = 0.0
 
 ## Seconds this tree has spent as a sapling (fills the growth ring).
 var _sapling_age: float = 0.0
@@ -155,10 +163,22 @@ func take_damage(amount: int) -> void:
 ## grown tree does nothing here.
 func _process(delta: float) -> void:
 	var moving: bool = show_vine_hint or is_heart or is_great or stage == Stage.SAPLING or _pop_left > 0.0
-	if stage == Stage.SAPLING:
+	if stage == Stage.SAPLING and not growth_paused:
 		_sapling_age += delta
+		# The growing countdown (see _start_timer). It lives here, in _process,
+		# so it stops with the game: in the pause menu and between waves.
+		if _timer_left > 0.0:
+			_timer_left -= delta
+			if _timer_left <= 0.0:
+				_on_timer_timeout()
 	_pop_left = maxf(_pop_left - delta, 0.0)
 	_alarm_left = maxf(_alarm_left - delta, 0.0)
+	if is_great:
+		# A great sunroot's pool of light is gold while a Sunburst is ready, and
+		# the usual green otherwise. (modulate is the colour a sprite is tinted by.)
+		var glow: Node2D = get_node_or_null(Glow.NODE_NAME)
+		if glow != null:
+			glow.modulate = CONFIG.sunburst_glow_color if sunburst_ready else CONFIG.tree_glow_color
 	if moving:
 		queue_redraw()
 
@@ -212,6 +232,11 @@ static func _lit(color: Color) -> Color:
 func _draw_overlay() -> void:
 	var cell_px: float = float(CONFIG.cell_size)
 	if stage == Stage.SAPLING:
+		# A sapling that is done growing but may not turn solid (the split guard,
+		# or someone standing on it) shows no ring: a screen full of finished
+		# rings hid the machines in a late New Game + run.
+		if growth() >= 1.0:
+			return
 		# An arc from 12 o'clock (-PI/2) clockwise; TAU is a full turn.
 		_overlay.draw_arc(Vector2.ZERO, cell_px * 0.42, -PI / 2.0, -PI / 2.0 + TAU * growth(), 32, _lit(CONFIG.tree_growth_ring_color), 3.0, true)
 		return
@@ -242,16 +267,6 @@ func _draw_overlay() -> void:
 		var at := Vector2(-width / 2.0, -cell_px * 1.0)
 		_overlay.draw_string_outline(font, at, text, HORIZONTAL_ALIGNMENT_CENTER, width, CONFIG.heart_label_font_size, 5, Color(0.0, 0.0, 0.0, 0.9 * heart_marker_strength()))
 		_overlay.draw_string(font, at, text, HORIZONTAL_ALIGNMENT_CENTER, width, CONFIG.heart_label_font_size, color)
-	if is_great and sunburst_ready:
-		# SUNBURST READY: a gold ring that breathes, with eight short rays like a
-		# small sun, so the player can see which trees to zip to.
-		var gold: Color = _lit(CONFIG.sunburst_ready_color)
-		var swell: float = sin(Time.get_ticks_msec() / 1000.0 * 4.0) * 0.03
-		var ring: float = cell_px * (0.66 + swell)
-		_overlay.draw_arc(Vector2.ZERO, ring, 0.0, TAU, 40, gold, 2.5, true)
-		for i: int in 8:
-			var ray: Vector2 = Vector2.from_angle(TAU * float(i) / 8.0)
-			_overlay.draw_line(ray * (ring + 3.0), ray * (ring + 9.0), gold, 2.5)
 	if hp < max_hp():
 		# The health bar: a dark back, and a fill that shortens and reddens.
 		var share: float = clampf(float(hp) / float(max_hp()), 0.0, 1.0)
@@ -278,6 +293,12 @@ func _draw() -> void:
 		var tint: Color = CONFIG.tap_tree_tint if is_tap else Color.WHITE
 		if is_heart:
 			tint = CONFIG.heart_tree_tint
+		if is_great and sunburst_ready:
+			# SUNBURST READY: the leaves take on a gold sheen that breathes slowly.
+			# sin() swings between -1 and 1; this turns it into 0.7 to 1.0, and
+			# lerp slides from "no tint" (white) toward the sheen colour by that much.
+			var breath: float = 0.85 + 0.15 * sin(Time.get_ticks_msec() / 1000.0 * 2.5)
+			tint = tint * Color.WHITE.lerp(CONFIG.sunburst_sheen_color, breath)
 		draw_texture_rect(picture, Rect2(-size / 2.0, -size / 2.0, size, size), false, tint)
 		_draw_vine_hint(cell_px)
 		return
@@ -346,9 +367,11 @@ func _draw_vine_hint(cell_px: float) -> void:
 
 ## Waits `seconds`, then asks the arena whether this sapling may turn solid.
 func _start_timer(seconds: float) -> void:
-	# create_timer makes a one-shot timer; `timeout` is its signal, and connect()
-	# tells Godot which function to call when the signal fires.
-	get_tree().create_timer(seconds).timeout.connect(_on_timer_timeout)
+	# Only sets the countdown; _process counts it down and calls
+	# _on_timer_timeout at zero. (Until s18 round 4 this was a SceneTree timer,
+	# which keeps running while the game is paused: saplings grew, and made
+	# their "grown" sound, behind the pause menu.)
+	_timer_left = maxf(seconds, 0.001)  # maxf = the larger of the two: never zero
 
 
 ## Runs when the timer above fires. If the tree is still a sapling, it emits the

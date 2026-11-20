@@ -47,8 +47,9 @@ extends Resource
 ## After a hit the bot blinks and cannot be hurt again for this long, so two
 ## enemies landing together cost one hit point, not two.
 @export var player_hit_invulnerable_time: float = 0.8
-## Seconds between the bot going down and the arena starting over.
-@export var death_restart_delay: float = 1.2
+## Seconds between the bot going down and the arena starting over. (s18 round 2:
+## 1.8, was 1.2, so the knock-out can be watched. Real seconds, not slowed ones.)
+@export var death_restart_delay: float = 2.8
 
 @export_group("Seed pod")
 @export var seed_speed: float = 720.0
@@ -84,7 +85,9 @@ extends Resource
 ## Hit points of a grown tree. Nothing damages trees yet; Sawbots will (waves 5+).
 @export var tree_hp: int = 6
 ## A downed enemy is a walk-through sapling for this long, then a solid tree.
-@export var sapling_time: float = 1.0
+## s18 (Sasha): doubled from 1.0 so the Quick Roots upgrade has something to
+## speed up, then doubled again to 4.0 (half the growth rate once more).
+@export var sapling_time: float = 4.0
 ## If someone is standing on a sapling when it should turn solid, it waits this
 ## long and tries again (so nobody gets trapped inside a tree).
 @export var sapling_retry_time: float = 0.25
@@ -92,8 +95,9 @@ extends Resource
 @export_group("Scrapper")
 ## s18: every machine walks 20% faster than before (this was 120).
 @export var scrapper_speed: float = 144.0
-## 1 = dies to a single seed pod.
-@export var scrapper_hp: int = 1
+## s18 round 2 (Sasha: "too easy"): every machine has double the hit points it
+## had. A Scrapper now takes two seed pods (it was 1).
+@export var scrapper_hp: int = 2
 @export_range(0.1, 0.49) var scrapper_radius_cells: float = 0.33
 ## How often a Scrapper recalculates its route to the player.
 @export var scrapper_repath_interval: float = 0.35
@@ -113,31 +117,66 @@ extends Resource
 ## Slower than a Scrapper (120): you have time to reach it before a tree falls.
 ## LINEBREAKER (a heavy Scrapper, scrapper.gd `heavy`): hit points, size (1 =
 ## a Scrapper's), speed (share of a Scrapper's), melee damage and colour.
-## s18: 15 hit points (was 5), and 15% faster than before: 0.67 of the new
-## Scrapper speed is about 97 px/s (it was 84). Still a third slower than a Scrapper.
-@export var linebreaker_hp: int = 15
+## s18 round 2: 30 hit points (15 before, 5 before that), and 30% SLOWER than
+## in round 1: 0.47 of a Scrapper's speed is about 68 px/s. It is a slow wall
+## that arrives with its own escort (see linebreaker_escorts).
+@export var linebreaker_hp: int = 30
+## Spitters that walk in with each Linebreaker and stay beside it.
+@export var linebreaker_escorts: int = 3
+## ESCORTS (spitter.gd): a Spitter guarding another machine (a Linebreaker's
+## escort, or an Arc Spitter guarding a Sawbot) stays within this many cells of
+## it, and walks back if it is left behind.
+@export var escort_leash_cells: float = 3.0
 @export var linebreaker_scale: float = 1.35
-@export var linebreaker_speed_factor: float = 0.67
+@export var linebreaker_speed_factor: float = 0.47
+## A Linebreaker that has made no headway for stuck_seconds shoulders straight
+## through whatever wedged it, for stuck_shoulder_seconds.
+@export var stuck_seconds: float = 0.9
+@export var stuck_shoulder_seconds: float = 0.5
 @export var linebreaker_damage: int = 2
 ## Hazard gold (s18: the old red-brown looked like any other Scrapper).
 @export var linebreaker_tint: Color = Color(1.45, 1.10, 0.35)
-## The Linebreaker's armour ring: the bright part is the hit points it has left.
+## The Linebreaker's FORCE FIELD (s18: it was a hard gold ring): a see-through
+## gold bubble. Its bright rim is the share of hit points left.
 @export var linebreaker_ring_color: Color = Color(1.60, 1.20, 0.20)
-@export var linebreaker_ring_lost_color: Color = Color(0.25, 0.20, 0.10, 0.85)
+## SHIELDS (enemy.gd _draw_shield), shared by the Linebreaker and the Arc Spitter.
+## Radius of the bubble in cells, how solid its inside is (0 = clear glass), and
+## how many times brighter it flares for a moment when a pod lands on it.
+@export var shield_radius_cells: float = 0.74
+@export var shield_fill_alpha: float = 0.08
+@export var shield_hit_flare: float = 2.2
 ## ARC SPITTER (spitter.gd `arc`): hit points, the angle between the shots of
 ## its three-shot fan, and colour.
-## s18: 6 hit points (was 3), and 15% faster than before (115 px/s): 0.96 of
-## the new Spitter speed.
-@export var arc_spitter_hp: int = 6
+## s18 round 2: 12 hit points (6 before, 3 before that). 0.96 of a Spitter's
+## speed (115 px/s). It guards the Sawbots: it stays beside the nearest one.
+@export var arc_spitter_hp: int = 12
 @export var arc_spitter_speed_factor: float = 0.96
+## An Arc Spitter's reload, as a share of a Spitter's (0.65 = about a third faster).
+@export var arc_spitter_cooldown_factor: float = 0.65
 @export var arc_spitter_spread_degrees: float = 18.0
-## Electric cyan, with three sparks circling it (one per shot of its fan).
+## Electric cyan. Its force field is the same blue, with small lightning arcs
+## crawling over it, and its shots are bolts of that colour (spit_shot.gd).
 @export var arc_spitter_tint: Color = Color(0.55, 1.35, 1.45)
 @export var arc_spitter_spark_color: Color = Color(0.50, 1.70, 1.90)
 ## s18: 20% faster (was 90).
 @export var sawbot_speed: float = 108.0
-## Takes three pods. It ignores you, so the cost of leaving it alone is trees.
-@export var sawbot_hp: int = 3
+## Takes six pods (three before s18 round 2). It ignores you, so the cost of
+## leaving it alone is trees.
+@export var sawbot_hp: int = 6
+## THE RIPSAW (s18 round 4): the upgraded Sawbot. Bigger (ripsaw_scale), more
+## hit points, a faster walk (x ripsaw_speed_factor), and its blade bites in
+## half the time (x ripsaw_saw_interval_factor), so trees fall twice as fast.
+@export var ripsaw_hp: int = 14
+@export var ripsaw_scale: float = 1.4
+@export var ripsaw_speed_factor: float = 1.2
+@export var ripsaw_saw_interval_factor: float = 0.5
+## Its tint: hot red steel. (Values above 1 brighten.)
+@export var ripsaw_tint: Color = Color(1.5, 0.75, 0.6)
+## Ripsaws per wave (entry 0 is wave 1). Regular game: from wave 7, never more
+## than 3. New Game +: from wave 4, never more than 5. Used as written.
+@export var wave_ripsaws: Array[int] = [0, 0, 0, 0, 0, 0, 1, 2, 2, 3]
+@export var ng_plus_wave_ripsaws: Array[int] = [0, 0, 0, 1, 2, 2, 3, 4, 4, 5]
+@export var dj_first_ripsaw: Array[String] = ["That big red one is a Ripsaw. It drops a tree in half the time. Stop it before it reaches the Heart Tree."]
 @export_range(0.1, 0.49) var sawbot_radius_cells: float = 0.36
 ## How often a Sawbot picks its next tree and recalculates its route.
 @export var sawbot_repath_interval: float = 0.5
@@ -152,15 +191,21 @@ extends Resource
 @export_group("Spitter")
 ## s18: 20% faster (was 100).
 @export var spitter_speed: float = 120.0
-## Takes two pods.
-@export var spitter_hp: int = 2
+## Takes four pods (two before s18 round 2).
+@export var spitter_hp: int = 4
 @export_range(0.1, 0.49) var spitter_radius_cells: float = 0.33
 ## How often a Spitter recalculates its route while closing in.
 @export var spitter_repath_interval: float = 0.4
 ## It backs away if the player comes closer than this...
-@export var spitter_min_range_cells: float = 3.5
+## (s18 round 2: they keep further off now. These were 3.5 and 7.)
+@export var spitter_min_range_cells: float = 4.5
 ## ...and walks closer if the player is further than this (or out of sight).
-@export var spitter_max_range_cells: float = 7.0
+@export var spitter_max_range_cells: float = 8.0
+## COVER (s18 round 2): between shots a Spitter hides behind one of YOUR trees.
+## It looks for a hiding cell within this many cells of where it stands...
+@export var spitter_cover_search_cells: int = 6
+## ...and steps back out this many seconds before its next shot is ready.
+@export var spitter_peek_seconds: float = 0.4
 ## The warning: it glows red for this long before the shot leaves.
 @export var spitter_windup: float = 0.5
 ## Rest time between shots.
@@ -172,6 +217,68 @@ extends Resource
 @export var spit_radius: float = 7.0
 ## A shot that hits nothing deletes itself after this long.
 @export var spit_lifetime: float = 3.0
+
+@export_group("Entrances")
+## HOW MACHINES ARRIVE (s18 round 3, gates.gd and Enemy.drop_in).
+## GATES: each side wall has a gateway on these grid rows. Ordinary machines
+## (Scrappers, Spitters, Sawbots) roll out of one.
+@export var gate_rows: Array[int] = [3, 7, 11]
+## Seconds a machine takes to roll from inside the gate onto the floor.
+@export var gate_walk_in_seconds: float = 0.45
+## Seconds a gate's red lamp stays lit when a machine comes through.
+@export var gate_lamp_seconds: float = 1.2
+## A machine uses a gate at least this many cells from Seven, if there is one.
+@export var gate_min_player_cells: float = 6.0
+## THE DROP: the two heavy machines (Linebreaker, Arc Spitter) fall in from
+## above. Seconds the fall takes, how far above its landing spot the picture
+## starts (pixels), and how far from Seven it must land (cells).
+@export var drop_seconds: float = 0.7
+@export var drop_height_px: float = 460.0
+@export var drop_min_player_cells: float = 5.0
+## The landing: how hard the screen shakes (pixels; a kill is 3, a hit on Seven
+## 7), and how long the dust ring and the cracks in the concrete show.
+@export var shake_land_px: float = 20.0
+@export var land_fx_seconds: float = 0.9
+## THE INTRO CLIP: the FIRST Linebreaker and the FIRST Arc Spitter of a run get
+## a short clip as they drop in. The game runs at heavy_intro_slow_scale speed,
+## the camera pushes in on the landing spot by heavy_intro_zoom (1.35 = 35%
+## closer), black bars of heavy_intro_bar_px slide in at the top and bottom,
+## and the machine's name is shown. All of it lasts heavy_intro_seconds of real
+## time, then everything eases back.
+@export var heavy_intro_seconds: float = 4.6
+@export var heavy_intro_slow_scale: float = 0.4
+@export var heavy_intro_zoom: float = 1.35
+@export var heavy_intro_bar_px: float = 64.0
+@export var linebreaker_intro_title: String = "LINEBREAKER\nHelios heavy recovery unit"
+@export var arc_spitter_intro_title: String = "ARC SPITTER\nHelios escort unit"
+## The title shown in the intro clip of each kind of machine, the first time one
+## arrives in a run (s18 round 4: the three everyday machines get a clip too).
+## The key is the kind's name, as the wave director spells it.
+@export var intro_titles: Dictionary[StringName, String] = {
+	&"scrapper": "SCRAPPER\nHunts you down and swings. Two pods.",
+	&"spitter": "SPITTER\nShoots from range, hides behind your trees.",
+	&"sawbot": "SAWBOT\nIgnores you. Cuts your trees. Heads for the Heart Tree.",
+	&"linebreaker": "LINEBREAKER\nHeavy unit. Arrives with a Spitter escort.",
+	&"arc_spitter": "ARC SPITTER\nGuards the Sawbots. Fires three bolts.",
+	&"ripsaw": "RIPSAW\nUpgraded Sawbot. Faster, tougher, cuts twice as quick.",
+}
+## A Linebreaker's escorts drop in one after another, this many seconds apart.
+@export var escort_drop_gap: float = 0.18
+## How dark the shadow under a falling machine is: when the fall starts, and
+## just before it lands (0 = invisible, 1 = solid black).
+@export var drop_shadow_alpha_far: float = 0.40
+@export var drop_shadow_alpha_near: float = 0.92
+## LUCKY'S MOMENT: when the shop opens the game all but stops
+## (lucky_intro_slow_scale; 1 = normal speed) for lucky_intro_seconds of real
+## time, with the camera on the shop and this text on screen.
+## The Sunburst clip (New Game +): shown the first time a wave starts with a
+## great sunroot standing.
+@export var sunburst_intro_title: String = "GREAT SUNROOT\nRight-click it to vine there: that sets off a SUNBURST.\nGold trees are ready. Nearby great sunroots chain."
+@export var sunburst_intro_title_touch: String = "GREAT SUNROOT\nVine to it: that sets off a SUNBURST.\nGold trees are ready. Nearby great sunroots chain."
+@export var lucky_intro_seconds: float = 8.0
+@export var lucky_intro_slow_scale: float = 0.03
+@export var lucky_intro_title: String = "LUCKY'S GIFT\nRight-click a machine to bind it with the vine.\nOne spare fuse: it saves Seven once this run."
+@export var lucky_intro_title_touch: String = "LUCKY'S GIFT\nVine a machine to bind it.\nOne spare fuse: it saves Seven once this run."
 
 @export_group("Lucky cat")
 ## Seed pods that must land on the shuttered shop before it opens.
@@ -187,8 +294,10 @@ extends Resource
 ## HIT FEEDBACK (s18, "make it clear when a shot lands and what is hurting Seven").
 ## A machine that takes a hit and survives flashes this colour for this long,
 ## with a ring that closes in on it.
-@export var hit_flash_seconds: float = 0.14
-@export var hit_flash_color: Color = Color(1.0, 1.0, 0.9, 0.85)
+## (First try was 0.14 s and plain white: Sasha found it too faint. Values above
+## 1 keep it bright under the night tint.)
+@export var hit_flash_seconds: float = 0.24
+@export var hit_flash_color: Color = Color(2.4, 2.4, 2.0, 1.0)
 ## SCREEN SHAKE: the playfield (not the HUD) jitters by up to this many pixels,
 ## dying away over shake_seconds. One size for a machine going down, a bigger
 ## one for Seven being hurt. Set shake_scale to 0 to switch all shaking off.
@@ -201,7 +310,10 @@ extends Resource
 ## hurt_arc_seconds (a full ring if the source is unknown).
 @export var hurt_flash_seconds: float = 0.35
 @export var hurt_flash_color: Color = Color(1.0, 0.12, 0.08, 0.3)
-@export var hurt_arc_seconds: float = 0.6
+## (First try was 0.6 s and an arc only: Sasha could not tell what hit Seven. Now
+## it lasts longer and a red beam of hurt_beam_cells points at the attacker.)
+@export var hurt_arc_seconds: float = 1.1
+@export var hurt_beam_cells: float = 2.2
 @export var hurt_arc_color: Color = Color(1.6, 0.25, 0.2)
 ## KNOCK-OUT animation: Seven jolts, tips over and greys out, throwing sparks,
 ## over this many seconds. (Keep it shorter than death_restart_delay.)
@@ -211,8 +323,29 @@ extends Resource
 ## lightning bolt over Seven, while the picture pops big and settles back.
 @export var fuse_flash_seconds: float = 0.8
 @export var fuse_flash_color: Color = Color(1.9, 1.6, 0.5)
-## Seconds Seven cannot be hurt after the fuse saves it (it blinks meanwhile).
-@export var fuse_invulnerable_time: float = 2.0
+## Seconds Seven cannot be hurt after the fuse saves it. A gold shield shows
+## around Seven for that long, fading away as it runs out (s18 round 2: 3 s, was 2).
+@export var fuse_invulnerable_time: float = 3.0
+@export var fuse_shield_color: Color = Color(1.9, 1.5, 0.4)
+## THE BIG MOMENTS (s18 round 2, Sasha: the fuse revive was "just a quick bolt").
+## When Seven is knocked out, or the fuse brings it back, the whole game slows
+## to drama_slow_scale (0.3 = 30% speed) and the screen darkens by
+## drama_dim_alpha (0 = not at all, 1 = black), both easing back over
+## knockout_drama_seconds / fuse_drama_seconds of real time.
+@export var drama_slow_scale: float = 0.3
+@export var drama_dim_alpha: float = 0.8
+@export var knockout_drama_seconds: float = 2.2
+@export var fuse_drama_seconds: float = 2.6
+## WEAR AND TEAR: Seven shows its damage in three steps (player.gd wear_level).
+##   level 1  at or under wear_dented_share of full health: scorch marks, a spark now and then
+##   level 2  at or under wear_battered_share: more scorch, steady sparks, smoke
+##   level 3  on the last pip: sparks all the time and a red warning light
+@export var wear_dented_share: float = 0.67
+@export var wear_battered_share: float = 0.34
+@export var wear_scorch_color: Color = Color(0.05, 0.04, 0.04, 0.55)
+@export var wear_spark_color: Color = Color(2.2, 1.7, 0.5)
+@export var wear_smoke_color: Color = Color(0.6, 0.6, 0.65, 0.35)
+@export var wear_warning_color: Color = Color(2.2, 0.3, 0.2)
 ## Talking to Lucky: Seven must be within this many cells of the open shop for
 ## the E key to work. (A tap on the shop works from anywhere.)
 @export var lucky_talk_range_cells: float = 3.5
@@ -248,6 +381,8 @@ extends Resource
 ## while it stands, heals Seven when it grows, and is slow to saw. New patches
 ## are picked at the start of every wave from `tap_points_from_wave` on.
 @export var tap_points_per_wave: int = 2
+## What Canopy FM says the first time tap points appear.
+@export var dj_tap_points: String = "See the gold rings on the floor? Old grid taps. Grow a tree on one: Seven gets a pip back and more homes light up."
 @export var tap_points_from_wave: int = 2
 ## Extra windows each standing tap tree lights.
 @export var tap_tree_bonus_windows: int = 3
@@ -277,6 +412,13 @@ extends Resource
 ## standing when that wave is cleared matures into a GREAT SUNROOT (tree stage 4).
 ## Its hit points are this many times a normal tree's.
 @export var great_sunroot_hp_multiplier: int = 3
+## s18 round 2 (Sasha): great sunroots were too common (a late run had 30+ on
+## screen). A tree must now stand, grown, through this many whole waves before
+## it matures (it was 1)...
+@export var great_sunroot_waves_needed: int = 3
+## ...and the lot holds at most this many great sunroots. The trees that have
+## stood longest mature first.
+@export var great_sunroot_max: int = 8
 ## Picture of the great sunroot (tools/tree_sprites.py: tree_big.png).
 @export var tree_great_texture: Texture2D
 
@@ -389,13 +531,26 @@ extends Resource
 ## s18: now only a short guard against one zip firing two; the real limit is
 ## the charges below. (It was a hidden 8 seconds.)
 @export var sunburst_cooldown: float = 1.0
+## THE CHAIN (s18 round 2): a Sunburst sets off every other great sunroot
+## within this many cells of it, each of those sets off its own neighbours, and
+## so on, like dominoes. Each tree flares once per chain, and the whole chain
+## costs one charge. Plant great sunroots in a line to carry it across the lot.
+@export var sunburst_chain_range_cells: float = 4.5
+## Seconds between one tree flaring and the next one in the chain.
+@export var sunburst_chain_delay: float = 0.22
+## Colour of the flare: a soft gold wash that spreads and fades.
+@export var sunburst_flare_color: Color = Color(1.6, 1.3, 0.55)
 ## Sunbursts Seven gets each wave. Shown on the HUD; refilled when a wave starts.
-@export var sunburst_charges_per_wave: int = 2
-## The gold ring on every great sunroot while a Sunburst is ready.
-@export var sunburst_ready_color: Color = Color(1.7, 1.3, 0.3, 0.9)
+@export var sunburst_charges_per_wave: int = 1
+## While a Sunburst is ready, every great sunroot turns gold: its picture is
+## multiplied by the sheen colour (values above 1 brighten) and its pool of
+## light switches to the glow colour. (s18: this was a hard gold ring with rays
+## on every great tree, which made a late New Game + screen unreadable.)
+@export var sunburst_sheen_color: Color = Color(1.55, 1.25, 0.50)
+@export var sunburst_glow_color: Color = Color(1.0, 0.78, 0.30, 0.30)
 ## Canopy FM explains it the first time great sunroots stand at a wave start.
 ## %d is the number of charges.
-@export var sunburst_intro_line: String = "See the gold rings? Zip to a great sunroot for a Sunburst: it stuns every machine near it. You get %d each wave."
+@export var sunburst_intro_line: String = "See the great sunroots glow gold? Zip to one for a Sunburst: it stuns every machine near it, and great sunroots close by catch and flare too. You get %d each wave."
 
 @export_group("Canopy FM")
 ## The block's pirate radio (scripts/canopy_fm.gd). How loud the song is, in
@@ -421,10 +576,13 @@ extends Resource
 ## s18: about a third more Scrappers, Spitters and Sawbots from wave 2 on (85
 ## machines over a run became 113). Wave 1 is the tutorial and is unchanged.
 ## Linebreakers and Arc Spitters keep their numbers: they got tougher instead.
-@export var wave_scrappers: Array[int] = [1, 4, 4, 5, 5, 7, 7, 8, 8, 9]
+## s18 round 2: more Scrappers again (they are the ones that hunt Seven).
+@export var wave_scrappers: Array[int] = [1, 5, 5, 6, 7, 8, 9, 10, 11, 12]
 ## How many Spitters each wave sends, lined up with the list above. They arrive
 ## first (wave 2), so cover matters before anything starts cutting it down.
-@export var wave_spitters: Array[int] = [1, 1, 3, 3, 3, 3, 4, 4, 5, 5]
+## s18 round 2: fewer lone Spitters from wave 6, because every Linebreaker now
+## brings linebreaker_escorts more of them (wave 10: 3 + 3 x 3 = 12 Spitters).
+@export var wave_spitters: Array[int] = [1, 1, 3, 3, 3, 2, 2, 3, 3, 3]
 ## How many Sawbots each wave sends, lined up with the list above.
 @export var wave_sawbots: Array[int] = [0, 0, 0, 1, 3, 3, 3, 4, 4, 5]
 ## UPGRADES (upgrade_picker.gd): after clearing this wave and each later one
@@ -442,12 +600,16 @@ extends Resource
 @export var light_trees_per_wave: float = 4.0
 ## How often the windows are brought up to date with the forest, in seconds.
 @export var light_refresh_seconds: float = 0.4
-## Seed Pouch multiplies the time between pods by this (0.8 = 20% faster).
-@export var upgrade_fire_cooldown_factor: float = 0.8
+## Seed Pouch multiplies the time between pods by this (0.9 = 10% faster). Every
+## pick multiplies again, so the upgrade stacks.
+@export var upgrade_fire_cooldown_factor: float = 0.9
 ## Heavy Seeds: extra damage per pod.
 @export var upgrade_seed_damage: int = 1
-## Thick Plating: extra max health.
-@export var upgrade_max_hp: int = 2
+## PATCH KIT (the card that used to be Thick Plating): refills a random number
+## of pips between these two, and adds no max health, so picking it again never
+## stacks. It is not dealt while Seven is unhurt.
+@export var upgrade_repair_min_pips: int = 1
+@export var upgrade_repair_max_pips: int = 3
 ## The most pips Seven can ever have, however many Thick Platings are taken, so
 ## the row of pips on the HUD always fits. At the cap the card stops being dealt.
 @export var player_hp_cap: int = 10
@@ -461,7 +623,9 @@ extends Resource
 ## (First try was 2 cells and 4 s: Sasha could not tell it was working.)
 @export var grove_rest_radius_cells: float = 3.0
 @export var grove_rest_trees: int = 4
-@export var grove_rest_seconds_per_pip: float = 2.5
+## s18 (Sasha): half as fast as before (was 2.5), and only while a wave is being
+## fought: not between waves, and not before the wave's first machine walks in.
+@export var grove_rest_seconds_per_pip: float = 5.0
 ## The small words under Seven: trees in reach while hurt, and while repairing.
 @export var grove_rest_count_text: String = "Grove %d / %d"
 @export var grove_rest_working_text: String = "Repairing"
@@ -472,12 +636,14 @@ extends Resource
 @export var grove_rest_glow_radius_cells: float = 0.85
 ## Canopy FM explains it the first time Seven is hurt in a run.
 @export var grove_rest_line: String = "Dented? Stand close to four grown trees and the grove patches you up, one pip at a time."
-## Hardwood: extra hit points for every tree.
-@export var upgrade_tree_hp: int = 2
-## Quick Roots multiplies the sapling time by this (0.6 = 40% faster).
-@export var upgrade_sapling_time_factor: float = 0.6
-## Long Trellis: extra seconds for every trellis vine.
-@export var upgrade_trellis_seconds: float = 4.0
+## Hardwood: extra hit points for every tree, per pick (it stacks).
+@export var upgrade_tree_hp: int = 1
+## Quick Roots: each pick makes saplings root this much faster (0.15 = 15%), and
+## the picks add up: two picks is 30% faster, so the time is divided by 1.30.
+@export var upgrade_sapling_rate_gain: float = 0.15
+## Vine Trip Line (the card that was called Long Trellis): extra seconds for
+## every trellis vine, per pick; the picks add up. (s18 round 3: 1.5, was 4.)
+@export var upgrade_trellis_seconds: float = 1.5
 ## Linebreakers (heavy Scrappers) per wave. They arrive once the player has had
 ## a few upgrade picks to answer them with.
 @export var wave_linebreakers: Array[int] = [0, 0, 0, 0, 0, 1, 1, 2, 2, 3]
@@ -493,7 +659,8 @@ extends Resource
 ## runs at wave_end_slow_scale speed (0.3 = 30%) for wave_end_slow_seconds of
 ## real time. Then the upgrade cards come up, then the next wave.
 @export var wave_end_slow_scale: float = 0.3
-@export var wave_end_slow_seconds: float = 0.9
+## (Was 0.9: Sasha found it too short.)
+@export var wave_end_slow_seconds: float = 1.6
 ## After clearing this wave, the banner tells the player it is a fine place to
 ## stop and rate the game. Jam judges play many entries; this tells them they
 ## have seen the core of it. 0 switches the marker off.
@@ -501,7 +668,8 @@ extends Resource
 ## Each wave's Scrappers are this much faster than the wave before
 ## (0.08 = 8%). Wave 10 Scrappers therefore walk at 172% speed: about 206,
 ## still slower than the bot's 260. (Was 0.12 when there were only five waves.)
-@export var scrapper_speed_gain_per_wave: float = 0.08
+## s18 round 2: 0.09. The top-speed cap (enemy_top_speed_share) still holds.
+@export var scrapper_speed_gain_per_wave: float = 0.09
 
 @export_group("Story")
 ## The words of the story (see STORY.md). Edit them here or in the Inspector;
@@ -544,13 +712,38 @@ extends Resource
 ## Empty space kept on each side of the banner, in screen pixels.
 @export var banner_side_margin: float = 40.0
 @export var helios_end_line: String = "Account closed."
+## CANOPY FM IN THE DARK: with no light the song is this many decibels quieter
+## and a radio hiss plays at radio_hiss_db; both fade away as the block lights.
+@export var music_dark_drop_db: float = 13.0
+@export var radio_hiss_db: float = -11.0
+## While the lot's light is below this (0 to 1), Canopy FM's lines are shown
+## with a "[static]" break in them: the signal is still weak.
+@export var radio_static_clear_light: float = 0.45
+## A RESTARTED WAVE gives Seven the health it began the wave with plus
+## restart_bonus_pips, but never more than restart_hp_cap_share of full health.
+@export var restart_bonus_pips: int = 1
+@export var restart_hp_cap_share: float = 0.8
+## THE HEART TREE UNDER ATTACK: a short, gentle slow-and-zoom on it
+## (heart_clip_seconds at heart_clip_slow_scale speed, zoomed heart_clip_zoom),
+## and then not again for heart_clip_cooldown seconds.
+@export var heart_clip_seconds: float = 0.9
+@export var heart_clip_slow_scale: float = 0.55
+@export var heart_clip_zoom: float = 1.15
+@export var heart_clip_cooldown: float = 3.0
+@export var heart_clip_title: String = "THE HEART TREE IS UNDER ATTACK"
+## The dark panel behind the end screen's words (the last number is how solid
+## it is: 0 = invisible, 1 = solid).
+@export var end_panel_color: Color = Color(0.03, 0.04, 0.06, 0.84)
+## Canopy FM mentions, as this wave starts, that its music can be changed.
+@export var dj_music_hint_wave: int = 4
+@export var dj_music_hint: String = "Not your sound? Canopy FM has four stations. Pick another on the title screen."
 ## Seconds each radio line stays on the air once it has finished typing.
-@export var story_line_seconds: float = 3.0
+@export var story_line_seconds: float = 6.0
 
 @export_group("Radio")
 ## THE RADIO PANEL (radio.gd): Helios's broadcasts and Canopy FM's DJ.
 ## How fast words "type" onto the panel, in letters per second.
-@export var radio_chars_per_second: float = 40.0
+@export var radio_chars_per_second: float = 22.0
 ## Chance (0 to 1) that a letter of Helios's broadcast flickers into static.
 @export var radio_helios_static: float = 0.03
 ## Canopy FM's DJ, wave 1 (keyboard and mouse): the tutorial. Feeble signal.
@@ -587,10 +780,10 @@ extends Resource
 ]
 ## Canopy FM, the first time a Linebreaker or an Arc Spitter is sent in.
 @export var dj_first_linebreaker: Array[String] = [
-	"Big one! That's a Linebreaker. Armoured, slow, hits twice as hard. Keep your distance and keep planting.",
+	"Big one! That's a Linebreaker. Shielded, slow, hits twice as hard, and it brings three Spitters to cover it.",
 ]
 @export var dj_first_arc_spitter: Array[String] = [
-	"Arc Spitter. Fires a fan of three. One tree won't cover you from all of it: find a thicket.",
+	"Arc Spitter. Fires a fan of three bolts and guards the Sawbots. One tree won't cover you: find a thicket.",
 ]
 ## NEW GAME + OPENING (s18). Before wave 1, Canopy FM wakes Seven up and asks
 ## whether a reminder is wanted (see tutorial_offer.gd). The wave waits for the
@@ -646,7 +839,8 @@ extends Resource
 ## The pool of light each lit window throws onto the lot: reach in cells, and
 ## strength at full brightness (0 to 1).
 @export var window_spill_radius_cells: float = 2.4
-@export_range(0.0, 1.0) var window_spill_strength: float = 0.45
+## s18 (Sasha): the homes and the trees were too bright; both are down 20%.
+@export_range(0.0, 1.0) var window_spill_strength: float = 0.36
 ## How much brighter than its window the pool of light is. The whole lot is
 ## darkened by the night tint, lights included; values above 1 make a light
 ## shine through that darkness instead of being dimmed with everything else.
@@ -674,7 +868,7 @@ extends Resource
 ## How far a grown tree's glow reaches, in cells, and its colour. The alpha
 ## (last number) is the strength of the light.
 @export var tree_glow_radius_cells: float = 1.7
-@export var tree_glow_color: Color = Color(0.35, 0.95, 0.60, 0.30)
+@export var tree_glow_color: Color = Color(0.35, 0.95, 0.60, 0.24)
 ## Seven's lamp: reach in cells, and colour.
 @export var player_glow_radius_cells: float = 2.2
 @export var player_glow_color: Color = Color(1.0, 0.85, 0.60, 0.22)

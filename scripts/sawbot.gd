@@ -22,6 +22,10 @@ const FALLBACK_COLOR: Color = Color(0.60, 0.64, 0.66)
 ## Tint while the blade is biting (values above 1.0 brighten).
 const SAWING_TINT: Color = Color(1.5, 1.3, 0.8)
 
+## True makes this a RIPSAW (s18 round 4): the upgraded Sawbot. Bigger, more
+## hit points, a faster walk, and a blade that bites twice as often. Set by the
+## arena BEFORE the machine enters the scene (its _ready reads it).
+var big: bool = false
 ## True while it is sawing a tree. Public so the tests can watch it.
 var is_sawing: bool = false
 
@@ -33,7 +37,23 @@ var _destination: Vector2 = Vector2.ZERO
 
 ## _ready runs once when the Sawbot enters the scene.
 func _ready() -> void:
-	_configure_body(CONFIG.sawbot_hp, CONFIG.sawbot_radius_cells, CONFIG.sawbot_texture, FALLBACK_COLOR)
+	_configure_body(CONFIG.ripsaw_hp if big else CONFIG.sawbot_hp, CONFIG.sawbot_radius_cells, CONFIG.sawbot_texture, FALLBACK_COLOR)
+	if big:
+		# A RIPSAW: scaling the whole node makes the picture AND the hit circle
+		# bigger; the tint goes on the sprite (modulate is kept for the sawing glow).
+		scale = Vector2.ONE * CONFIG.ripsaw_scale
+		_sprite.self_modulate = CONFIG.ripsaw_tint
+		shoulders_through = true  # too big to stay wedged in a gap (see enemy.gd)
+
+
+## How fast this machine walks, in pixels per second.
+func _speed() -> float:
+	return CONFIG.sawbot_speed * (CONFIG.ripsaw_speed_factor if big else 1.0)
+
+
+## Seconds between two bites of the blade. A Ripsaw bites twice as often.
+func _saw_interval() -> float:
+	return CONFIG.sawbot_saw_interval * (CONFIG.ripsaw_saw_interval_factor if big else 1.0)
 
 
 ## _physics_process runs 60 times per second: saw if a tree is in reach,
@@ -45,7 +65,9 @@ func _physics_process(delta: float) -> void:
 		return  # tied up by the vine: do nothing this step
 
 	var reach: float = CONFIG.sawbot_reach_cells * CONFIG.cell_size
-	var in_reach: ForestTree = _nearest_tree(ForestTree.Stage.GROWN, reach)
+	# `false` = measure the REAL distance. (The Heart Tree's lure makes it count
+	# as nearer than it is; used here, that let a Sawbot cut it from two cells off.)
+	var in_reach: ForestTree = _nearest_tree(ForestTree.Stage.GROWN, reach, false)
 	if in_reach != null:
 		_saw(in_reach, delta)
 		return
@@ -60,7 +82,7 @@ func _physics_process(delta: float) -> void:
 	if global_position.distance_to(_destination) <= reach:
 		velocity = Vector2.ZERO
 		return
-	_walk_towards(_next_goal(_destination), CONFIG.sawbot_speed)
+	_walk_towards(_next_goal(_destination), _speed())
 
 
 ## Overrides Enemy._on_bound: being tied up stops the saw. (When the binding
@@ -76,11 +98,12 @@ func _saw(tree: ForestTree, delta: float) -> void:
 	if not is_sawing:
 		is_sawing = true
 		modulate = SAWING_TINT
-		_saw_time_left = CONFIG.sawbot_saw_interval  # the first bite takes a moment
+		_saw_time_left = _saw_interval()  # the first bite takes a moment
+	Sfx.play_steady(&"saw")  # the saw runs for as long as the blade is on the tree
 	_saw_time_left -= delta
 	if _saw_time_left <= 0.0:
-		_saw_time_left = CONFIG.sawbot_saw_interval
-		Sfx.play(&"saw")
+		_saw_time_left = _saw_interval()
+
 		tree.take_damage(CONFIG.sawbot_saw_damage)  # at 0 HP the tree fells itself
 
 
@@ -97,7 +120,8 @@ func _choose_destination() -> Vector2:
 
 ## The nearest tree at the given stage within `max_distance` pixels, or null.
 ## (INF, infinity, as the distance means "no limit".)
-func _nearest_tree(stage: ForestTree.Stage, max_distance: float) -> ForestTree:
+## `lured` false switches the Heart Tree's lure off, for "can my blade touch it?".
+func _nearest_tree(stage: ForestTree.Stage, max_distance: float, lured: bool = true) -> ForestTree:
 	var best: ForestTree = null
 	var best_distance: float = max_distance
 	# Every tree adds itself to the "trees" group, so this loop sees all of them.
@@ -107,7 +131,7 @@ func _nearest_tree(stage: ForestTree.Stage, max_distance: float) -> ForestTree:
 			continue
 		var distance: float = global_position.distance_to(tree.global_position)
 		# The Heart Tree LURES Sawbots: it counts as nearer than it really is.
-		if tree.is_heart:
+		if tree.is_heart and lured:
 			distance *= CONFIG.heart_tree_lure
 		if distance <= best_distance:
 			best = tree

@@ -35,6 +35,9 @@ var _streams: Dictionary[StringName, AudioStream] = {}
 var _players: Array[AudioStreamPlayer] = []
 ## Which player in the pool gets the next sound (round-robin).
 var _next_player: int = 0
+## Sound name -> the time (seconds since start) until which play_steady will
+## not start that sound again.
+var _steady_until: Dictionary[StringName, float] = {}
 
 
 ## _ready runs once, when this node enters the scene tree at game start.
@@ -55,6 +58,14 @@ func _ready() -> void:
 	_streams[&"bind"] = _make_blip(900.0, 300.0, 0.16, 0.25)
 	_streams[&"spit"] = _make_blip(700.0, 250.0, 0.10, 0.25)
 	_streams[&"wave_clear"] = _make_blip(500.0, 1000.0, 0.35, 0.30)
+	# s18 round 3: how machines arrive. A gate rumbling open, the whistle of a
+	# heavy machine falling, and the crash of it landing on the concrete.
+	_streams[&"gate"] = _make_blip(110.0, 70.0, 0.22, 0.30)
+	_streams[&"drop"] = _make_blip(1100.0, 180.0, 0.55, 0.22)
+	_streams[&"crash"] = _make_crash()
+	# s18 round 4: a burst of radio static, played as a Helios notice cuts in
+	# and again as it cuts out.
+	_streams[&"static"] = _make_static(0.38, 0.30)
 
 	# REAL SOUND FILES WIN: if audio/sfx/<name>.mp3 (or .ogg / .wav) exists, it
 	# replaces the beep of the same name. So a sound is swapped in by dropping one
@@ -110,10 +121,89 @@ func play(sound_name: StringName) -> void:
 	player.play()
 
 
+## Plays a named sound ONLY if it is not still playing from the last call, so a
+## sound asked for many times a second plays through to its end and then starts
+## again, instead of being cut off and restarted. (The Sawbot's saw: it used to
+## restart on every bite, which sounded like a stutter, not a saw.)
+func play_steady(sound_name: StringName) -> void:
+	var now: float = Time.get_ticks_msec() / 1000.0  # seconds since the game started
+	if now < _steady_until.get(sound_name, 0.0):
+		return
+	play(sound_name)
+	if _streams.has(sound_name):
+		# get_length is the clip's length in seconds; a hair less, so two plays
+		# run into each other without a gap.
+		_steady_until[sound_name] = now + maxf(_streams[sound_name].get_length() - 0.03, 0.05)
+
+
+## Builds a burst of radio static: random noise whose loudness jumps about in
+## little steps (the crackle), fading in and out at the ends so it does not click.
+func _make_static(seconds: float, volume: float) -> AudioStreamWAV:
+	var sample_count: int = int(seconds * MIX_RATE)
+	var bytes := PackedByteArray()
+	bytes.resize(sample_count * 2)  # 16-bit audio = 2 bytes per sample
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11  # a fixed seed: the same burst every time
+	var crackle: float = 1.0
+	for i: int in sample_count:
+		var progress: float = float(i) / float(sample_count)  # 0.0 at start, 1.0 at end
+		# Every 120 samples (about 5 ms) pick a new loudness: that is the crackle.
+		if i % 120 == 0:
+			crackle = rng.randf_range(0.25, 1.0)
+		# minf(...) is a short ramp up at the start and down at the end.
+		var edge: float = minf(minf(progress / 0.08, (1.0 - progress) / 0.25), 1.0)
+		var sample: float = rng.randf_range(-1.0, 1.0) * crackle * edge * volume
+		bytes.encode_s16(i * 2, int(clampf(sample, -1.0, 1.0) * 32767.0))
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = MIX_RATE
+	wav.stereo = false
+	wav.data = bytes
+	return wav
+
+
 ## Returns the clip a sound name will play (a beep or a real file), or null if
 ## the name is unknown. Used by the tests to prove the real files were picked up.
 func stream_for(sound_name: StringName) -> AudioStream:
 	return _streams.get(sound_name)
+
+
+## Builds the sound of something heavy and metal hitting concrete, from three
+## layers added together sample by sample:
+##   1. THE THUD: a very low tone that drops in pitch (90 Hz down to 35 Hz);
+##   2. THE CRUNCH: random noise that dies away quickly (rubble and dust);
+##   3. THE RING: a few high tones that are NOT neat multiples of each other,
+##      which is what makes a sound read as struck metal, fading more slowly.
+## A real recording saved as audio/sfx/crash.mp3 replaces it (see _ready).
+func _make_crash() -> AudioStreamWAV:
+	var seconds: float = 0.9
+	var sample_count: int = int(seconds * MIX_RATE)
+	var bytes := PackedByteArray()
+	bytes.resize(sample_count * 2)  # 16-bit audio = 2 bytes per sample
+	var ring_hz: Array[float] = [311.0, 523.0, 847.0, 1290.0]
+	var thud_phase: float = 0.0
+	# Our own random-number generator with a fixed seed, so the crunch is the
+	# same every time the game starts.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	for i: int in sample_count:
+		var t: float = float(i) / float(MIX_RATE)             # seconds since the start
+		var progress: float = float(i) / float(sample_count)  # 0.0 at start, 1.0 at end
+		# exp(-t * k) is a curve that starts at 1 and falls away; bigger k = faster.
+		thud_phase += TAU * lerpf(90.0, 35.0, progress) / float(MIX_RATE)
+		var thud: float = sin(thud_phase) * exp(-t * 5.0) * 0.75
+		var crunch: float = rng.randf_range(-1.0, 1.0) * exp(-t * 14.0) * 0.45
+		var ring: float = 0.0
+		for hz: float in ring_hz:
+			ring += sin(TAU * hz * t) * exp(-t * 6.0) * 0.07
+		var sample: float = thud + crunch + ring
+		bytes.encode_s16(i * 2, int(clampf(sample, -1.0, 1.0) * 32767.0))
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = MIX_RATE
+	wav.stereo = false
+	wav.data = bytes
+	return wav
 
 
 ## Builds a short sine-wave beep that slides from one pitch to another and fades out.

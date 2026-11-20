@@ -16,6 +16,8 @@ extends RefCounted
 
 ## Returned by helpers that look for a cell and find none.
 const NO_CELL: Vector2i = Vector2i(-1, -1)
+## How much dearer a step along the outer border is than an ordinary step.
+const BORDER_WEIGHT: float = 2.5
 
 ## Grid size in cells, and the size of one cell in pixels.
 var cols: int
@@ -51,6 +53,14 @@ func _init(p_cols: int, p_rows: int, p_cell_size: int, p_origin: Vector2 = Vecto
 	for y: int in rows:
 		_astar.set_point_solid(Vector2i(0, y), true)
 		_astar.set_point_solid(Vector2i(cols - 1, y), true)
+	# The floor cells right beside a wall "cost" more to walk through, so routes
+	# keep off the outer border when there is another way. (s18 round 4: a
+	# Linebreaker wedged itself between a tree and Lucky's shop up there.)
+	# A weight of 1 is normal; a higher weight makes a cell less attractive.
+	for x: int in range(1, cols - 1):
+		for y: int in range(1, rows - 1):
+			if x == 1 or y == 1 or x == cols - 2 or y == rows - 2:
+				_astar.set_point_weight_scale(Vector2i(x, y), BORDER_WEIGHT)
 
 
 ## Which cell contains this pixel position? (May be out of bounds: check in_bounds.)

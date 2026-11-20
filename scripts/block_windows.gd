@@ -163,6 +163,15 @@ func window_count() -> int:
 
 
 
+## The roof of every home, left to right, in pixels: the top ROOF_HEIGHT of its
+## wall. The graffiti paints one tag on each (see graffiti.gd).
+func roof_rects() -> Array[Rect2]:
+	var roofs: Array[Rect2] = []
+	for rect: Rect2 in _home_rects:
+		roofs.append(Rect2(rect.position, Vector2(rect.size.x, ROOF_HEIGHT)))
+	return roofs
+
+
 ## How many homes the block has.
 func home_count() -> int:
 	return CONFIG.home_window_counts.size()

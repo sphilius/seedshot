@@ -16,6 +16,9 @@ extends CharacterBody2D
 
 ## Emitted once, when HP reaches zero. The arena plants a sapling where it fell.
 signal died(enemy: Enemy)
+## Emitted the moment a machine that dropped in hits the floor (see drop_in).
+## The arena answers with a screen shake and the crash sound.
+signal landed(enemy: Enemy)
 
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
 ## Group that every machine joins, so code can ask the scene tree for "all enemies".
@@ -42,11 +45,27 @@ var hp: int = 0
 ## The hit points it started with (for the Linebreaker's armour ring).
 var max_hp: int = 0
 var is_dead: bool = false
+## True while the machine is still arriving (rolling out of a gate, or falling):
+## it does nothing until it is in. Public so the tests can read it.
+var is_entering: bool = false
+## Seconds of the fall left, and how long the whole fall takes (see drop_in).
+var _drop_left: float = 0.0
+var _drop_total: float = 1.0
+## Seconds left of the dust ring and cracks after a landing. Public for the tests.
+var land_fx_left: float = 0.0
 ## Seconds left of the "I was hit" flash. Public so the tests can read it.
 var hit_flash_left: float = 0.0
 ## A small node drawn ABOVE the sprite, for the hit flash. (A node's own _draw
 ## is painted behind its children, so the flash needs a child of its own.)
 var _hit_overlay: Node2D
+
+## True for a machine too big to stay wedged (the Linebreaker): when it has made
+## no headway for stuck_seconds it shoulders straight through for a moment.
+var shoulders_through: bool = false
+## Seconds it has been pushing without getting anywhere.
+var _stuck_time: float = 0.0
+## Seconds left of shouldering through. Public-ish for the tests.
+var _shoulder_left: float = 0.0
 
 ## The grid to find routes over. Handed in by setup().
 var _grid: ArenaGrid
@@ -84,10 +103,71 @@ func take_damage(amount: int) -> void:
 		_hit_overlay.queue_redraw()
 
 
+## The colour of this machine's force field, or a fully see-through colour for
+## "no shield". Nothing here; the Linebreaker and the Arc Spitter write their
+## own versions ("overriding").
+func _shield_color() -> Color:
+	return Color(0.0, 0.0, 0.0, 0.0)
+
+
+## True if the shield should crackle with small lightning arcs (the Arc Spitter).
+func _shield_sparks() -> bool:
+	return false
+
+
+## Paints the force field on the overlay node, so it sits OVER the machine like
+## a glass bubble:
+##   1. a faint filled disc (the glass);
+##   2. three thin rings just inside the edge, each fainter, so the rim looks
+##      soft and thick instead of like a drawn circle;
+##   3. the bright rim, only as long as the share of hit points left;
+##   4. a glint that slides round it, so it reads as energy and not as paint;
+##   5. (Arc Spitter) short jagged arcs that jump about on the rim.
+## The whole bubble flares for a moment when a pod lands on it.
+func _draw_shield() -> void:
+	var color: Color = _shield_color()
+	if color.a <= 0.0 or is_dead:
+		return
+	var radius: float = CONFIG.shield_radius_cells * float(CONFIG.cell_size)
+	var seconds: float = float(Time.get_ticks_msec()) / 1000.0  # the clock, in seconds
+	# 1.0 normally, up to shield_hit_flare just after a hit.
+	var flare: float = 1.0
+	if hit_flash_left > 0.0:
+		flare = lerpf(1.0, CONFIG.shield_hit_flare, hit_flash_left / CONFIG.hit_flash_seconds)
+	# A slow breathing of the glass (sin swings -1..1).
+	var breath: float = 1.0 + 0.15 * sin(seconds * 2.2)
+	_hit_overlay.draw_circle(Vector2.ZERO, radius, Color(color, CONFIG.shield_fill_alpha * breath * flare))
+	for i: int in 3:
+		var inner: float = radius - 3.0 * float(i + 1)
+		_hit_overlay.draw_arc(Vector2.ZERO, inner, 0.0, TAU, 40, Color(color, 0.22 * flare / float(i + 1)), 3.0, true)
+	# The rim: from 12 o'clock (-PI / 2) clockwise; TAU is a full turn.
+	var share: float = clampf(float(hp) / float(maxi(max_hp, 1)), 0.0, 1.0)
+	_hit_overlay.draw_arc(Vector2.ZERO, radius, 0.0, TAU, 48, Color(color, 0.18), 2.0, true)
+	_hit_overlay.draw_arc(Vector2.ZERO, radius, -PI / 2.0, -PI / 2.0 + TAU * share, 48, Color(color * flare, 0.9), 3.0, true)
+	# The glint: a short, nearly white arc that travels round the bubble.
+	var glint: float = seconds * 1.6
+	_hit_overlay.draw_arc(Vector2.ZERO, radius - 2.0, glint, glint + 0.6, 10, Color(color.lightened(0.6), 0.75), 2.5, true)
+	if _shield_sparks():
+		# Three jagged arcs. Their places change eight times a second: floorf
+		# drops the part after the decimal point, so `tick` is a whole number
+		# that steps up, and each step gives new "random-looking" angles.
+		var tick: float = floorf(seconds * 8.0)
+		for i: int in 3:
+			var start: float = fmod(tick * 2.399 + float(i) * 2.1, TAU)
+			var points := PackedVector2Array()
+			for step: int in 5:
+				# Each point sits a little further round the rim, pushed in or
+				# out by a few pixels, which makes the line zigzag.
+				var wobble: float = 4.0 * sin(tick * 7.3 + float(i * 5 + step) * 2.7)
+				points.append(Vector2.from_angle(start + float(step) * 0.16) * (radius + wobble))
+			_hit_overlay.draw_polyline(points, Color(color.lightened(0.5), 0.95), 2.0, true)
+
+
 ## Paints the hit flash on the overlay node: a pale disc over the machine that
 ## fades out, and a ring that closes in on it. Connected to the overlay's `draw`
-## signal in _configure_body.
+## signal in _configure_body. (The force field, if any, is painted first.)
 func _draw_hit_flash() -> void:
+	_draw_shield()
 	if hit_flash_left <= 0.0:
 		return
 	var left: float = hit_flash_left / CONFIG.hit_flash_seconds  # 1 at the hit, 0 when over
@@ -97,6 +177,71 @@ func _draw_hit_flash() -> void:
 	_hit_overlay.draw_circle(Vector2.ZERO, radius * 1.15, color)
 	# lerpf(a, b, t) slides from a to b: the ring starts wide and shrinks.
 	_hit_overlay.draw_arc(Vector2.ZERO, radius * lerpf(1.2, 2.0, left), 0.0, TAU, 24, color, 3.0)
+
+
+## ARRIVING BY GATE: the machine was created on its floor cell; this puts it
+## back inside the gate at `from` and slides it out to that cell over `seconds`.
+## Until it is out it does nothing (is_entering). Called by the arena.
+func walk_in_from(from: Vector2, seconds: float) -> void:
+	var target: Vector2 = global_position
+	global_position = from
+	is_entering = true
+	# A Tween changes a property smoothly over time. PHYSICS mode steps it in
+	# time with the physics engine, since it is moving a physics body.
+	var tween: Tween = create_tween()
+	tween.set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)
+	tween.tween_property(self, "global_position", target, seconds)
+	# tween_callback runs a function when the steps before it are done. The small
+	# function in brackets is a "lambda": it just switches the flag back off.
+	tween.tween_callback(func() -> void: is_entering = false)
+
+
+## ARRIVING BY AIR (the heavy machines): the machine is already standing on its
+## landing cell, but its PICTURE starts `height` pixels above and falls for
+## `seconds`, getting faster (EASE_IN), while a shadow grows on the floor under
+## it (see _draw_entrance). When it lands it emits `landed`. Called by the arena.
+func drop_in(seconds: float, height: float) -> void:
+	is_entering = true
+	_drop_total = maxf(seconds, 0.01)
+	_drop_left = _drop_total
+	_sprite.position = Vector2(0.0, -height)
+	_hit_overlay.visible = false  # no shield or flash drawn on the ground while it is in the air
+	var tween: Tween = create_tween()
+	tween.set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)
+	tween.tween_property(_sprite, "position", Vector2.ZERO, _drop_total).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.tween_callback(_land)
+
+
+## The fall is over: the machine wakes up, the dust flies, the arena is told.
+func _land() -> void:
+	is_entering = false
+	_drop_left = 0.0
+	_hit_overlay.visible = true
+	land_fx_left = CONFIG.land_fx_seconds
+	queue_redraw()
+	landed.emit(self)
+
+
+## Paints what belongs to an arrival, behind the machine:
+##   while falling  a round shadow that grows and darkens as the machine nears;
+##   after landing  a ring of dust spreading out, and cracks in the concrete.
+func _draw_entrance() -> void:
+	var radius: float = (_collision.shape as CircleShape2D).radius
+	if _drop_left > 0.0:
+		var near: float = 1.0 - _drop_left / _drop_total  # 0 high up, 1 about to land
+		draw_circle(Vector2.ZERO, radius * (0.6 + 0.9 * near), Color(0.0, 0.0, 0.0, lerpf(CONFIG.drop_shadow_alpha_far, CONFIG.drop_shadow_alpha_near, near)))
+	if land_fx_left > 0.0:
+		var done: float = 1.0 - land_fx_left / CONFIG.land_fx_seconds  # 0 at the landing, 1 when gone
+		var fade: float = 1.0 - done
+		# The cracks shoot out fast (done in the first third), then just fade.
+		var shoot: float = minf(done * 3.0, 1.0)
+		for i: int in 7:
+			# Seven directions round the circle, each a slightly different length.
+			var direction: Vector2 = Vector2.from_angle(TAU * float(i) / 7.0 + 0.4)
+			var reach: float = radius * (1.3 + (1.2 + 0.25 * float(i % 3)) * shoot)
+			draw_line(direction * radius * 0.7, direction * reach, Color(0.02, 0.02, 0.03, 0.85 * fade), 3.0)
+		draw_arc(Vector2.ZERO, radius * (1.0 + 2.4 * done), 0.0, TAU, 40, Color(0.80, 0.78, 0.70, 0.7 * fade), 5.0)
+		draw_arc(Vector2.ZERO, radius * (0.8 + 1.5 * done), 0.0, TAU, 40, Color(0.80, 0.78, 0.70, 0.35 * fade), 9.0)
 
 
 ## The vine's second use: drags this machine towards `puller` in a straight line,
@@ -159,6 +304,16 @@ func _tick_bound(delta: float) -> bool:
 	if hit_flash_left > 0.0:
 		hit_flash_left = maxf(hit_flash_left - delta, 0.0)
 		_hit_overlay.queue_redraw()
+	elif _shield_color().a > 0.0:
+		_hit_overlay.queue_redraw()  # a force field is always moving
+	# The arrival: count the fall and the landing dust down, redrawing meanwhile.
+	if _drop_left > 0.0 or land_fx_left > 0.0:
+		_drop_left = maxf(_drop_left - delta, 0.0)
+		land_fx_left = maxf(land_fx_left - delta, 0.0)
+		queue_redraw()
+	if is_entering:
+		velocity = Vector2.ZERO
+		return true  # still rolling out of a gate or falling: do nothing yet
 	if not is_bound:
 		return false
 	_bound_time_left -= delta
@@ -175,6 +330,7 @@ func _draw() -> void:
 	if _sprite.texture == null:
 		var size: float = (_collision.shape as CircleShape2D).radius * 2.0
 		draw_rect(Rect2(-size / 2.0, -size / 2.0, size, size), _fallback_color)
+	_draw_entrance()
 	_draw_marks()
 
 
@@ -262,4 +418,24 @@ func _walk_towards(goal: Vector2, speed: float) -> void:
 		_slowed_steps -= 1
 	# The art faces "up", and angle() measures from "right", hence the quarter turn.
 	_sprite.rotation = velocity.angle() + PI / 2.0
+	var step: float = get_physics_process_delta_time()  # the length of one physics step, in seconds
+	# SHOULDERING THROUGH (see shoulders_through): for a short moment the machine
+	# moves straight at its goal and ignores whatever is in the way.
+	if _shoulder_left > 0.0:
+		_shoulder_left -= step
+		global_position = global_position.move_toward(goal, velocity.length() * step)
+		return
+	var before: Vector2 = global_position
 	move_and_slide()  # moves by `velocity`, sliding along anything solid
+	if not shoulders_through:
+		return
+	# Did it get anywhere? If it keeps covering less than a quarter of the
+	# ground it should, it is wedged: after stuck_seconds of that, push through.
+	var wanted: float = velocity.length() * step
+	if wanted > 0.01 and global_position.distance_to(before) < wanted * 0.25:
+		_stuck_time += step
+	else:
+		_stuck_time = maxf(_stuck_time - step, 0.0)
+	if _stuck_time >= CONFIG.stuck_seconds:
+		_stuck_time = 0.0
+		_shoulder_left = CONFIG.stuck_shoulder_seconds

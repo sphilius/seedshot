@@ -20,6 +20,13 @@ var _arena: Arena
 ## Functions that use `await` pause until something happens (a physics step, a
 ## signal), so the scene tests can let the game run for a moment between checks.
 func _ready() -> void:
+	# The radio's pace is a matter of taste and was slowed twice in s18; the
+	# checks below were timed for the original pace, so they run at that pace.
+	# (CONFIG is one shared object, so this reaches the arena too. Only this
+	# test run is changed: nothing is saved.)
+	# (.set() is used because GDScript will not assign to a field of a constant.)
+	CONFIG.set(&"radio_chars_per_second", 40.0)
+	CONFIG.set(&"story_line_seconds", 3.0)
 	# Layer 1: pure logic, no scene needed.
 	_test_grid_coordinates()
 	_test_grid_walls_and_paths()
@@ -119,6 +126,13 @@ func _ready() -> void:
 	await _test_back_wall_and_roof_graffiti()
 	await _test_harder_waves_aim_line_sunburst()
 	await _test_hit_feedback()
+	await _test_s18_shields_and_bolts()
+	await _test_s18_machine_roles()
+	await _test_s18_sunburst_chain()
+	await _test_s18_wear_and_big_moments()
+	await _test_s18_entrances()
+	await _test_s18_lucky_moves()
+	await _test_s18_round_4()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -147,6 +161,16 @@ func _fresh_arena(with_heart: bool = false) -> void:
 	_arena.plant_heart_tree = with_heart
 	# No slow-motion beat at the end of a wave: the checks deal the cards at once.
 	_arena.wave_end_beat_seconds = 0.0
+	# The heavy machines' intro clips slow the whole game down; only the test
+	# written for them switches them back on.
+	_arena.intro_clips_on = false
+	# Lucky's shop moves each run; the tests keep it where they know to shoot.
+	_arena.random_cat_shop = false
+	# Saplings wait between waves in the real game; the older checks grow trees
+	# in the breaks, so only the test written for the rule switches it on.
+	_arena.pause_growth_between_waves = false
+	# Canopy FM's "[static]" breaks change the words; the checks compare them exactly.
+	_arena.radio_static_on = false
 	add_child(_arena)
 	# Give the physics engine two steps to register the new bodies.
 	await get_tree().physics_frame
@@ -396,7 +420,12 @@ func _test_kill_becomes_sapling_then_tree() -> void:
 	# The array is a one-item box the lambda can write into.
 	var fell_at: Array[Vector2] = []
 	scrapper.died.connect(func(dead: Scrapper) -> void: fell_at.append(dead.global_position))
-	_check(await _wait_until(func() -> bool: return not fell_at.is_empty(), 2.0), "Scrapper dies to one pod")
+	# Keep firing while we wait (fire() itself refuses to shoot faster than the
+	# cooldown allows): a Scrapper takes scrapper_hp pods since s18 round 2.
+	var down: Callable = func() -> bool:
+		_arena.player.fire(Vector2.RIGHT)
+		return not fell_at.is_empty()
+	_check(await _wait_until(down, 3.0), "a Scrapper dies to %d pods" % CONFIG.scrapper_hp)
 	if fell_at.is_empty():
 		return
 	# The sapling is planted at the end of the frame (deferred), so wait one step.
@@ -439,6 +468,15 @@ func _touch_controls() -> TouchControls:
 
 
 ## Lets the game run for a number of physics steps (60 steps = one second).
+## Waits for `count` DRAWN frames. _process (where the arena updates the HUD,
+## the tints and the sheets) runs once per drawn frame, and on a busy computer
+## several physics frames can pass between two of them, so a check that needs
+## _process to have run must wait with this and not with _wait_frames.
+func _wait_drawn_frames(count: int) -> void:
+	for i: int in count:
+		await get_tree().process_frame  # `process_frame` fires once per drawn frame
+
+
 func _wait_frames(count: int) -> void:
 	for i: int in count:
 		await get_tree().physics_frame
@@ -853,7 +891,8 @@ func _test_going_down_restarts_the_wave_with_its_forest() -> void:
 	_check(_arena.player.is_dead, "the player goes down")
 	var back_up: Callable = func() -> bool: return not _arena.player.is_dead
 	_check(await _wait_until(back_up, CONFIG.death_restart_delay + 1.0), "after a moment the player is back up")
-	_check(_arena.player.hp == CONFIG.player_max_hp, "with full health")
+	# s18 round 5: a restart gives at most 80% of full health (restart_hp_cap_share).
+	_check(_arena.player.hp == floori(float(CONFIG.player_max_hp) * CONFIG.restart_hp_cap_share), "with health capped at 80%")
 	var start: Vector2 = _arena.grid.cell_to_world(Arena.PLAYER_START_CELL)
 	_check(_arena.player.global_position.distance_to(start) < 1.0, "back at the starting spot")
 	_check(_arena.waves.wave == 2, "still on wave 2")
@@ -886,7 +925,10 @@ func _test_spitter_warns_then_hits_the_player() -> void:
 	_check(await _wait_until(fired, CONFIG.spitter_windup + 0.5), "when the windup ends it fires one shot")
 	if shots.get_child_count() == 1:
 		var shot := shots.get_child(0) as SpitShot
-		_check(shot.direction.is_equal_approx(Vector2.LEFT), "the shot flies straight at the player")
+		# dot() of two unit vectors is 1 when they point the same way. (The
+		# Spitter may have stepped aside to hide first, so "left" is no longer exact.)
+		var to_player: Vector2 = (player.global_position - spitter.global_position).normalized()
+		_check(shot.direction.dot(to_player) > 0.97, "the shot flies straight at the player")
 
 	var was_hit: Callable = func() -> bool: return player.hp < CONFIG.player_max_hp
 	_check(await _wait_until(was_hit, 2.0), "the shot reaches the player")
@@ -1123,6 +1165,9 @@ func _test_story_words() -> void:
 	_check(_arena.helios_line_for(99) == "", "a wave with no line gets none")
 
 	# Start wave 2 directly. The very first wave start of a run shows the hook.
+	# Seven stands still through this whole test while wave 2 walks in. Make it
+	# unhittable, or a knock-out (and its slow motion) would upset the timing.
+	_arena.player._invulnerable_left = 999.0
 	_arena.waves.time_scale = 20.0
 	_arena.waves.start_wave(2)
 	_check(radio.speaker == Radio.CANOPY and radio.text == CONFIG.story_hook, "the first wave start: Canopy FM says the opening line")
@@ -1410,13 +1455,14 @@ func _test_spare_fuse() -> void:
 	_arena.waves_cleared += 1
 	_arena._update_light()
 	_check(not player.has_fuse, "clearing a wave does not refit the fuse")
-	await _wait_frames(150)  # let the long fuse blink run out
+	# Let the fuse's "cannot be hurt" time run out (60 physics frames a second).
+	await _wait_frames(int(CONFIG.fuse_invulnerable_time * 60.0) + 30)
 	player.take_damage(CONFIG.player_max_hp)
 	_check(player.is_dead, "without a fuse the next deadly hit downs Seven")
 
-	# A real defeat restarts the wave and refits it.
+	# s18 round 4: a defeat does NOT refit it. One fuse, once per run.
 	player.revive(player.global_position)
-	_check(player.has_fuse, "a real defeat (the wave restart) refits the fuse")
+	_check(not player.has_fuse, "a defeat (the wave restart) does not refit the fuse: once per run")
 
 
 ## Talking to Lucky: words only. The greeting depends on the wave the cat was
@@ -1540,8 +1586,12 @@ func _test_new_game_plus() -> void:
 	# Great sunroots: a tree grown at wave start and standing at wave clear matures.
 	_arena.waves.start_wave(2)  # snapshots the forest: the three hand-placed trees are grown
 	var tree: ForestTree = _arena.tree_at(Arena.TEST_TREE_CELLS[0])
+	# It must stand through great_sunroot_waves_needed waves: one short is not enough.
+	for i: int in CONFIG.great_sunroot_waves_needed - 1:
+		_arena.mature_trees()
+	_check(not tree.is_great, "one wave short, the tree is not a great sunroot yet")
 	_arena._on_wave_cleared(2)
-	_check(tree.is_great, "a tree that stood through the wave matures into a great sunroot")
+	_check(tree.is_great, "a tree that stood through %d waves matures into a great sunroot" % CONFIG.great_sunroot_waves_needed)
 	_check(tree.hp == CONFIG.tree_hp * CONFIG.great_sunroot_hp_multiplier, "with %dx the hit points" % CONFIG.great_sunroot_hp_multiplier)
 	_check(tree.current_texture() == CONFIG.tree_great_texture, "and the stage 4 picture")
 	var fresh: ForestTree = _arena.spawn_tree(Vector2i(8, 8), true)
@@ -1602,8 +1652,9 @@ func _test_great_powers() -> void:
 	var near: Scrapper = _arena.spawn_scrapper_at(Vector2i(4, 10))
 	_check(powers.sunburst(a.global_position) >= 1, "a Sunburst stuns the machines near the great tree")
 	_check(not is_instance_valid(near) or near.is_dead or near.is_bound, "the machine in range is stunned (or downed)")
-	_check(powers.sunburst(a.global_position) == 0, "a second Sunburst waits for the cooldown")
+	_check(powers.sunburst(a.global_position) == -1, "a second Sunburst waits for the cooldown")
 	powers.sunburst_cooldown_left = 0.0
+	powers.sunburst_charges = 1  # a fresh charge (a wave now gives one, not two)
 	_arena.player.zip_tree = b
 	_arena._on_player_zip_finished()
 	_check(powers.sunburst_cooldown_left > 0.0, "a zip that ends at a great sunroot sets off its Sunburst")
@@ -1672,7 +1723,7 @@ func _test_new_machines() -> void:
 	var arc: Spitter = _arena.spawn_spitter_at(Vector2i(20, 3), true)
 	await _wait_frames(1)
 	var shots: Array[Vector2] = []
-	arc.spat.connect(func(_origin: Vector2, direction: Vector2) -> void: shots.append(direction))
+	arc.spat.connect(func(_origin: Vector2, direction: Vector2, _electric: bool) -> void: shots.append(direction))
 	arc._fire(Vector2.LEFT * 100.0)
 	_check(shots.size() == 3, "an Arc Spitter fires a fan of three shots")
 	# The waves: none of either early on; both by the last wave.
@@ -1707,7 +1758,7 @@ func _test_upgrades() -> void:
 	var player: Player = _arena.player
 	var hp_before: int = player.max_hp
 	_arena.apply_upgrade(&"thick_plating")
-	_check(player.max_hp == hp_before + CONFIG.upgrade_max_hp and player.hp == player.max_hp, "Thick Plating: more max health, and the new pips arrive filled")
+	_check(player.max_hp == hp_before, "Patch Kit: no extra max health")
 	_arena.apply_upgrade(&"seed_pouch")
 	_check(player.fire_cooldown_scale < 1.0, "Seed Pouch: pods come faster")
 	_arena.apply_upgrade(&"heavy_seeds")
@@ -1722,8 +1773,18 @@ func _test_upgrades() -> void:
 	var trellis_before: float = _arena.great_powers.trellis_bonus_seconds
 	_arena.apply_upgrade(&"long_trellis")
 	_check(is_equal_approx(_arena.great_powers.trellis_bonus_seconds - trellis_before, CONFIG.upgrade_trellis_seconds), "Long Trellis: trellis vines last longer")
+	# (Count from what is already taken: the random first pick may have been Quick Roots.)
+	var roots_before: int = _arena.quick_roots_taken
+	var gain: float = CONFIG.upgrade_sapling_rate_gain
 	_arena.apply_upgrade(&"quick_roots")
-	_check(_arena.sapling_time_scale < 1.0, "Quick Roots: saplings root faster")
+	# Rooting RATE goes up 15% a pick, so the TIME is divided by 1.15, then 1.30...
+	_check(is_equal_approx(_arena.sapling_time_scale, 1.0 / (1.0 + gain * float(roots_before + 1))), "Quick Roots: saplings root %d%% faster" % roundi(gain * 100.0))
+	_arena.apply_upgrade(&"quick_roots")
+	_check(is_equal_approx(_arena.sapling_time_scale, 1.0 / (1.0 + gain * float(roots_before + 2))), "a second Quick Roots stacks: the rates add up")
+	# Seed Pouch multiplies the time between pods each pick, so it stacks as well.
+	var pouch_before: float = player.fire_cooldown_scale
+	_arena.apply_upgrade(&"seed_pouch")
+	_check(is_equal_approx(player.fire_cooldown_scale, pouch_before * CONFIG.upgrade_fire_cooldown_factor), "a second Seed Pouch stacks too")
 	for id: StringName in UpgradePicker.CATALOG.keys():
 		_check(UpgradePicker._describe(id).find("%d") == -1, "the %s card's text is filled in" % id)
 
@@ -2008,31 +2069,33 @@ func _test_plating_and_grove_rest() -> void:
 	var player: Player = _arena.player
 	var pips: HealthPips = _arena._health_pips
 
-	# Thick Plating on a hurt Seven: the new pips are filled, the old damage stays.
-	player.take_damage(2)
-	var hp_before: int = player.hp
+	# PATCH KIT (the card that was Thick Plating): a random 1 to 3 pip refill and
+	# no extra max health, so it cannot stack.
 	var max_before: int = player.max_hp
+	player.hp = 1  # (set directly: take_damage would be ignored while Seven blinks)
 	_arena.apply_upgrade(&"thick_plating")
-	_check(player.max_hp == max_before + CONFIG.upgrade_max_hp, "Thick Plating adds %d max health" % CONFIG.upgrade_max_hp)
-	_check(player.hp == hp_before + CONFIG.upgrade_max_hp, "the new pips arrive filled")
-	_check(player.max_hp - player.hp == 2, "and the damage Seven already had is NOT repaired")
-
-	# The cap: however many are taken, health never passes player_hp_cap.
+	var gave: int = _arena.last_repair_pips
+	_check(gave >= CONFIG.upgrade_repair_min_pips and gave <= CONFIG.upgrade_repair_max_pips, "a Patch Kit repairs between %d and %d pips" % [CONFIG.upgrade_repair_min_pips, CONFIG.upgrade_repair_max_pips])
+	_check(player.hp == 1 + gave and player.max_hp == max_before, "the pips come back, and max health does not grow")
 	for i: int in 10:
 		_arena.apply_upgrade(&"thick_plating")
-	_check(player.max_hp == CONFIG.player_hp_cap, "max health stops at the cap of %d" % CONFIG.player_hp_cap)
-	_check(_arena.upgrades_left_out().has(&"thick_plating"), "at the cap, Thick Plating is no longer dealt")
+	_check(player.hp == player.max_hp and player.max_hp == max_before, "ten more never take Seven past full health")
+	_check(_arena.upgrades_left_out().has(&"thick_plating"), "at full health the Patch Kit is not dealt")
 	var dealt_it: bool = false
 	for i: int in 20:
 		_arena.upgrade_picker.offer(CONFIG.upgrade_choices, _arena.upgrades_left_out())
 		dealt_it = dealt_it or _arena.upgrade_picker.offered.has(&"thick_plating")
 	_arena.upgrade_picker.choose(0)  # close the cards again
-	_check(not dealt_it, "20 deals at the cap never show the Thick Plating card")
+	_check(not dealt_it, "20 deals at full health never show the Patch Kit")
+
+	# The pips: add_plating still raises the maximum up to the cap (kept for the HUD check).
+	player.add_plating(CONFIG.player_hp_cap)
+	_check(player.max_hp == CONFIG.player_hp_cap, "max health stops at the cap of %d" % CONFIG.player_hp_cap)
 
 	# The HUD: with the longest wave label and every pip, the row starts after
 	# the label and ends before the right margin.
 	_arena._wave_label.text = "Wave 10 / 10    Homes lit 40 / 40    Trees 100    Brambles 2 / 2"
-	await _wait_frames(2)  # let the arena's _process hand the label's end to the pips
+	await _wait_drawn_frames(4)  # let the arena's _process hand the label's end to the pips
 	var label_end: float = _arena._wave_label.position.x + _arena._wave_label.get_minimum_size().x
 	var last: Rect2 = pips.pip_rect(pips.maximum - 1)
 	_check(pips.maximum == CONFIG.player_hp_cap and pips.pip_rect(0).position.x >= label_end, "the full row of pips starts after the wave label")
@@ -2063,6 +2126,22 @@ func _test_plating_and_grove_rest() -> void:
 	_arena.tick_grove_rest(CONFIG.grove_rest_seconds_per_pip)
 	_check(player.hp == player.max_hp and not player.is_resting, "it stops at full health, and the glow goes out")
 
+	# s18: no Grove rest between waves, or before a wave's first machine walks in.
+	player.hp = 1
+	_arena.waves.wave = 3
+	_arena.waves.state = WaveDirector.State.BREAK
+	_arena.tick_grove_rest(CONFIG.grove_rest_seconds_per_pip * 2.0)
+	_check(player.hp == 1 and not player.is_resting, "between waves the grove does not repair Seven")
+	_arena.waves.state = WaveDirector.State.SPAWNING
+	_arena.tick_grove_rest(CONFIG.grove_rest_seconds_per_pip * 2.0)
+	_check(player.hp == 1, "nor before the wave's first machine has walked in")
+	_arena.waves.state = WaveDirector.State.FIGHTING
+	_arena.spawn_sawbot_at(Vector2i(22, 12))
+	_arena.tick_grove_rest(CONFIG.grove_rest_seconds_per_pip * 1.1)
+	_check(player.hp == 2 and player.is_resting, "with a machine on the lot, it repairs again")
+	_arena.waves.state = WaveDirector.State.IDLE
+	_arena.waves.wave = 0
+
 ## s18 batch 2: tougher and faster machines, the Heart Tree's fading label, Seven
 ## parked while the upgrade cards are up, and windows that follow the forest.
 func _test_s18_machines_heart_cards_light() -> void:
@@ -2073,7 +2152,7 @@ func _test_s18_machines_heart_cards_light() -> void:
 	await get_tree().physics_frame
 	_check(heavy.hp == CONFIG.linebreaker_hp and heavy.max_hp == heavy.hp, "a Linebreaker starts with %d hit points" % CONFIG.linebreaker_hp)
 	_check(arc.hp == CONFIG.arc_spitter_hp, "an Arc Spitter starts with %d hit points" % CONFIG.arc_spitter_hp)
-	_check(heavy._speed() < CONFIG.scrapper_speed and heavy._speed() > 84.0 * 1.1, "a Linebreaker is faster than it was (84) but still slower than a Scrapper")
+	_check(heavy._speed() < CONFIG.scrapper_speed * 0.5, "a Linebreaker is slow: under half a Scrapper's speed (%.0f px/s)" % heavy._speed())
 	_check(is_equal_approx(arc._speed(), CONFIG.spitter_speed * CONFIG.arc_spitter_speed_factor), "an Arc Spitter walks at its own speed")
 	heavy.toughen(CONFIG.ng_plus_heavy_hp_multiplier, CONFIG.ng_plus_speed_multiplier)
 	_check(heavy.hp == ceili(CONFIG.linebreaker_hp * CONFIG.ng_plus_heavy_hp_multiplier) and heavy.speed_scale > 1.0, "New Game + makes it tougher and faster still")
@@ -2092,11 +2171,12 @@ func _test_s18_machines_heart_cards_light() -> void:
 
 	# Upgrade cards: Seven is parked next to the Heart Tree and cannot act.
 	var player: Player = _arena.player
+	# s18 round 4: Seven is locked where it stands, not moved to the Heart Tree.
+	var stood_at: Vector2 = player.global_position
 	_arena._park_player_for_cards()
-	var parked: Vector2i = _arena.grid.world_to_cell(player.global_position)
-	var offset: Vector2i = (parked - Arena.HEART_TREE_CELL).abs()
-	_check(player.locked and maxi(offset.x, offset.y) <= CONFIG.upgrade_park_cells, "the cards park Seven within %d cells of the Heart Tree" % CONFIG.upgrade_park_cells)
-	_check(not _arena.grid.is_solid(parked) and _arena.tree_at(parked) == null, "on an open cell")
+	_check(player.locked and player.global_position.is_equal_approx(stood_at), "the cards lock Seven where it stands")
+	var parked: Vector2i = _arena.park_cell()
+	_check(not _arena.grid.is_solid(parked) and _arena.tree_at(parked) == null, "park_cell still names an open cell by the Heart Tree")
 	_check(not player.fire(Vector2.RIGHT) and not player.throw_bramble(), "and Seven cannot shoot or throw while they are up")
 	_arena.apply_upgrade(&"seed_pouch")
 	_check(not player.locked, "picking a card frees Seven again")
@@ -2234,7 +2314,7 @@ func _test_pause_menu() -> void:
 	pause.choose(PauseOverlay.Item.RESTART)
 	_check(get_tree().paused and pause.menu_label(PauseOverlay.Item.RESTART).contains("Sure"), "Restart asks 'Sure?' on the first press")
 	pause.choose(PauseOverlay.Item.RESTART)
-	_check(not get_tree().paused and _arena.player.hp == _arena.player.max_hp and _arena.waves.wave == 2, "the second press restarts the wave with Seven at full health")
+	_check(not get_tree().paused and _arena.player.hp == floori(float(_arena.player.max_hp) * CONFIG.restart_hp_cap_share) and _arena.waves.wave == 2, "the second press restarts the wave with Seven at the 80% cap")
 
 	# Quit: asks first; a different button in between disarms it.
 	pause.set_paused(true)
@@ -2277,16 +2357,41 @@ func _test_back_wall_and_roof_graffiti() -> void:
 	var arena_rect := Rect2(_arena.grid.origin, Vector2(CONFIG.grid_cols, CONFIG.grid_rows) * float(CONFIG.cell_size))
 	var font: Font = CONFIG.graffiti_font
 	var all_fit: bool = true
+	var roofs_used: Dictionary[Rect2, bool] = {}  # which roofs carry a tag
 	for i: int in CONFIG.graffiti_lines.size():
-		var place: Array = graffiti.line_place(i)
-		var at: Vector2 = place[0]
-		var slot_width: float = place[1]
-		var text_width: float = font.get_string_size(CONFIG.graffiti_lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1.0, Graffiti.FONT_SIZE).x
-		var in_wall: bool = at.y > arena_rect.end.y - CONFIG.cell_size and at.y <= arena_rect.end.y
-		var in_arena: bool = at.x >= arena_rect.position.x and at.x + slot_width <= arena_rect.end.x + 0.5
-		if not in_wall or not in_arena or text_width > slot_width:
+		# tag_layout says how the line is painted: its rows, letter height and roof.
+		var layout: Dictionary = graffiti.tag_layout(i)
+		var roof: Rect2 = layout.roof
+		roofs_used[roof] = true  # a Dictionary used as a set: each roof is counted once
+		# Its middle must lie on one of the four walls (the outer ring of cells),
+		# and its room is never taller than a wall is thick.
+		var middle: Vector2i = _arena.grid.world_to_cell(roof.get_center())
+		var on_wall: bool = middle.x == 0 or middle.y == 0 or middle.x == CONFIG.grid_cols - 1 or middle.y == CONFIG.grid_rows - 1
+		if not on_wall or roof.size.y > CONFIG.cell_size or layout.size < Graffiti.MIN_FONT_SIZE:
 			all_fit = false
-	_check(all_fit, "every graffiti line fits its slot on the roofs of the bottom wall")
+			print("  tag %d is off the walls or too small: %s" % [i, roof])
+		# Measure each row at the tag's own letter height: none may be wider than its roof.
+		for row: String in layout.rows:
+			if font.get_string_size(row, HORIZONTAL_ALIGNMENT_LEFT, -1.0, layout.size).x > roof.size.x:
+				all_fit = false
+				print("  tag %d is too wide for its spot: %s" % [i, row])
+	_check(all_fit, "every graffiti tag fits on its own stretch of wall")
+	_check(roofs_used.size() == CONFIG.graffiti_lines.size(), "each tag has a spot of its own, so no two run together")
+	# s18 round 4: the tags are spread over three walls, not crowded on the roofs.
+	var on_roofs: int = 0
+	var sideways: int = 0
+	var on_back: int = 0
+	for i: int in CONFIG.graffiti_lines.size():
+		var middle: Vector2i = _arena.grid.world_to_cell(graffiti.roof_for(i).get_center())
+		if not is_zero_approx(graffiti.turn_for(i)):
+			sideways += 1
+		elif middle.y == 0:
+			on_back += 1
+			_check(middle.x != _arena.cat_shop_cell.x and middle.x != _arena.cat_shop_cell.x + 1, "a back wall tag is not on Lucky's shutter")
+		else:
+			on_roofs += 1
+	_check(on_roofs <= 4 and on_back == Graffiti.BACK_WALL_TAGS and sideways == 4, "tags: %d on roofs, %d on back wall shutters, %d sideways on the side walls" % [on_roofs, on_back, sideways])
+	_check(Graffiti.split_in_two("WE ARE THE NEIGHBOURS") == ["WE ARE THE", "NEIGHBOURS"], "a long tag is broken at the space nearest its middle")
 	_check(graffiti.get_index() > _arena.windows.get_index(), "and is painted over the roofs, not under them")
 
 ## s18 groups 6, 8 and 9: more machines per wave, a visible aim line, and
@@ -2297,7 +2402,7 @@ func _test_harder_waves_aim_line_sunburst() -> void:
 	for list: Array[int] in [CONFIG.wave_scrappers, CONFIG.wave_spitters, CONFIG.wave_sawbots]:
 		for count: int in list:
 			total += count
-	_check(total >= 110 and total <= 116, "a run sends about a third more machines than the old 85 (%d)" % total)
+	_check(total >= 116 and total <= 126, "a run sends about 40%% more machines than the old 85 (%d), escorts not counted" % total)
 	_check(CONFIG.wave_scrappers[0] == 1 and CONFIG.wave_spitters[0] == 1 and CONFIG.wave_sawbots[0] == 0, "the tutorial wave is unchanged")
 
 	# Group 8: the aim line runs along the aim and stops at the first tree.
@@ -2327,14 +2432,14 @@ func _test_harder_waves_aim_line_sunburst() -> void:
 	var great: ForestTree = _arena.tree_at(here + Vector2i(3, 0))
 	great.mature()
 	await _wait_frames(3)
-	_check(powers.sunburst_charges == CONFIG.sunburst_charges_per_wave and ForestTree.sunburst_ready, "a wave starts with %d Sunbursts, and great sunroots show the gold ring" % CONFIG.sunburst_charges_per_wave)
+	_check(powers.sunburst_charges == CONFIG.sunburst_charges_per_wave and ForestTree.sunburst_ready, "a wave starts with %d Sunbursts, and great sunroots show the gold sheen" % CONFIG.sunburst_charges_per_wave)
 	for i: int in CONFIG.sunburst_charges_per_wave:
 		powers.sunburst_cooldown_left = 0.0
 		powers.sunburst(great.global_position)
 	powers.sunburst_cooldown_left = 0.0
 	_check(powers.sunburst_charges == 0 and not powers.is_sunburst_ready(), "using them all leaves none, whatever the cooldown says")
 	await _wait_frames(3)
-	_check(not ForestTree.sunburst_ready, "and the gold rings go out")
+	_check(not ForestTree.sunburst_ready, "and the gold sheen goes out")
 	_arena.waves.start_wave(3)
 	_check(powers.sunburst_charges == CONFIG.sunburst_charges_per_wave, "the next wave refills them")
 	_check(_arena._is_radio_pending(CONFIG.sunburst_intro_line % CONFIG.sunburst_charges_per_wave), "and Canopy FM explains Sunburst the first time a great sunroot is standing")
@@ -2391,3 +2496,511 @@ func _test_hit_feedback() -> void:
 	_arena.shake(CONFIG.shake_hurt_px)
 	_arena.shake(CONFIG.shake_kill_px)
 	_check(is_equal_approx(_arena._shake_px, CONFIG.shake_hurt_px * CONFIG.shake_scale), "a small shake does not cut a big one short")
+
+
+## s18 playtest round 2: the two heavy machines wear force fields instead of
+## hard rings, the Arc Spitter fires bolts, and a ready Sunburst is a gold sheen.
+func _test_s18_shields_and_bolts() -> void:
+	await _fresh_arena()
+	# One of each machine, far from Seven so nothing fights during the check.
+	var heavy: Scrapper = _arena.spawn_scrapper_at(Vector2i(22, 3), true)
+	var plain: Scrapper = _arena.spawn_scrapper_at(Vector2i(22, 5))
+	var arc: Spitter = _arena.spawn_spitter_at(Vector2i(22, 11), true)
+	var spitter: Spitter = _arena.spawn_spitter_at(Vector2i(20, 12))
+	await get_tree().physics_frame
+	# _shield_color() returns a see-through colour (alpha 0) for "no shield".
+	_check(heavy._shield_color().a > 0.0 and not heavy._shield_sparks(), "a Linebreaker has a force field (no sparks)")
+	_check(arc._shield_color().a > 0.0 and arc._shield_sparks(), "an Arc Spitter has one that crackles")
+	_check(plain._shield_color().a == 0.0 and spitter._shield_color().a == 0.0, "plain Scrappers and Spitters have none")
+	# The Arc Spitter's shots are electric; a plain Spitter's are not.
+	# A "lambda" (the func in brackets) collects what each `spat` signal carries.
+	var flags: Array[bool] = []
+	arc.spat.connect(func(_origin: Vector2, _direction: Vector2, electric: bool) -> void: flags.append(electric))
+	spitter.spat.connect(func(_origin: Vector2, _direction: Vector2, electric: bool) -> void: flags.append(electric))
+	arc._fire(Vector2.LEFT)
+	spitter._fire(Vector2.LEFT)
+	_check(flags == [true, true, true, false], "an Arc Spitter fires three bolts; a plain Spitter one ordinary shot")
+	var bolt: SpitShot = _arena.spawn_spit_shot(Vector2(300.0, 300.0), Vector2.RIGHT, true)
+	_check(bolt.electric and not _arena.spawn_spit_shot(Vector2(300.0, 340.0), Vector2.RIGHT).electric, "the arena makes a bolt only when asked to")
+
+	# A ready Sunburst turns great sunroots gold: no ring, a gold pool of light.
+	var great: ForestTree = _arena.spawn_tree(Vector2i(5, 11), true)
+	great.mature()
+	# (The arena sets ForestTree.sunburst_ready itself every frame, from the charges.)
+	await _wait_drawn_frames(4)
+	var glow := great.get_node(Glow.NODE_NAME) as Sprite2D
+	_check(glow.modulate.is_equal_approx(CONFIG.sunburst_glow_color), "a ready Sunburst turns a great sunroot's light gold")
+	_arena.great_powers.sunburst_charges = 0
+	await _wait_drawn_frames(4)
+	_check(glow.modulate.is_equal_approx(CONFIG.tree_glow_color), "and it goes back to green when none is ready")
+
+
+## s18 playtest round 2: double hit points, a Linebreaker's three escorts, Arc
+## Spitters that guard Sawbots, and Spitters that hide behind trees to reload.
+func _test_s18_machine_roles() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	_check(CONFIG.scrapper_hp == 2 and CONFIG.spitter_hp == 4 and CONFIG.sawbot_hp == 6 and CONFIG.linebreaker_hp == 30 and CONFIG.arc_spitter_hp == 12, "every machine has double its old hit points")
+
+	# A Linebreaker sent in by the wave director brings its escorts.
+	_arena.waves.wave = 6
+	_arena.waves.state = WaveDirector.State.FIGHTING
+	_arena._on_spawn_requested(WaveDirector.LINEBREAKER, 6)
+	await get_tree().physics_frame
+	var heavy: Scrapper = null
+	var escorts: Array[Spitter] = []
+	for node: Node in get_tree().get_nodes_in_group(Enemy.GROUP):
+		if node is Scrapper:
+			heavy = node as Scrapper
+		elif node is Spitter:
+			escorts.append(node as Spitter)
+	_check(heavy != null and heavy.heavy and escorts.size() == CONFIG.linebreaker_escorts, "a Linebreaker arrives with %d Spitters" % CONFIG.linebreaker_escorts)
+	# Let the escorts finish rolling out of their gates before moving them by hand.
+	await _wait_frames(int(CONFIG.gate_walk_in_seconds * 60.0) + 10)
+	var all_guard: bool = true
+	for escort: Spitter in escorts:
+		all_guard = all_guard and escort.ward == heavy
+	_check(all_guard, "and every one of them guards it")
+	_check(_arena.waves._alive == CONFIG.linebreaker_escorts, "the wave director counts the escorts, so the wave waits for them too")
+
+	# An escort dragged far away walks back to its ward instead of hunting Seven.
+	var escort: Spitter = escorts[0]
+	var leash: float = CONFIG.escort_leash_cells * CONFIG.cell_size
+	heavy.set_physics_process(false)  # hold the Linebreaker still for the check
+	heavy.global_position = _arena.grid.cell_to_world(Vector2i(22, 3))
+	escort.global_position = _arena.grid.cell_to_world(Vector2i(14, 3))
+	var back: Callable = func() -> bool: return escort.global_position.distance_to(heavy.global_position) <= leash + 8.0
+	_check(await _wait_until(back, 6.0), "an escort left behind walks back to within %.0f cells of its Linebreaker" % CONFIG.escort_leash_cells)
+	# With its ward gone it is an ordinary Spitter again.
+	heavy.take_damage(999)
+	await get_tree().physics_frame
+	_check(not is_instance_valid(escort.ward) or escort.ward.is_dead, "when the Linebreaker falls the escort has nothing left to guard")
+
+	# An Arc Spitter picks the nearest Sawbot as its ward.
+	await _fresh_arena()
+	player = _arena.player
+	var sawbot: Sawbot = _arena.spawn_sawbot_at(Vector2i(22, 12))
+	var arc: Spitter = _arena.spawn_spitter_at(Vector2i(20, 12), true)
+	var plain: Spitter = _arena.spawn_spitter_at(Vector2i(22, 2))
+	_check(await _wait_until(func() -> bool: return arc.ward == sawbot, 1.5), "an Arc Spitter guards the nearest Sawbot")
+	_check(plain.ward == null and not plain.guards_sawbots, "a plain Spitter guards nobody")
+
+	# Cover: a reloading Spitter with a tree nearby hides behind it.
+	await _fresh_arena()
+	player = _arena.player
+	var player_cell: Vector2i = _arena.grid.world_to_cell(player.global_position)
+	# A tree six cells to Seven's right; the Spitter stands in the open, one row down.
+	var tree_cell: Vector2i = player_cell + Vector2i(6, 0)
+	_arena.spawn_tree(tree_cell, true)
+	var spitter: Spitter = _arena.spawn_spitter_at(tree_cell + Vector2i(1, 1))
+	spitter._cooldown_left = 30.0  # a long reload, so it has time to hide
+	var world_mask: int = Spitter.WORLD_MASK
+	# "Hidden" = a ray from the Spitter to Seven hits a wall or a tree.
+	var hidden: Callable = func() -> bool:
+		var ray := PhysicsRayQueryParameters2D.create(spitter.global_position, player.global_position, world_mask)
+		# The test scene is a plain Node, so it borrows the arena's physics world.
+		return not _arena.get_world_2d().direct_space_state.intersect_ray(ray).is_empty()
+	_check(not hidden.call(), "the Spitter starts in the open, in Seven's sight")
+	_check(await _wait_until(hidden, 3.0), "while reloading it walks behind a tree, out of Seven's sight")
+	_check(spitter.cover_cell != ArenaGrid.NO_CELL, "and it remembers that hiding cell")
+	# Ready to fire again: it comes back out for a clear line.
+	spitter._cooldown_left = 0.0
+	_check(await _wait_until(func() -> bool: return spitter.is_winding_up, 4.0), "with the shot ready it steps out and winds up")
+
+
+## s18 playtest round 2: a Sunburst chains to great sunroots close by, great
+## sunroots are capped, and a restarted wave keeps a tree's age.
+func _test_s18_sunburst_chain() -> void:
+	await _fresh_arena()
+	var powers: GreatPowers = _arena.great_powers
+	# Three great sunroots in a row, 4 cells apart (inside the chain range of
+	# 4.5), and a fourth far away on its own.
+	var cells: Array[Vector2i] = [Vector2i(4, 11), Vector2i(8, 11), Vector2i(12, 11), Vector2i(22, 3)]
+	var trees: Array[ForestTree] = []
+	for cell: Vector2i in cells:
+		var tree: ForestTree = _arena.spawn_tree(cell, true)
+		tree.mature()
+		trees.append(tree)
+	# A machine beside the THIRD tree: too far for the first flare, in reach of the chain.
+	var far_bot: Sawbot = _arena.spawn_sawbot_at(Vector2i(13, 12))
+	far_bot.set_physics_process(false)  # keep it from walking off during the check
+	await get_tree().physics_frame
+	powers.sunburst_charges = 1
+	var hp_before: int = far_bot.hp
+	var caught: int = powers.sunburst(trees[0].global_position)
+	_check(caught == 0 and far_bot.hp == hp_before, "the first flare does not reach a machine three trees away")
+	# The chain needs two steps of sunburst_chain_delay to reach the third tree.
+	var settled: Callable = func() -> bool: return powers._chain.is_empty() and powers.chain_size >= 3
+	_check(await _wait_until(settled, CONFIG.sunburst_chain_delay * 2.0 + 1.0), "the Sunburst runs down the row of great sunroots")
+	_check(powers.chain_size == 3, "three trees flared: the far one on its own was out of reach (%d)" % powers.chain_size)
+	_check(far_bot.hp == hp_before - CONFIG.sunburst_damage and far_bot.is_bound, "the chain stuns and hurts the machine by the third tree")
+	_check(powers.sunburst_charges == 0, "and the whole chain cost one charge")
+
+	# The cap: with great_sunroot_max standing, no more trees mature.
+	await _fresh_arena()
+	_arena.ng_plus = true
+	var planted: Array[ForestTree] = []
+	for x: int in range(2, 2 + CONFIG.great_sunroot_max + 3):
+		planted.append(_arena.spawn_tree(Vector2i(x, 12), true))
+	_arena.waves.start_wave(2)  # snapshots the forest, so these count as "grown at wave start"
+	for i: int in CONFIG.great_sunroot_waves_needed:
+		_arena.mature_trees()
+	_check(_arena.count_great_trees() == CONFIG.great_sunroot_max, "the lot holds at most %d great sunroots (%d)" % [CONFIG.great_sunroot_max, _arena.count_great_trees()])
+	# A restarted wave replants the forest; a tree keeps the waves it had stood through.
+	var young: ForestTree = _arena.spawn_tree(Vector2i(20, 9), true)
+	young.waves_stood = 2
+	_arena.waves.start_wave(3)
+	_arena._restart_current_wave()
+	_check(_arena.tree_at(Vector2i(20, 9)).waves_stood == 2, "a restarted wave keeps how long each tree has stood")
+
+
+## s18 playtest round 2: Seven shows wear in three steps, the fuse gives a gold
+## shield that runs down, and a knock-out or a fuse revive slows and darkens the game.
+func _test_s18_wear_and_big_moments() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	# Wear follows the share of health left. (hp is set directly: take_damage
+	# would be ignored while Seven blinks after the hit before.)
+	_check(player.wear_level() == 0, "an unhurt Seven shows no wear")
+	player.hp = 3  # 3 of 5 = 60%: at or under the "dented" share
+	_check(player.wear_level() == 1, "at 3 of 5 pips Seven is dented (level 1)")
+	player.hp = 2
+	# 2 of 5 = 40% is above the "battered" share of 34%, so still level 1.
+	_check(player.wear_level() == 1, "at 2 of 5 it is still level 1")
+	player.max_hp = 10
+	player.hp = 3
+	_check(player.wear_level() == 2, "at 3 of 10 pips Seven is battered (level 2)")
+	player.hp = 1
+	_check(player.wear_level() == 3, "on the last pip it is level 3, whatever the maximum")
+	player.max_hp = CONFIG.player_max_hp
+
+	# The fuse: Seven gets back up, the game slows and darkens, and a shield counts down.
+	# (The big moments only play during a wave, so pretend wave 3 is being fought.)
+	_arena.waves.wave = 3
+	_arena.waves.state = WaveDirector.State.FIGHTING
+	player.receive_cat_gift()
+	player.hp = 1
+	player._invulnerable_left = 0.0
+	player.take_damage(1)
+	_check(player.hp == CONFIG.fuse_revive_hp and not player.is_dead, "the fuse puts Seven back up")
+	_check(is_equal_approx(player.fuse_shield_left, CONFIG.fuse_invulnerable_time), "with a shield for %.0f seconds" % CONFIG.fuse_invulnerable_time)
+	_check(_arena.drama_left > 0.0 and is_equal_approx(Engine.time_scale, CONFIG.drama_slow_scale), "the game drops into slow motion for the moment")
+	await _wait_drawn_frames(4)
+	_check(_arena.dim_sheet.color.a > 0.0, "and the screen darkens")
+	_check(not player.take_damage(1), "nothing can hurt Seven while the shield is up")
+	# The slow motion ends by itself after fuse_drama_seconds of REAL time.
+	var normal_again: Callable = func() -> bool: return _arena.drama_left <= 0.0
+	_check(await _wait_until(normal_again, CONFIG.fuse_drama_seconds + 1.0), "the slow motion ends")
+	_check(is_equal_approx(Engine.time_scale, 1.0) and is_zero_approx(_arena.dim_sheet.color.a), "at normal speed, with the screen clear again")
+
+	# A knock-out does the same, and the arena leaves normal speed behind it.
+	player.has_fuse = false
+	player._invulnerable_left = 0.0
+	player.fuse_shield_left = 0.0
+	player.hp = 1
+	player.take_damage(1)
+	_check(player.is_dead and _arena.drama_left > 0.0, "a knock-out also slows and darkens the game")
+	_check(await _wait_until(normal_again, CONFIG.knockout_drama_seconds + 1.0) and is_equal_approx(Engine.time_scale, 1.0), "and then lets go of it")
+
+
+## s18 round 3: ordinary machines roll out of gates in the side walls, the two
+## heavy kinds drop in from above, and the first of each heavy kind gets a clip.
+func _test_s18_entrances() -> void:
+	await _fresh_arena()
+	var gates: Gates = _arena.gates
+	_check(gates.gate_cells().size() == CONFIG.gate_rows.size() * 2, "each side wall has a gate on every gate row (%d gates)" % gates.gate_cells().size())
+	var all_in_walls: bool = true
+	for gate: Vector2i in gates.gate_cells():
+		# A gate is a wall cell (solid); the cell in front of it is open floor.
+		all_in_walls = all_in_walls and _arena.grid.is_solid(gate) and not _arena.grid.is_solid(gates.floor_cell_of(gate))
+	_check(all_in_walls, "every gate is in a wall with open floor in front of it")
+
+	# A Scrapper sent in by the wave director starts inside a gate and rolls out.
+	_arena.waves.wave = 2
+	_arena.waves.state = WaveDirector.State.FIGHTING
+	_arena._on_spawn_requested(WaveDirector.SCRAPPER, 2)
+	var scrapper := get_tree().get_first_node_in_group(Enemy.GROUP) as Scrapper
+	var start_cell: Vector2i = _arena.grid.world_to_cell(scrapper.global_position)
+	_check(gates.gate_cells().has(start_cell) and scrapper.is_entering, "a Scrapper starts inside a gate, still arriving")
+	_check(gates.is_lit(start_cell), "and that gate's warning lamp lights")
+	var is_out: Callable = func() -> bool: return not scrapper.is_entering
+	_check(await _wait_until(is_out, CONFIG.gate_walk_in_seconds + 1.0), "it rolls out onto the floor")
+	_check(_arena.grid.world_to_cell(scrapper.global_position) == gates.floor_cell_of(start_cell), "and ends on the cell in front of that gate")
+
+	# A tree never grows in a gateway: a machine downed there roots one cell over.
+	scrapper.take_damage(999)
+	await _wait_frames(3)
+	_check(_arena.tree_at(gates.floor_cell_of(start_cell)) == null, "a machine downed in a gateway does not plant its tree there")
+	_check(_arena.trees_planted == 1, "its tree is planted beside the gateway instead")
+
+	# A Linebreaker drops in: no gate, a fall, then a landing with a hard shake.
+	await _fresh_arena()
+	gates = _arena.gates
+	_arena.intro_clips_on = true
+	_arena.waves.wave = 6
+	_arena.waves.state = WaveDirector.State.FIGHTING
+	# A one-item box the lambda can write into: how many landings were announced.
+	var landings: Array[int] = [0]
+	_arena._on_spawn_requested(WaveDirector.LINEBREAKER, 6)
+	var heavy: Scrapper = null
+	for node: Node in get_tree().get_nodes_in_group(Enemy.GROUP):
+		if node is Scrapper:
+			heavy = node as Scrapper
+	heavy.landed.connect(func(_machine: Enemy) -> void: landings[0] += 1)
+	var heavy_cell: Vector2i = _arena.grid.world_to_cell(heavy.global_position)
+	_check(heavy.is_entering and gates.gate_for(heavy_cell) == ArenaGrid.NO_CELL, "a Linebreaker does not use a gate: it is falling")
+	_check(heavy._sprite.position.y < -100.0, "its picture starts high above its landing spot")
+	_check(_arena.clip_left > 0.0 and is_equal_approx(Engine.time_scale, CONFIG.heavy_intro_slow_scale), "the first Linebreaker gets an intro clip in slow motion")
+	_check(_arena.clip_label.visible and _arena.clip_label.text == CONFIG.intro_titles[WaveDirector.LINEBREAKER], "with its name on screen")
+	var has_landed: Callable = func() -> bool: return landings[0] == 1
+	_check(await _wait_until(has_landed, CONFIG.drop_seconds + 2.0), "it lands")
+	_check(not heavy.is_entering and heavy._sprite.position.is_zero_approx() and heavy.land_fx_left > 0.0, "on its landing spot, awake, in a ring of dust")
+	_check(_arena._shake_px >= CONFIG.shake_land_px * CONFIG.shake_scale, "and the landing shakes the screen hard")
+	# The clip ends by itself and gives the game its speed back.
+	var clip_over: Callable = func() -> bool: return _arena.clip_left <= 0.0
+	_check(await _wait_until(clip_over, CONFIG.heavy_intro_seconds + 2.0), "the clip ends")
+	await _wait_drawn_frames(3)
+	_check(is_equal_approx(Engine.time_scale, 1.0) and is_zero_approx(_arena._bar_top.size.y) and not _arena.clip_label.visible, "at normal speed, with the black bars and the name gone")
+	# The second Linebreaker of the run still drops, but gets no clip.
+	_arena._on_spawn_requested(WaveDirector.LINEBREAKER, 6)
+	_check(_arena.clip_left <= 0.0, "a second Linebreaker drops in without a clip")
+	_check(Sfx.stream_for(&"crash") != null and Sfx.stream_for(&"drop") != null and Sfx.stream_for(&"gate") != null, "the crash, the falling whistle and the gate each have a sound")
+
+
+## s18 round 3: Lucky's shop hides behind a random shutter each run, and the
+## heavy landing has a real recorded sound.
+func _test_s18_lucky_moves() -> void:
+	# The places it may hide: shutter fronts of the back wall, never the corner one.
+	var places: Array[Vector2i] = BackWall.shop_cells(CONFIG.grid_cols)
+	_check(places.size() >= 3 and places.has(Arena.CAT_SHOP_CELL), "the shop has %d shutters to hide behind, the old spot among them" % places.size())
+	var all_shutters: bool = true
+	for place: Vector2i in places:
+		var index: int = place.x / BackWall.FRONT_CELLS
+		all_shutters = all_shutters and index > 0 and place.y == 0 and BackWall.PATTERN[index % BackWall.PATTERN.size()] == BackWall.Kind.SHUTTER
+	_check(all_shutters, "every hiding place is a shutter front in the top wall, away from the corner")
+
+	# Build a dozen arenas with the knob ON and note where the shop went.
+	# (_fresh_arena switches the knob off, so these are built by hand here.)
+	var seen: Dictionary[Vector2i, bool] = {}
+	var always_lined_up: bool = true
+	for i: int in 12:
+		if _arena != null:
+			_arena.queue_free()
+			await get_tree().physics_frame
+		_arena = ARENA_SCENE.instantiate()
+		_arena.autostart_waves = false
+		_arena.intro_clips_on = false
+		add_child(_arena)
+		await get_tree().physics_frame
+		seen[_arena.cat_shop_cell] = true
+		# The shop node, the gap left in the back wall and the chosen cell must agree.
+		var front: int = _arena.cat_shop_cell.x / BackWall.FRONT_CELLS
+		var lined_up: bool = places.has(_arena.cat_shop_cell) and _arena.back_wall.is_shop_front(front)
+		lined_up = lined_up and is_equal_approx(_arena.back_wall.front_rect(front).get_center().x, _arena.cat_shop.global_position.x)
+		always_lined_up = always_lined_up and lined_up
+	_check(always_lined_up, "wherever it is, the shop stands exactly in the gap the back wall leaves for it")
+	_check(seen.size() >= 2, "over 12 runs the shop turned up in %d different places" % seen.size())
+
+	# It still opens to three pods in its new place.
+	var shop: CatShop = _arena.cat_shop
+	for i: int in CONFIG.cat_hits_needed:
+		var pod: SeedPod = Arena.SEED_POD_SCENE.instantiate()
+		# Start each pod two cells below the shop, flying straight up at it.
+		pod.position = shop.global_position + Vector2(0.0, CONFIG.cell_size * 2.0)
+		pod.direction = Vector2.UP
+		_arena.get_node("Pods").add_child(pod)
+		await _wait_frames(20)
+	_check(shop.is_open, "three pods open the shop wherever it is hiding")
+
+	# The landing crash is a real recording now, not the generated one.
+	_check(Sfx.stream_for(&"crash") is AudioStreamMP3, "the heavy landing plays the recorded crash")
+
+
+## s18 round 4, from Sasha's playtest of round 3: restarts that cannot loop or
+## heal, a once-per-run fuse, a Sawbot that must stand next to what it cuts,
+## escorts that land with their Linebreaker, saplings that wait between waves,
+## a radio box that fits its words, and a dark panel under the end screen.
+func _test_s18_round_4() -> void:
+	await _fresh_arena(true)
+	var player: Player = _arena.player
+
+	# A RESTARTED WAVE gives back the health Seven had when the wave began.
+	player.hp = 2
+	_arena.waves.start_wave(3)  # the arena notes Seven's health as the wave starts
+	player.receive_cat_gift()
+	player.has_fuse = false  # the fuse was used earlier in the run
+	player.hp = 1
+	_arena._restart_pending = true
+	_arena.waves.hold_break = true
+	_arena.upgrade_picker.offer(CONFIG.upgrade_choices)
+	_arena._restart_current_wave()
+	_check(player.hp == 2 + CONFIG.restart_bonus_pips and not player.is_dead, "a restarted wave gives Seven the 2 pips it began the wave with plus %d, not full health" % CONFIG.restart_bonus_pips)
+	_check(_arena._hp_at_wave_start == 2, "and a second restart would give the same again, not one more each time")
+	_check(not player.has_fuse, "and no new fuse")
+	_check(not _arena.upgrade_picker.is_open() and not _arena.waves.hold_break and not player.locked, "a restart takes the upgrade cards away and frees Seven")
+
+	# A wave that "clears" while a restart is pending does not count.
+	var cleared_before: int = _arena.waves_cleared
+	_arena._restart_pending = true
+	_arena._on_wave_cleared(3)
+	_check(_arena.waves_cleared == cleared_before and not _arena.upgrade_picker.is_open(), "a wave cleared as Seven goes down does not count, and deals no cards")
+	_arena._restart_pending = false
+	_arena.waves.hold_break = false
+
+	# SAWBOT REACH: two cells from the Heart Tree is too far to cut it.
+	await _fresh_arena(true)
+	var sawbot: Sawbot = _arena.spawn_sawbot_at(Arena.HEART_TREE_CELL + Vector2i(2, 0))
+	await _wait_frames(2)
+	var reach: float = CONFIG.sawbot_reach_cells * CONFIG.cell_size
+	_check(sawbot._nearest_tree(ForestTree.Stage.GROWN, reach, false) == null, "a Sawbot two cells from the Heart Tree cannot reach it")
+	_check(sawbot._nearest_tree(ForestTree.Stage.GROWN, INF) == _arena.heart_tree, "though the Heart Tree still lures it")
+	await _wait_frames(20)
+	_check(_arena.heart_tree.hp == _arena.heart_tree.max_hp(), "so it does not cut it from there")
+	sawbot.queue_free()
+
+	# ESCORTS land around their Linebreaker.
+	_arena._on_spawn_requested(WaveDirector.LINEBREAKER, 6)
+	var heavy: Scrapper = null
+	var escorts: Array[Spitter] = []
+	for node: Node in get_tree().get_nodes_in_group(Enemy.GROUP):
+		if node is Scrapper and (node as Scrapper).heavy:
+			heavy = node as Scrapper
+		elif node is Spitter:
+			escorts.append(node as Spitter)
+	var all_close: bool = heavy != null and escorts.size() == CONFIG.linebreaker_escorts
+	for escort: Spitter in escorts:
+		var apart: Vector2i = (_arena.grid.world_to_cell(escort.global_position) - _arena.grid.world_to_cell(heavy.global_position)).abs()
+		if maxi(apart.x, apart.y) > 2 or not escort.is_entering or escort.ward != heavy:
+			all_close = false
+	_check(all_close, "a Linebreaker's %d escorts drop in within 2 cells of it, guarding it" % CONFIG.linebreaker_escorts)
+
+	# THE FIRST SCRAPPER gets an intro clip too (regular game only).
+	await _fresh_arena()
+	_arena.intro_clips_on = true
+	_arena._on_spawn_requested(WaveDirector.SCRAPPER, 1)
+	_check(_arena.clip_left > 0.0 and _arena.clip_label.text == CONFIG.intro_titles[WaveDirector.SCRAPPER], "the first Scrapper of a run gets an intro clip with its name")
+	_check(CONFIG.intro_titles.has(WaveDirector.SPITTER) and CONFIG.intro_titles.has(WaveDirector.SAWBOT), "and the Spitter and the Sawbot have one waiting")
+	_arena.clip_left = 0.0
+	_arena.intro_clips_on = false
+	Engine.time_scale = 1.0
+
+	# A BIG MOMENT keeps its subject lit: the dark sheet has a pool of light.
+	player = _arena.player  # a fresh arena has a fresh Seven
+	_arena.waves.wave = 1
+	_arena.start_drama(0.6, player)
+	await _wait_drawn_frames(3)
+	_check(_arena.dim_sheet.color.a > 0.0 and _arena.dim_sheet.focus != Vector2.INF, "a big moment darkens the screen but leaves a pool of light on Seven")
+	_arena.drama_left = 0.0
+	_arena.dim_sheet.color = Color(0.0, 0.0, 0.0, 0.0)
+	_arena.waves.wave = 0
+	Engine.time_scale = 1.0
+
+	# SAPLINGS WAIT between waves.
+	_arena.pause_growth_between_waves = true
+	_arena.waves.hold_break = true  # or the director would end the break at once
+	_arena.waves.state = WaveDirector.State.BREAK
+	var sapling: ForestTree = _arena.spawn_tree(Vector2i(4, 4), false)
+	await _wait_drawn_frames(8)
+	_check(sapling.stage == ForestTree.Stage.SAPLING and is_zero_approx(sapling.growth()), "a sapling does not grow between waves")
+	_arena.waves.state = WaveDirector.State.IDLE
+	_arena.waves.hold_break = false
+	await _wait_drawn_frames(8)
+	_check(sapling.growth() > 0.0, "and grows again once the break is over")
+	_arena.pause_growth_between_waves = false
+
+	# THE RADIO BOX grows to fit a long line.
+	var radio: Radio = _arena.radio
+	radio.say(Radio.CANOPY, "Short.")
+	_check(is_equal_approx(radio.panel_rect().size.y, Radio.PANEL_RECT.size.y), "a short radio line keeps the small box")
+	radio.say(Radio.CANOPY, "Heads up: Helios has sent tougher, faster drones after you this time. And then some more words, so that it wraps onto a third row.")
+	_check(radio.panel_rect().size.y > Radio.PANEL_RECT.size.y + 20.0, "a long line makes the box taller, so no words hang out of it")
+	_check(CONFIG.story_line_seconds >= 3.0, "a line stays up at least 3 seconds after it has typed (%.1f)" % CONFIG.story_line_seconds)
+	radio.clear()
+
+	# THE MUSIC SWITCH really stops the song.
+	CanopyFM.set_music_on(false)
+	_check(not CanopyFM.music_on and not CanopyFM._player.playing, "Music off stops the song (not just pauses it)")
+	CanopyFM.set_music_on(true)
+	_check(CanopyFM.music_on, "and Music on brings it back")
+
+	# THE END SCREEN has a dark panel behind its words.
+	_check(not _arena.has_end_panel(), "no panel behind an ordinary banner")
+	_arena._on_all_waves_cleared()
+	_check(_arena.has_end_panel() and _arena._banner.size.x < get_viewport().get_visible_rect().size.x, "the end screen's words sit on a dark panel sized to them")
+
+	# THE RIPSAW: the upgraded Sawbot.
+	await _fresh_arena()
+	var ripsaw: Sawbot = _arena.spawn_sawbot_at(Vector2i(4, 8), true)
+	var plain: Sawbot = _arena.spawn_sawbot_at(Vector2i(4, 10))
+	await _wait_frames(2)
+	_check(ripsaw.big and ripsaw.hp == CONFIG.ripsaw_hp and ripsaw.hp > plain.hp, "a Ripsaw has more hit points than a Sawbot (%d to %d)" % [ripsaw.hp, plain.hp])
+	_check(ripsaw._speed() > plain._speed() and is_equal_approx(ripsaw._saw_interval() * 2.0, plain._saw_interval()), "it walks faster and its blade bites twice as often")
+	_check(ripsaw.scale.x > plain.scale.x, "and it is bigger")
+	var waves: WaveDirector = _arena.waves
+	var first_wave: int = 0
+	var most: int = 0
+	for number: int in range(1, waves.total_waves() + 1):
+		var count: int = waves._build_queue(number).count(WaveDirector.RIPSAW)
+		if count > 0 and first_wave == 0:
+			first_wave = number
+		most = maxi(most, count)
+	_check(first_wave == 7 and most <= 3, "regular game: Ripsaws from wave 7, never more than 3 in a wave")
+	_arena.apply_ng_plus()
+	first_wave = 0
+	most = 0
+	for number: int in range(1, waves.total_waves() + 1):
+		var count: int = waves._build_queue(number).count(WaveDirector.RIPSAW)
+		if count > 0 and first_wave == 0:
+			first_wave = number
+		most = maxi(most, count)
+	_check(first_wave == 4 and most <= 5, "New Game +: Ripsaws from wave 4, never more than 5 in a wave")
+
+	# A WEDGED LINEBREAKER shoulders through; routes keep off the outer border.
+	var heavy_one: Scrapper = _arena.spawn_scrapper_at(Vector2i(20, 8), true)
+	await _wait_frames(2)
+	_check(heavy_one.shoulders_through and not _arena.spawn_scrapper_at(Vector2i(20, 10)).shoulders_through, "a Linebreaker can shoulder through when wedged; a Scrapper cannot")
+	heavy_one._stuck_time = CONFIG.stuck_seconds  # as if it had been pushing at something
+	heavy_one.velocity = Vector2.ZERO
+	var along_border: Array[Vector2i] = _arena.grid.find_path(Vector2i(3, 1), Vector2i(22, 1))
+	var leaves_border: bool = false
+	for cell: Vector2i in along_border:
+		if cell.y > 1:
+			leaves_border = true
+	_check(leaves_border, "a route between two border cells swings in off the border")
+
+	# THE RADIO: a tap on the panel moves it along; Canopy FM hisses in the dark.
+	await _fresh_arena()
+	_arena._radio_later([Arena._radio_line(Radio.CANOPY, "First line, long enough to still be typing."), Arena._radio_line(Radio.HELIOS, "Second line.")])
+	_check(_arena.radio.is_on() and not _arena.radio.is_fully_typed(), "a radio line starts typing")
+	_arena.skip_radio_line()
+	_check(_arena.radio.is_fully_typed() and _arena.radio.speaker == Radio.CANOPY, "one tap on the panel finishes typing the line")
+	_arena.skip_radio_line()
+	_check(_arena.radio.speaker == Radio.HELIOS, "the next tap goes on to the next line")
+	_check(Sfx.stream_for(&"static") != null, "a Helios notice has a burst of static to cut in and out with")
+	_check(CanopyFM.hiss_for(0.0) > CanopyFM.hiss_for(1.0) + 20.0, "Canopy FM hisses in the dark (%.0f dB) and is clear once the block is lit (%.0f dB)" % [CanopyFM.hiss_for(0.0), CanopyFM.hiss_for(1.0)])
+
+	# s18 round 5: weak-signal text, the restart cap, and clips that do not cut each other off.
+	var plain_line: String = "Seven, this is Canopy FM, the only station still on the air tonight."
+	_check(Arena.with_static(plain_line, 0.0).contains("[static]") and Arena.with_static(plain_line, 1.0) == plain_line, "Canopy FM's words break up with [static] in the dark and are whole once the block is lit")
+	_check(Arena.with_static(plain_line, 0.0).replace(" [static]", "") == plain_line, "the [static] is only added between whole words")
+	await _fresh_arena(true)
+	_arena.waves.start_wave(3)
+	_arena._restart_current_wave()
+	var cap: int = floori(float(_arena.player.max_hp) * CONFIG.restart_hp_cap_share)
+	_check(_arena.player.hp == cap and cap < _arena.player.max_hp, "a restart from full health comes back capped at %d of %d pips" % [cap, _arena.player.max_hp])
+	_arena.intro_clips_on = true
+	_arena._on_spawn_requested(WaveDirector.SAWBOT, 4)
+	_arena._on_spawn_requested(WaveDirector.LINEBREAKER, 6)
+	_check(_arena.clip_label.text == CONFIG.intro_titles[WaveDirector.SAWBOT] and not _arena._intro_done.has(WaveDirector.LINEBREAKER), "a Linebreaker landing during another clip keeps its own clip for the next one")
+	_arena.clip_left = 0.0
+	_arena._on_spawn_requested(WaveDirector.LINEBREAKER, 6)
+	_check(_arena.clip_left > 0.0 and _arena.clip_label.text == CONFIG.intro_titles[WaveDirector.LINEBREAKER], "which then gets it")
+	_arena.clip_left = 0.0
+	_arena._heart_clip_wait = 0.0
+	_arena.heart_tree.take_damage(1)
+	_check(_arena.clip_left > 0.0 and _arena.clip_label.text == CONFIG.heart_clip_title and is_equal_approx(_arena._clip_zoom, CONFIG.heart_clip_zoom), "a cut into the Heart Tree plays a short, gentler clip on it")
+	_arena.clip_left = 0.0
+	_arena.heart_tree.take_damage(1)
+	_check(_arena.clip_left <= 0.0, "and not again straight away")
+	_arena.intro_clips_on = false
+	Engine.time_scale = 1.0
