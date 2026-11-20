@@ -37,12 +37,15 @@ var _destination: Vector2 = Vector2.ZERO
 
 ## _ready runs once when the Sawbot enters the scene.
 func _ready() -> void:
-	_configure_body(CONFIG.ripsaw_hp if big else CONFIG.sawbot_hp, CONFIG.sawbot_radius_cells, CONFIG.sawbot_texture, FALLBACK_COLOR)
+	# A Ripsaw has its own picture; without one it is the Sawbot's picture, tinted.
+	var own_picture: bool = big and CONFIG.ripsaw_texture != null
+	_configure_body(CONFIG.ripsaw_hp if big else CONFIG.sawbot_hp, CONFIG.sawbot_radius_cells, CONFIG.ripsaw_texture if own_picture else CONFIG.sawbot_texture, FALLBACK_COLOR)
 	if big:
 		# A RIPSAW: scaling the whole node makes the picture AND the hit circle
 		# bigger; the tint goes on the sprite (modulate is kept for the sawing glow).
 		scale = Vector2.ONE * CONFIG.ripsaw_scale
-		_sprite.self_modulate = CONFIG.ripsaw_tint
+		if not own_picture:
+			_sprite.self_modulate = CONFIG.ripsaw_tint
 		shoulders_through = true  # too big to stay wedged in a gap (see enemy.gd)
 
 

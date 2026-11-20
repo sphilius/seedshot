@@ -38,14 +38,17 @@ var heavy: bool = false
 ## _ready runs once when the Scrapper enters the scene.
 func _ready() -> void:
 	var start_hp: int = CONFIG.linebreaker_hp if heavy else CONFIG.scrapper_hp
-	_configure_body(start_hp, CONFIG.scrapper_radius_cells, CONFIG.scrapper_texture, FALLBACK_COLOR)
+	# A Linebreaker has its own picture; without one it is the Scrapper's picture, tinted.
+	var own_picture: bool = heavy and CONFIG.linebreaker_texture != null
+	_configure_body(start_hp, CONFIG.scrapper_radius_cells, CONFIG.linebreaker_texture if own_picture else CONFIG.scrapper_texture, FALLBACK_COLOR)
 	if heavy:
 		# Scaling the whole node makes the picture AND the hit circle bigger.
 		scale = Vector2.ONE * CONFIG.linebreaker_scale
 		shoulders_through = true  # too big to stay wedged in a gap (see enemy.gd)
 		# self_modulate tints only this node's own drawing; the sprite is a child,
 		# so tint it directly. (modulate is kept free for the windup's red glow.)
-		_sprite.self_modulate = CONFIG.linebreaker_tint
+		if not own_picture:
+			_sprite.self_modulate = CONFIG.linebreaker_tint
 
 
 ## Overrides Enemy._shield_color: a Linebreaker has a gold force field (drawn by

@@ -274,6 +274,9 @@ func _test_art_is_the_right_size() -> void:
 		"sawbot": CONFIG.sawbot_texture,
 		"spitter": CONFIG.spitter_texture,
 		"cat": CONFIG.cat_texture,
+		"linebreaker": CONFIG.linebreaker_texture,
+		"ripsaw": CONFIG.ripsaw_texture,
+		"arc spitter": CONFIG.arc_spitter_texture,
 	}
 	for sprite_name: String in sprites:
 		var texture: Texture2D = sprites[sprite_name]

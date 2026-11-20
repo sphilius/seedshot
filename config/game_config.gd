@@ -191,7 +191,7 @@ extends Resource
 ## than 3. New Game +: from wave 4, never more than 5. Used as written.
 @export var wave_ripsaws: Array[int] = [0, 0, 0, 0, 0, 0, 1, 2, 2, 3]
 @export var ng_plus_wave_ripsaws: Array[int] = [0, 0, 0, 1, 2, 2, 3, 4, 4, 5]
-@export var dj_first_ripsaw: Array[String] = ["Uh oh. That big red one is a Ripsaw. It fells a tree in half the time, so stop it before it reaches the Heart Tree."]
+@export var dj_first_ripsaw: Array[String] = ["Uh oh. That big one with the striped blade is a Ripsaw. It fells a tree in half the time, so stop it before it reaches the Heart Tree."]
 @export_range(0.1, 0.49) var sawbot_radius_cells: float = 0.36
 ## How often a Sawbot picks its next tree and recalculates its route.
 @export var sawbot_repath_interval: float = 0.5
@@ -989,6 +989,11 @@ extends Resource
 @export var scrapper_texture: Texture2D
 @export var sawbot_texture: Texture2D
 @export var spitter_texture: Texture2D
+## The heavy variants have their own pictures (s21 redesign). Each is optional: left empty, the
+## variant falls back to its plain sibling's picture plus the old colour tint.
+@export var linebreaker_texture: Texture2D
+@export var ripsaw_texture: Texture2D
+@export var arc_spitter_texture: Texture2D
 @export var cat_texture: Texture2D
 ## Lucky's second frame, paw dipped (tools/lucky_wave.py). The shop swaps between
 ## the two every cat_wave_seconds, so Lucky beckons.
