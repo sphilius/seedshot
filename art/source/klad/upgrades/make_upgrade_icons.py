@@ -358,6 +358,32 @@ def draw_repair():
     return g
 
 
+def draw_quick_reload():
+    """Quick Reload (s22): a gold arrow running round in a circle (the reload) about a
+    teal seed canister with three green pods lined up in it (the load)."""
+    g = Grid()
+    # The ring: everything inside a big circle but outside a smaller one...
+    ring = both(ellipse(32, 32, 27, 27), not_(ellipse(32, 32, 20, 20)))
+    # ...with a wedge cut out at the top right, where the arrowhead will point.
+    gap = polygon([(32, 32), (40, 0), (64, 0), (64, 16)])
+    open_ring = both(ring, not_(gap))
+    g.fill(open_ring, "gold")
+    # Shade the lower part of the ring (light from the top left). A lambda is a
+    # one-line function: here "is this pixel below row 44?".
+    g.fill(both(open_ring, lambda x, y: y > 44), "rust-light")
+    # The arrowhead at the end of the ring beside the wedge, pointing clockwise.
+    g.fill(polygon([(51, 3), (63, 22), (44, 21)]), "gold")
+    # The canister: a teal box in the middle, light lid on top, dark base below.
+    g.fill(box(21, 23, 22, 19), "teal")
+    g.fill(box(21, 23, 22, 3), "steel-light")
+    g.fill(box(21, 39, 22, 3), "steel-dark")
+    # Three pods in a row inside it: a dark base with a light top, like the other cards.
+    for cx in (26, 32, 38):
+        g.fill(ellipse(cx, 32, 2.6, 4.0), "leaf-dark")
+        g.fill(ellipse(cx - 0.6, 31, 1.4, 2.2), "leaf-light")
+    return g
+
+
 ICONS = [
     ("seed_pouch", draw_seed_pouch),
     ("heavy_seeds", draw_heavy_seeds),
@@ -365,6 +391,7 @@ ICONS = [
     ("hardwood", draw_hardwood),
     ("quick_roots", draw_quick_roots),
     ("long_trellis", draw_long_trellis),
+    ("quick_reload", draw_quick_reload),
 ]
 
 
