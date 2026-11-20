@@ -221,7 +221,7 @@ func _draw_entrance() -> void:
 	var radius: float = (_collision.shape as CircleShape2D).radius
 	if _drop_left > 0.0:
 		var near: float = 1.0 - _drop_left / _drop_total  # 0 high up, 1 about to land
-		draw_circle(Vector2.ZERO, radius * (0.5 + 0.8 * near), Color(0.0, 0.0, 0.0, 0.15 + 0.4 * near))
+		draw_circle(Vector2.ZERO, radius * (0.6 + 0.9 * near), Color(0.0, 0.0, 0.0, lerpf(CONFIG.drop_shadow_alpha_far, CONFIG.drop_shadow_alpha_near, near)))
 	if land_fx_left > 0.0:
 		var done: float = 1.0 - land_fx_left / CONFIG.land_fx_seconds  # 0 at the landing, 1 when gone
 		var fade: float = 1.0 - done

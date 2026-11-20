@@ -45,7 +45,9 @@ func _physics_process(delta: float) -> void:
 		return  # tied up by the vine: do nothing this step
 
 	var reach: float = CONFIG.sawbot_reach_cells * CONFIG.cell_size
-	var in_reach: ForestTree = _nearest_tree(ForestTree.Stage.GROWN, reach)
+	# `false` = measure the REAL distance. (The Heart Tree's lure makes it count
+	# as nearer than it is; used here, that let a Sawbot cut it from two cells off.)
+	var in_reach: ForestTree = _nearest_tree(ForestTree.Stage.GROWN, reach, false)
 	if in_reach != null:
 		_saw(in_reach, delta)
 		return
@@ -97,7 +99,8 @@ func _choose_destination() -> Vector2:
 
 ## The nearest tree at the given stage within `max_distance` pixels, or null.
 ## (INF, infinity, as the distance means "no limit".)
-func _nearest_tree(stage: ForestTree.Stage, max_distance: float) -> ForestTree:
+## `lured` false switches the Heart Tree's lure off, for "can my blade touch it?".
+func _nearest_tree(stage: ForestTree.Stage, max_distance: float, lured: bool = true) -> ForestTree:
 	var best: ForestTree = null
 	var best_distance: float = max_distance
 	# Every tree adds itself to the "trees" group, so this loop sees all of them.
@@ -107,7 +110,7 @@ func _nearest_tree(stage: ForestTree.Stage, max_distance: float) -> ForestTree:
 			continue
 		var distance: float = global_position.distance_to(tree.global_position)
 		# The Heart Tree LURES Sawbots: it counts as nearer than it really is.
-		if tree.is_heart:
+		if tree.is_heart and lured:
 			distance *= CONFIG.heart_tree_lure
 		if distance <= best_distance:
 			best = tree

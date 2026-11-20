@@ -366,10 +366,14 @@ func take_damage(amount: int, from: Vector2 = Vector2.INF) -> bool:
 
 ## Brings a downed bot back at full health at `world_position`. Called by the
 ## arena when a wave restarts. The short blink gives a moment of safety.
-func revive(world_position: Vector2) -> void:
+## `start_hp` (optional) is the health to come back with; 0 or less, or leaving
+## it out, means full health. The arena passes the health Seven had when the
+## wave first began, so dying is not a free repair.
+func revive(world_position: Vector2, start_hp: int = 0) -> void:
 	global_position = world_position
 	velocity = Vector2.ZERO
-	hp = max_hp
+	# clampi keeps a whole number between two bounds: at least 1 pip, at most all.
+	hp = max_hp if start_hp <= 0 else clampi(start_hp, 1, max_hp)
 	is_dead = false
 	is_zipping = false
 	bramble_charges = CONFIG.bramble_max_charges  # a fresh start refills the seeds
@@ -378,8 +382,8 @@ func revive(world_position: Vector2) -> void:
 	fuse_shield_left = 0.0
 	_reset_body()  # stand the picture back up after the knock-out
 	_invulnerable_left = CONFIG.player_hit_invulnerable_time
-	# A real defeat is the only thing that refits a used fuse.
-	has_fuse = has_fuse_slot
+	# The spare fuse is NOT refitted: Lucky gives one, and it saves Seven once
+	# per run (until s18 round 4 every restarted wave fitted a new one).
 	health_changed.emit(hp, max_hp)
 
 

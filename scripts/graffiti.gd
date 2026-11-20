@@ -25,11 +25,22 @@ extends Node2D
 ##   - each tag is tilted a few degrees, a different way on each home;
 ##   - a short tag is painted big on one row, a long one is broken onto two rows,
 ##     so every tag stays inside its own roof and none touches its neighbour.
+##
+## SPREAD OUT (s18 round 4, fourth try): ten tags on ten roofs crowded the front
+## homes by wave 7. Now the tags take turns between three kinds of SPOT (see
+## _build_spots): every third home's roof, the roll-down shutters of the back
+## wall, and the brick of the side walls between the gates (painted sideways,
+## as on a real wall you walk along). Four roofs, two shutters, four side walls.
 
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
 
 ## The biggest and smallest letter heights a tag may use, in pixels.
 const MAX_FONT_SIZE: int = 22
+## How many tags go on the back wall's shutters.
+const BACK_WALL_TAGS: int = 2
+## The side wall stretches that take a tag, as (first row, last row), used in
+## turn left, right, left, right. They lie between the gates (config gate_rows).
+const SIDE_WALL_ROWS: Array[Vector2i] = [Vector2i(4, 6), Vector2i(8, 10), Vector2i(12, 13), Vector2i(1, 2)]
 const MIN_FONT_SIZE: int = 11
 ## Kept as the size the old tests measured with; a tag now picks its own size.
 const FONT_SIZE: int = 17
@@ -54,17 +65,73 @@ var _arena_rect: Rect2
 var _wall_px: float = 48.0
 ## The roof of each home, left to right, in pixels. Set by setup().
 var _roofs: Array[Rect2] = []
+## Where each tag goes, in the order the tags appear. Each spot is a Dictionary:
+##   rect  the room the tag has, laid out as if the text ran left to right
+##         (for a side wall that is the wall segment turned on its side)
+##   turn  how far the text is turned, in radians (0 = level, a quarter turn
+##         either way on the side walls)
+var _spots: Array[Dictionary] = []
 
 
 ## Called once by the arena: tells this node where the walls are and where each
 ## home's roof is (`roofs`, from BlockWindows.roof_rects()).
-func setup(arena_rect: Rect2, wall_px: float, roofs: Array[Rect2] = []) -> void:
+## `shop_cell_x` is the first cell of Lucky's shop front (no tag goes there);
+## -1, the value used when it is left out, means "roofs only", as before.
+func setup(arena_rect: Rect2, wall_px: float, roofs: Array[Rect2] = [], shop_cell_x: int = -1) -> void:
 	_arena_rect = arena_rect
 	_wall_px = wall_px
 	_roofs = roofs
 	if _roofs.is_empty():
 		# No homes handed in (a test, perhaps): treat the whole wall as one roof.
 		_roofs = [Rect2(arena_rect.position.x, arena_rect.end.y - wall_px, arena_rect.size.x, wall_px)]
+	_build_spots(shop_cell_x)
+	queue_redraw()
+
+
+## Works out where every tag goes (fills _spots).
+func _build_spots(shop_cell_x: int) -> void:
+	_spots.clear()
+	if shop_cell_x < 0:
+		for roof: Rect2 in _roofs:
+			_spots.append({rect = roof, turn = 0.0})
+		return
+	# 1. ROOFS: every third home, so the front wall keeps room to breathe.
+	var roofs: Array[Dictionary] = []
+	for i: int in range(0, _roofs.size(), 3):
+		roofs.append({rect = _roofs[i], turn = 0.0})
+	# 2. BACK WALL: the shutter fronts, rightmost first (the left end of that
+	#    wall sits under the wave label and the health pips), never Lucky's.
+	var shutters: Array[Dictionary] = []
+	var cols: int = int(_arena_rect.size.x / _wall_px)
+	var shop_cells: Array[Vector2i] = BackWall.shop_cells(cols)
+	shop_cells.reverse()  # reverse flips the list: rightmost first
+	for cell: Vector2i in shop_cells:
+		if cell.x != shop_cell_x and shutters.size() < BACK_WALL_TAGS:
+			var front := Rect2(_arena_rect.position + Vector2(cell.x * _wall_px, 0.0), Vector2(_wall_px * BackWall.FRONT_CELLS, _wall_px))
+			shutters.append({rect = front.grow(-3.0), turn = 0.0})
+	# 3. SIDE WALLS: the stretches of brick between the gates. Each entry is
+	#    (first row, last row). The text is turned a quarter turn: it reads
+	#    upward on the left wall and downward on the right wall.
+	var sides: Array[Dictionary] = []
+	for i: int in SIDE_WALL_ROWS.size():
+		var rows: Vector2i = SIDE_WALL_ROWS[i]
+		var is_left: bool = i % 2 == 0  # they alternate: left, right, left, right
+		var length: float = float(rows.y - rows.x + 1) * _wall_px
+		var centre := Vector2(
+			_arena_rect.position.x + _wall_px / 2.0 if is_left else _arena_rect.end.x - _wall_px / 2.0,
+			_arena_rect.position.y + float(rows.x) * _wall_px + length / 2.0)
+		# The room is `length` wide and one wall thick, centred on `centre`.
+		var room := Rect2(centre - Vector2(length, _wall_px) / 2.0, Vector2(length, _wall_px))
+		sides.append({rect = room, turn = -PI / 2.0 if is_left else PI / 2.0})
+	# Deal them out in turn (roof, side, shutter, roof, side, ...) so the first
+	# few waves already put paint on three different walls.
+	var piles: Array = [roofs, sides, shutters]
+	var pile: int = 0
+	while not (roofs.is_empty() and sides.is_empty() and shutters.is_empty()):
+		var from: Array = piles[pile % piles.size()]
+		pile += 1
+		if not from.is_empty():
+			_spots.append(from.pop_front())  # pop_front removes and returns the first entry
 
 
 ## Shows every line up to and including wave `wave`'s. Never hides a line, so
@@ -90,7 +157,12 @@ func _font() -> Font:
 ## The roof that line `index` is painted on. With more lines than homes the
 ## count wraps round (% is "remainder after dividing").
 func roof_for(index: int) -> Rect2:
-	return _roofs[index % _roofs.size()]
+	return _spots[index % _spots.size()].rect
+
+
+## How far the text of line `index` is turned to follow its wall, in radians.
+func turn_for(index: int) -> float:
+	return _spots[index % _spots.size()].turn
 
 
 ## Breaks `text` into two rows at the space nearest its middle. A text with no
@@ -167,7 +239,7 @@ func _draw_tag(index: int) -> void:
 	var color: Color = PAINT_COLORS[index % PAINT_COLORS.size()]
 	# draw_set_transform moves and turns everything drawn after it: here the
 	# origin (0, 0) becomes the roof's centre and the "paper" is tilted.
-	draw_set_transform(roof.get_center(), tilt_for(index))
+	draw_set_transform(roof.get_center(), turn_for(index) + tilt_for(index))
 	var row_height: float = float(size) * 1.02
 	for r: int in rows.size():
 		var width: float = font.get_string_size(rows[r], HORIZONTAL_ALIGNMENT_LEFT, -1.0, size).x

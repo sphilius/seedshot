@@ -46,6 +46,8 @@ var station: StringName = &"lofi"
 ## False when the player has switched the MUSIC off in the pause menu. Public so
 ## the menu can show it; change it with set_music_on.
 var music_on: bool = true
+## Where in the song to carry on from when the music is switched back on, in seconds.
+var _resume_at: float = 0.0
 ## The filter cutoff the song is gliding toward, in Hz (Hertz = pitch). Public for tests.
 var target_cutoff_hz: float = 0.0
 
@@ -125,9 +127,20 @@ func is_dulled() -> bool:
 
 ## Switches the music off or on (the pause menu's Music button). stream_paused
 ## holds the song at its place, so switching back on carries on from there.
+## The song is STOPPED, not just paused, and its place remembered: in the web
+## build a paused stream carried on playing (Sasha: "the Music still plays if
+## you switch it off"). _process starts it again from `_resume_at`.
 func set_music_on(on: bool) -> void:
+	if on == music_on:
+		return
 	music_on = on
-	_player.stream_paused = not on
+	if not on:
+		_resume_at = _player.get_playback_position()
+		_player.stop()
+	elif Sfx.is_unlocked and _player.stream != null:
+		# Start it here and now: _process does not run while the pause menu is up.
+		_player.play(_resume_at)
+		_resume_at = 0.0
 
 
 ## The name of the station playing, as shown to the player.
@@ -150,7 +163,8 @@ func set_station(new_station: StringName) -> void:
 ## filter (and the volume, while dulled) toward where the light says they should be.
 func _process(delta: float) -> void:
 	if music_on and Sfx.is_unlocked and not _player.playing and _player.stream != null:
-		_player.play()
+		_player.play(_resume_at)  # from where it was switched off (0 = the start)
+		_resume_at = 0.0
 	_dull_left = maxf(_dull_left - delta, 0.0)
 	target_cutoff_hz = cutoff_for(_light)
 	var volume: float = CONFIG.music_volume_db

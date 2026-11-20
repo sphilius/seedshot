@@ -125,6 +125,7 @@ func _ready() -> void:
 	await _test_s18_wear_and_big_moments()
 	await _test_s18_entrances()
 	await _test_s18_lucky_moves()
+	await _test_s18_round_4()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -158,6 +159,9 @@ func _fresh_arena(with_heart: bool = false) -> void:
 	_arena.intro_clips_on = false
 	# Lucky's shop moves each run; the tests keep it where they know to shoot.
 	_arena.random_cat_shop = false
+	# Saplings wait between waves in the real game; the older checks grow trees
+	# in the breaks, so only the test written for the rule switches it on.
+	_arena.pause_growth_between_waves = false
 	add_child(_arena)
 	# Give the physics engine two steps to register the new bodies.
 	await get_tree().physics_frame
@@ -1443,9 +1447,9 @@ func _test_spare_fuse() -> void:
 	player.take_damage(CONFIG.player_max_hp)
 	_check(player.is_dead, "without a fuse the next deadly hit downs Seven")
 
-	# A real defeat restarts the wave and refits it.
+	# s18 round 4: a defeat does NOT refit it. One fuse, once per run.
 	player.revive(player.global_position)
-	_check(player.has_fuse, "a real defeat (the wave restart) refits the fuse")
+	_check(not player.has_fuse, "a defeat (the wave restart) does not refit the fuse: once per run")
 
 
 ## Talking to Lucky: words only. The greeting depends on the wave the cat was
@@ -2153,11 +2157,12 @@ func _test_s18_machines_heart_cards_light() -> void:
 
 	# Upgrade cards: Seven is parked next to the Heart Tree and cannot act.
 	var player: Player = _arena.player
+	# s18 round 4: Seven is locked where it stands, not moved to the Heart Tree.
+	var stood_at: Vector2 = player.global_position
 	_arena._park_player_for_cards()
-	var parked: Vector2i = _arena.grid.world_to_cell(player.global_position)
-	var offset: Vector2i = (parked - Arena.HEART_TREE_CELL).abs()
-	_check(player.locked and maxi(offset.x, offset.y) <= CONFIG.upgrade_park_cells, "the cards park Seven within %d cells of the Heart Tree" % CONFIG.upgrade_park_cells)
-	_check(not _arena.grid.is_solid(parked) and _arena.tree_at(parked) == null, "on an open cell")
+	_check(player.locked and player.global_position.is_equal_approx(stood_at), "the cards lock Seven where it stands")
+	var parked: Vector2i = _arena.park_cell()
+	_check(not _arena.grid.is_solid(parked) and _arena.tree_at(parked) == null, "park_cell still names an open cell by the Heart Tree")
 	_check(not player.fire(Vector2.RIGHT) and not player.throw_bramble(), "and Seven cannot shoot or throw while they are up")
 	_arena.apply_upgrade(&"seed_pouch")
 	_check(not player.locked, "picking a card frees Seven again")
@@ -2344,17 +2349,34 @@ func _test_back_wall_and_roof_graffiti() -> void:
 		var layout: Dictionary = graffiti.tag_layout(i)
 		var roof: Rect2 = layout.roof
 		roofs_used[roof] = true  # a Dictionary used as a set: each roof is counted once
-		# The roof must lie inside the bottom wall cell and inside the arena's width.
-		var in_wall: bool = roof.position.y >= arena_rect.end.y - CONFIG.cell_size and roof.end.y <= arena_rect.end.y
-		var in_arena: bool = roof.position.x >= arena_rect.position.x and roof.end.x <= arena_rect.end.x + 0.5
-		if not in_wall or not in_arena or layout.size < Graffiti.MIN_FONT_SIZE:
+		# Its middle must lie on one of the four walls (the outer ring of cells),
+		# and its room is never taller than a wall is thick.
+		var middle: Vector2i = _arena.grid.world_to_cell(roof.get_center())
+		var on_wall: bool = middle.x == 0 or middle.y == 0 or middle.x == CONFIG.grid_cols - 1 or middle.y == CONFIG.grid_rows - 1
+		if not on_wall or roof.size.y > CONFIG.cell_size or layout.size < Graffiti.MIN_FONT_SIZE:
 			all_fit = false
+			print("  tag %d is off the walls or too small: %s" % [i, roof])
 		# Measure each row at the tag's own letter height: none may be wider than its roof.
 		for row: String in layout.rows:
 			if font.get_string_size(row, HORIZONTAL_ALIGNMENT_LEFT, -1.0, layout.size).x > roof.size.x:
 				all_fit = false
-	_check(all_fit, "every graffiti tag fits on a roof of the bottom wall")
-	_check(roofs_used.size() == CONFIG.graffiti_lines.size(), "each tag has a roof of its own, so no two run together")
+				print("  tag %d is too wide for its spot: %s" % [i, row])
+	_check(all_fit, "every graffiti tag fits on its own stretch of wall")
+	_check(roofs_used.size() == CONFIG.graffiti_lines.size(), "each tag has a spot of its own, so no two run together")
+	# s18 round 4: the tags are spread over three walls, not crowded on the roofs.
+	var on_roofs: int = 0
+	var sideways: int = 0
+	var on_back: int = 0
+	for i: int in CONFIG.graffiti_lines.size():
+		var middle: Vector2i = _arena.grid.world_to_cell(graffiti.roof_for(i).get_center())
+		if not is_zero_approx(graffiti.turn_for(i)):
+			sideways += 1
+		elif middle.y == 0:
+			on_back += 1
+			_check(middle.x != _arena.cat_shop_cell.x and middle.x != _arena.cat_shop_cell.x + 1, "a back wall tag is not on Lucky's shutter")
+		else:
+			on_roofs += 1
+	_check(on_roofs <= 4 and on_back == Graffiti.BACK_WALL_TAGS and sideways == 4, "tags: %d on roofs, %d on back wall shutters, %d sideways on the side walls" % [on_roofs, on_back, sideways])
 	_check(Graffiti.split_in_two("WE ARE THE NEIGHBOURS") == ["WE ARE THE", "NEIGHBOURS"], "a long tag is broken at the space nearest its middle")
 	_check(graffiti.get_index() > _arena.windows.get_index(), "and is painted over the roofs, not under them")
 
@@ -2715,7 +2737,7 @@ func _test_s18_entrances() -> void:
 	_check(heavy.is_entering and gates.gate_for(heavy_cell) == ArenaGrid.NO_CELL, "a Linebreaker does not use a gate: it is falling")
 	_check(heavy._sprite.position.y < -100.0, "its picture starts high above its landing spot")
 	_check(_arena.clip_left > 0.0 and is_equal_approx(Engine.time_scale, CONFIG.heavy_intro_slow_scale), "the first Linebreaker gets an intro clip in slow motion")
-	_check(_arena.clip_label.visible and _arena.clip_label.text == CONFIG.linebreaker_intro_title, "with its name on screen")
+	_check(_arena.clip_label.visible and _arena.clip_label.text == CONFIG.intro_titles[WaveDirector.LINEBREAKER], "with its name on screen")
 	var has_landed: Callable = func() -> bool: return landings[0] == 1
 	_check(await _wait_until(has_landed, CONFIG.drop_seconds + 2.0), "it lands")
 	_check(not heavy.is_entering and heavy._sprite.position.is_zero_approx() and heavy.land_fx_left > 0.0, "on its landing spot, awake, in a ring of dust")
@@ -2778,3 +2800,115 @@ func _test_s18_lucky_moves() -> void:
 
 	# The landing crash is a real recording now, not the generated one.
 	_check(Sfx.stream_for(&"crash") is AudioStreamMP3, "the heavy landing plays the recorded crash")
+
+
+## s18 round 4, from Sasha's playtest of round 3: restarts that cannot loop or
+## heal, a once-per-run fuse, a Sawbot that must stand next to what it cuts,
+## escorts that land with their Linebreaker, saplings that wait between waves,
+## a radio box that fits its words, and a dark panel under the end screen.
+func _test_s18_round_4() -> void:
+	await _fresh_arena(true)
+	var player: Player = _arena.player
+
+	# A RESTARTED WAVE gives back the health Seven had when the wave began.
+	player.hp = 2
+	_arena.waves.start_wave(3)  # the arena notes Seven's health as the wave starts
+	player.receive_cat_gift()
+	player.has_fuse = false  # the fuse was used earlier in the run
+	player.hp = 1
+	_arena._restart_pending = true
+	_arena.waves.hold_break = true
+	_arena.upgrade_picker.offer(CONFIG.upgrade_choices)
+	_arena._restart_current_wave()
+	_check(player.hp == 2 and not player.is_dead, "a restarted wave gives Seven the 2 pips it began the wave with, not full health")
+	_check(not player.has_fuse, "and no new fuse")
+	_check(not _arena.upgrade_picker.is_open() and not _arena.waves.hold_break and not player.locked, "a restart takes the upgrade cards away and frees Seven")
+
+	# A wave that "clears" while a restart is pending does not count.
+	var cleared_before: int = _arena.waves_cleared
+	_arena._restart_pending = true
+	_arena._on_wave_cleared(3)
+	_check(_arena.waves_cleared == cleared_before and not _arena.upgrade_picker.is_open(), "a wave cleared as Seven goes down does not count, and deals no cards")
+	_arena._restart_pending = false
+	_arena.waves.hold_break = false
+
+	# SAWBOT REACH: two cells from the Heart Tree is too far to cut it.
+	await _fresh_arena(true)
+	var sawbot: Sawbot = _arena.spawn_sawbot_at(Arena.HEART_TREE_CELL + Vector2i(2, 0))
+	await _wait_frames(2)
+	var reach: float = CONFIG.sawbot_reach_cells * CONFIG.cell_size
+	_check(sawbot._nearest_tree(ForestTree.Stage.GROWN, reach, false) == null, "a Sawbot two cells from the Heart Tree cannot reach it")
+	_check(sawbot._nearest_tree(ForestTree.Stage.GROWN, INF) == _arena.heart_tree, "though the Heart Tree still lures it")
+	await _wait_frames(20)
+	_check(_arena.heart_tree.hp == _arena.heart_tree.max_hp(), "so it does not cut it from there")
+	sawbot.queue_free()
+
+	# ESCORTS land around their Linebreaker.
+	_arena._on_spawn_requested(WaveDirector.LINEBREAKER, 6)
+	var heavy: Scrapper = null
+	var escorts: Array[Spitter] = []
+	for node: Node in get_tree().get_nodes_in_group(Enemy.GROUP):
+		if node is Scrapper and (node as Scrapper).heavy:
+			heavy = node as Scrapper
+		elif node is Spitter:
+			escorts.append(node as Spitter)
+	var all_close: bool = heavy != null and escorts.size() == CONFIG.linebreaker_escorts
+	for escort: Spitter in escorts:
+		var apart: Vector2i = (_arena.grid.world_to_cell(escort.global_position) - _arena.grid.world_to_cell(heavy.global_position)).abs()
+		if maxi(apart.x, apart.y) > 2 or not escort.is_entering or escort.ward != heavy:
+			all_close = false
+	_check(all_close, "a Linebreaker's %d escorts drop in within 2 cells of it, guarding it" % CONFIG.linebreaker_escorts)
+
+	# THE FIRST SCRAPPER gets an intro clip too (regular game only).
+	await _fresh_arena()
+	_arena.intro_clips_on = true
+	_arena._on_spawn_requested(WaveDirector.SCRAPPER, 1)
+	_check(_arena.clip_left > 0.0 and _arena.clip_label.text == CONFIG.intro_titles[WaveDirector.SCRAPPER], "the first Scrapper of a run gets an intro clip with its name")
+	_check(CONFIG.intro_titles.has(WaveDirector.SPITTER) and CONFIG.intro_titles.has(WaveDirector.SAWBOT), "and the Spitter and the Sawbot have one waiting")
+	_arena.clip_left = 0.0
+	_arena.intro_clips_on = false
+	Engine.time_scale = 1.0
+
+	# A BIG MOMENT keeps its subject lit: the dark sheet has a pool of light.
+	player = _arena.player  # a fresh arena has a fresh Seven
+	_arena.waves.wave = 1
+	_arena.start_drama(0.6, player)
+	await _wait_drawn_frames(3)
+	_check(_arena.dim_sheet.color.a > 0.0 and _arena.dim_sheet.focus != Vector2.INF, "a big moment darkens the screen but leaves a pool of light on Seven")
+	_arena.drama_left = 0.0
+	_arena.dim_sheet.color = Color(0.0, 0.0, 0.0, 0.0)
+	_arena.waves.wave = 0
+	Engine.time_scale = 1.0
+
+	# SAPLINGS WAIT between waves.
+	_arena.pause_growth_between_waves = true
+	_arena.waves.hold_break = true  # or the director would end the break at once
+	_arena.waves.state = WaveDirector.State.BREAK
+	var sapling: ForestTree = _arena.spawn_tree(Vector2i(4, 4), false)
+	await _wait_drawn_frames(8)
+	_check(sapling.stage == ForestTree.Stage.SAPLING and is_zero_approx(sapling.growth()), "a sapling does not grow between waves")
+	_arena.waves.state = WaveDirector.State.IDLE
+	_arena.waves.hold_break = false
+	await _wait_drawn_frames(8)
+	_check(sapling.growth() > 0.0, "and grows again once the break is over")
+	_arena.pause_growth_between_waves = false
+
+	# THE RADIO BOX grows to fit a long line.
+	var radio: Radio = _arena.radio
+	radio.say(Radio.CANOPY, "Short.")
+	_check(is_equal_approx(radio.panel_rect().size.y, Radio.PANEL_RECT.size.y), "a short radio line keeps the small box")
+	radio.say(Radio.CANOPY, "Heads up: Helios has sent tougher, faster drones after you this time. And then some more words, so that it wraps onto a third row.")
+	_check(radio.panel_rect().size.y > Radio.PANEL_RECT.size.y + 20.0, "a long line makes the box taller, so no words hang out of it")
+	_check(CONFIG.story_line_seconds >= 3.0, "a line stays up at least 3 seconds after it has typed (%.1f)" % CONFIG.story_line_seconds)
+	radio.clear()
+
+	# THE MUSIC SWITCH really stops the song.
+	CanopyFM.set_music_on(false)
+	_check(not CanopyFM.music_on and not CanopyFM._player.playing, "Music off stops the song (not just pauses it)")
+	CanopyFM.set_music_on(true)
+	_check(CanopyFM.music_on, "and Music on brings it back")
+
+	# THE END SCREEN has a dark panel behind its words.
+	_check(not _arena.has_end_panel(), "no panel behind an ordinary banner")
+	_arena._on_all_waves_cleared()
+	_check(_arena.has_end_panel() and _arena._banner.size.x < get_viewport().get_visible_rect().size.x, "the end screen's words sit on a dark panel sized to them")

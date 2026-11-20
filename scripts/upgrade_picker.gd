@@ -98,6 +98,14 @@ func offer(count: int, left_out: Array[StringName] = []) -> void:
 	queue_redraw()
 
 
+## Takes the cards away WITHOUT picking one (the wave is being restarted).
+func cancel() -> void:
+	offered = []
+	visible = false
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	queue_redraw()
+
+
 ## True while the cards are showing.
 func is_open() -> bool:
 	return not offered.is_empty()

@@ -113,8 +113,15 @@ var hurt_flash_left: float = 0.0
 ## THE BIG MOMENTS (knock-out, fuse revive): a black sheet over the screen that
 ## darkens it, the real seconds of slow motion left, and how long this one
 ## lasts in all. Public so the tests can read them.
-var dim_sheet: ColorRect
+var dim_sheet: DimSheet
 var drama_left: float = 0.0
+## Who the big moment is about (kept lit while the rest darkens), or null.
+var _drama_focus: Node2D
+## True from the moment Seven goes down (or the Heart Tree falls) until the wave
+## has been started again. While it is true, a wave cannot count as cleared.
+var _restart_pending: bool = false
+## Seven's health when the current wave first began. 0 = not known yet (full).
+var _hp_at_wave_start: int = 0
 var _drama_seconds: float = 1.0
 ## The service gates in the side walls that ordinary machines roll out of
 ## (see gates.gd). Public so the tests can reach it.
@@ -123,6 +130,9 @@ var gates: Gates
 ## intro_clips_on: the tests switch the clips off (they slow the whole game).
 ## clip_left: real seconds of the clip left. Public for the tests.
 var intro_clips_on: bool = true
+## Saplings wait between waves (see _process). The older tests switch it off:
+## they grow trees with no wave running.
+var pause_growth_between_waves: bool = true
 var clip_left: float = 0.0
 var _clip_seconds: float = 1.0
 ## The machine the camera pushes in on, and the last place it was seen.
@@ -252,7 +262,6 @@ func _ready() -> void:
 	# The Block's graffiti: painted across the roofs of the homes on the bottom
 	# wall, so it is added AFTER the windows (later children draw on top).
 	graffiti = Graffiti.new()
-	graffiti.setup(Rect2(origin, arena_px), float(CONFIG.cell_size), windows.roof_rects())
 	add_child(graffiti)
 	# The back (top) wall: a row of home and shop fronts. Lucky's shop is added
 	# further down and draws itself into the gap this leaves for it.
@@ -266,6 +275,11 @@ func _ready() -> void:
 	back_wall = BackWall.new()
 	back_wall.setup(Rect2(origin, arena_px), float(CONFIG.cell_size), cat_shop_cell.x)
 	add_child(back_wall)
+	# The graffiti is set up only now, because it must know which shutter is
+	# Lucky's (no tag goes there), and moved to draw AFTER the back wall, since
+	# two of its tags are painted on that wall's shutters.
+	graffiti.setup(Rect2(origin, arena_px), float(CONFIG.cell_size), windows.roof_rects(), cat_shop_cell.x)
+	move_child(graffiti, -1)  # -1 = last child = drawn on top of the ones before
 	# Lantern strings across the lot. Added before the trees and machines, so
 	# they hang underneath them and never hide the action.
 	# The art pass: brick walls and street props (see props.gd). Added first among
@@ -358,7 +372,7 @@ func _ready() -> void:
 	$Hud.add_child(hurt_flash)
 	$Hud.move_child(hurt_flash, 0)
 	# The black "big moment" sheet, made the same way and also under the HUD's labels.
-	dim_sheet = ColorRect.new()
+	dim_sheet = DimSheet.new()
 	dim_sheet.color = Color(0.0, 0.0, 0.0, 0.0)
 	dim_sheet.size = get_viewport_rect().size
 	dim_sheet.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -417,6 +431,10 @@ func _process(delta: float) -> void:
 			_wave_label.text += "    Sunburst %d / %d" % [great_powers.sunburst_charges, CONFIG.sunburst_charges_per_wave]
 	# Great sunroots take on a gold sheen while a Sunburst is ready.
 	ForestTree.sunburst_ready = great_powers.is_sunburst_ready()
+	# Saplings only grow while a wave is being fought: not in the break between
+	# waves, and not while the upgrade cards are up. (After the last wave they
+	# grow again, so the end screen's forest finishes filling in.)
+	ForestTree.growth_paused = pause_growth_between_waves and (waves.state == WaveDirector.State.BREAK or upgrade_picker.is_open())
 	# Glide the lot's tint toward what the current light calls for.
 	var wanted_tint: Color = ambient_tint_for(light_level())
 	if cat_shop != null:
@@ -458,8 +476,9 @@ func _process(delta: float) -> void:
 	_ambient.color = _ambient.color.lerp(wanted_tint, minf(1.0, CONFIG.ambient_change_speed * delta))
 	# The last machines are still growing into trees when the end screen comes
 	# up, so keep its score current instead of freezing it at the first count.
-	if is_run_finished:
+	if is_run_finished and _banner.text != end_banner_text():
 		_banner.text = end_banner_text()
+		_back_the_end_banner()  # the words changed: fit the dark panel to them again
 	# The small story line: when its time is up, show the next one or hide.
 	if _story_time_left > 0.0:
 		_story_time_left -= delta
@@ -818,6 +837,14 @@ func _restart_current_wave() -> void:
 	for cell: Vector2i in _trees_by_cell.keys():
 		grid.set_solid(cell, false)
 	_trees_by_cell.clear()
+	# A restart cancels anything left over from the attempt that just ended: the
+	# upgrade cards, the wave end slow-down, a held break. (Sasha saw the cards
+	# come up on a restarted wave, which could loop: cards, die, cards, die.)
+	_restart_pending = false
+	_beat_left = 0.0
+	waves.hold_break = false
+	upgrade_picker.cancel()
+	player.locked = false
 
 	# Replant the forest from the snapshot taken at wave start.
 	tap_points.clear()
@@ -833,7 +860,9 @@ func _restart_current_wave() -> void:
 	var start_cell: Vector2i = _nearest_free_cell(PLAYER_START_CELL)
 	if start_cell == ArenaGrid.NO_CELL:
 		start_cell = PLAYER_START_CELL
-	player.revive(grid.cell_to_world(start_cell))
+	# Seven comes back with the health it had when this wave FIRST began, not at
+	# full health: dying is not a free repair (s18 round 4).
+	player.revive(grid.cell_to_world(start_cell), _hp_at_wave_start)
 	waves.restart_wave()
 
 
@@ -1007,6 +1036,9 @@ func dj_lines_for_wave(number: int) -> Array[String]:
 			lines.append_array(CONFIG.dj_intro_touch if _is_touch() else CONFIG.dj_intro)
 		if ng_plus:
 			lines.append_array(CONFIG.dj_ng_plus_intro)
+	# Once the game is under way: the player may not know the music can be changed.
+	if number == CONFIG.dj_music_hint_wave:
+		lines.append(CONFIG.dj_music_hint)
 	var hint: int = CONFIG.dj_cat_hint_waves.find(number)
 	if hint >= 0 and hint < CONFIG.dj_cat_hints.size() and cat_shop != null and not cat_shop.is_open:
 		lines.append(CONFIG.dj_cat_hints[hint])
@@ -1026,6 +1058,10 @@ func _on_wave_started(number: int, total: int) -> void:
 			_tap_trees_at_wave_start.append(cell)
 		if _trees_by_cell[cell].is_great:
 			_great_trees_at_wave_start.append(cell)
+	# Remember Seven's health too: a restarted wave gives back exactly this much.
+	# (A restart calls this again, right after the revive, so the number stays.)
+	if not player.is_dead:
+		_hp_at_wave_start = player.hp
 	_choose_tap_points(number)
 	_show_banner("Wave %d" % number, 1.5)
 	# By now the controls are learned; the bottom wall belongs to the windows.
@@ -1093,6 +1129,7 @@ func _on_spawn_requested(kind: StringName, wave_number: int) -> void:
 		_play_intro_once(kind, machine)
 	else:
 		_walk_in(machine, cell)
+		_play_intro_once(kind, machine)  # the first Scrapper, Spitter and Sawbot too
 	# New Game +: everything walks faster, and the two heavy kinds are tougher.
 	if ng_plus and machine != null:
 		var is_heavy_kind: bool = kind == WaveDirector.LINEBREAKER or kind == WaveDirector.ARC_SPITTER
@@ -1106,16 +1143,36 @@ func _on_spawn_requested(kind: StringName, wave_number: int) -> void:
 ## The Linebreaker itself drops in at `cell`; its escorts roll out of a gate and
 ## walk to it (a guard always heads for its ward).
 func _send_escorts(linebreaker: Scrapper, cell: Vector2i) -> void:
+	# s18 round 4: the escorts DROP IN around the Linebreaker, a beat after one
+	# another, so the squad is plainly a squad from its first second. (They used
+	# to roll out of far-off gates and Sasha never saw them arrive as its escort.)
+	var taken: Array[Vector2i] = [cell]
 	for i: int in CONFIG.linebreaker_escorts:
-		var gate_cell: Vector2i = _pick_spawn_cell()
-		if gate_cell == ArenaGrid.NO_CELL:
-			gate_cell = cell  # nowhere else: appear beside the Linebreaker
-		var escort: Spitter = spawn_spitter_at(gate_cell)
+		var spot: Vector2i = _free_cell_around(cell, taken)
+		if spot == ArenaGrid.NO_CELL:
+			spot = cell  # nowhere else: land on the Linebreaker's own cell
+		taken.append(spot)
+		var escort: Spitter = spawn_spitter_at(spot)
 		escort.ward = linebreaker
-		_walk_in(escort, gate_cell)
+		escort.drop_in(CONFIG.drop_seconds + CONFIG.escort_drop_gap * float(i + 1), CONFIG.drop_height_px)
 		waves.enemy_added()
 		if ng_plus:
 			escort.toughen(1.0, CONFIG.ng_plus_speed_multiplier)
+
+
+## A random open floor cell one or two steps from `centre` that is not in
+## `taken`, or NO_CELL. (Where a Linebreaker's escorts land.)
+func _free_cell_around(centre: Vector2i, taken: Array[Vector2i]) -> Vector2i:
+	var open: Array[Vector2i] = []
+	for dy: int in range(-2, 3):
+		for dx: int in range(-2, 3):
+			var spot: Vector2i = centre + Vector2i(dx, dy)
+			if taken.has(spot) or not grid.in_bounds(spot) or grid.is_solid(spot) or _trees_by_cell.has(spot):
+				continue
+			open.append(spot)
+	if open.is_empty():
+		return ArenaGrid.NO_CELL
+	return open[_rng.randi_range(0, open.size() - 1)]
 
 
 ## Sends `machine` in through the gate beside floor cell `cell`: the gate's lamp
@@ -1142,28 +1199,47 @@ func _on_heavy_landed(_machine: Enemy) -> void:
 func _play_intro_once(kind: StringName, machine: Enemy) -> void:
 	if not intro_clips_on or _intro_done.has(kind):
 		return
+	# The three everyday machines only get a clip in a first (regular) run: a
+	# New Game + player has met them.
+	var is_heavy_kind: bool = kind == WaveDirector.LINEBREAKER or kind == WaveDirector.ARC_SPITTER
+	if ng_plus and not is_heavy_kind:
+		return
+	if not CONFIG.intro_titles.has(kind):
+		return
 	_intro_done[kind] = true
-	var title: String = CONFIG.linebreaker_intro_title if kind == WaveDirector.LINEBREAKER else CONFIG.arc_spitter_intro_title
-	start_clip(machine, title, CONFIG.heavy_intro_seconds)
+	start_clip(machine, CONFIG.intro_titles[kind], CONFIG.heavy_intro_seconds)
 
 
 ## Starts an INTRO CLIP on `target`: slow motion, the camera pushing in on it,
 ## black bars top and bottom, and `title` on the banner, for `seconds` of real
 ## time. _tick_impact moves it along every frame. Public for the tests.
-func start_clip(target: Node2D, title: String, seconds: float) -> void:
+## `slow_scale` (optional) is how slow the game runs meanwhile; left out, it is
+## the config's heavy_intro_slow_scale. Lucky's clip passes a tiny number, which
+## all but freezes the game while the player reads.
+func start_clip(target: Node2D, title: String, seconds: float, slow_scale: float = -1.0) -> void:
 	if seconds <= 0.0:
 		return
 	_clip_target = target
 	_clip_at = target.global_position
 	_clip_seconds = seconds
 	clip_left = seconds
-	Engine.time_scale = CONFIG.heavy_intro_slow_scale
+	Engine.time_scale = CONFIG.heavy_intro_slow_scale if slow_scale <= 0.0 else slow_scale
 	clip_label.text = title
 	clip_label.visible = true
 
 
 ## Signal handler: every machine of a wave is down.
 func _on_wave_cleared(number: int) -> void:
+	# Seven went down (or the Heart Tree fell) as the last machine did: the wave
+	# is about to start again, so it does NOT count as cleared. No cards, no
+	# light, no graffiti. hold_break keeps the director from starting the next
+	# wave during the short wait before the restart.
+	if _restart_pending or player.is_dead:
+		waves.hold_break = true
+		return
+	# Shots still in the air vanish: nothing may hurt Seven once a wave is won.
+	for shot: Node in _shots.get_children():
+		shot.queue_free()
 	Sfx.play(&"wave_clear")
 	_show_banner(wave_cleared_text(number), CONFIG.wave_break_time)
 	# Between waves (not after the last one): deal the upgrade cards. The next
@@ -1201,7 +1277,7 @@ func _start_wave_end_beat(number: int) -> void:
 func _end_wave_end_beat() -> void:
 	_beat_left = 0.0
 	Engine.time_scale = 1.0
-	if waves.hold_break and not is_run_finished and not upgrade_picker.is_open():
+	if waves.hold_break and not is_run_finished and not upgrade_picker.is_open() and not _restart_pending and not player.is_dead:
 		upgrade_picker.offer(CONFIG.upgrade_choices, upgrades_left_out())
 		_park_player_for_cards()
 
@@ -1294,7 +1370,12 @@ func _tick_impact(delta: float) -> void:
 	if drama_left > 0.0:
 		drama_left = maxf(drama_left - real_delta, 0.0)
 		var left: float = drama_left / _drama_seconds  # 1 at the start, 0 when over
-		dim_sheet.color = Color(0.0, 0.0, 0.0, CONFIG.drama_dim_alpha * left)
+		# It darkens fast and stays dark for most of the moment, then lifts: `left`
+		# times 4 reaches full strength for the first three quarters.
+		dim_sheet.color = Color(0.0, 0.0, 0.0, CONFIG.drama_dim_alpha * minf(left * 4.0, 1.0))
+		# Where the pool of light is, in SCREEN pixels (the sheet is on the HUD).
+		# get_global_transform_with_canvas includes the camera's zoom and shake.
+		dim_sheet.focus = _drama_focus.get_global_transform_with_canvas().origin if is_instance_valid(_drama_focus) else Vector2.INF
 		if drama_left <= 0.0:
 			# Back to normal speed, unless a wave end slow-down is still running.
 			Engine.time_scale = CONFIG.wave_end_slow_scale if _beat_left > 0.0 else 1.0
@@ -1302,9 +1383,12 @@ func _tick_impact(delta: float) -> void:
 
 ## Starts a BIG MOMENT: slow motion and a darkened screen for `seconds` of real
 ## time (see drama_slow_scale and drama_dim_alpha in the config). Public for the tests.
-func start_drama(seconds: float) -> void:
+## `focus` (optional) is who the moment is about: the dark sheet leaves a pool
+## of light around it, so it stands out while the rest of the screen goes dark.
+func start_drama(seconds: float, focus: Node2D = null) -> void:
 	if seconds <= 0.0:
 		return
+	_drama_focus = focus
 	_drama_seconds = seconds
 	drama_left = seconds
 	Engine.time_scale = CONFIG.drama_slow_scale
@@ -1386,11 +1470,42 @@ func _on_all_waves_cleared() -> void:
 	Sfx.play(&"cat")
 	# The arena is left exactly as it is: the end screen IS your forest.
 	_show_banner(end_banner_text(), 0.0)
+	_back_the_end_banner()
 	windows.light_next_block()  # the light jumps the wall
 	# Helios gets the last word, and it stays up with the banner.
 	_story_queue.clear()
 	radio.say(Radio.HELIOS, CONFIG.helios_end_line)
 	_story_time_left = 0.0
+
+
+## Puts a dark rounded panel behind the end screen's words, sized to the words,
+## so they read over the bright, fully lit forest. Public name-free helper; the
+## panel is a StyleBoxFlat (a drawn box: colour, rounded corners, inner margins)
+## set as the banner label's own background.
+func _back_the_end_banner() -> void:
+	var box := StyleBoxFlat.new()
+	box.bg_color = CONFIG.end_panel_color
+	box.set_corner_radius_all(18)
+	box.set_content_margin_all(22.0)
+	_banner.add_theme_stylebox_override(&"normal", box)
+	# How wide the longest line is, measured without drawing it.
+	var font: Font = _banner.get_theme_font(&"font")
+	var font_size: int = _banner.get_theme_font_size(&"font_size")
+	var text_width: float = font.get_multiline_string_size(_banner.text, HORIZONTAL_ALIGNMENT_CENTER, -1.0, font_size).x
+	# Centre the label on the screen, just wide enough for the words and margins
+	# (never wider than the screen allows).
+	var screen_width: float = get_viewport_rect().size.x
+	var width: float = minf(text_width + 2.0 * 44.0, screen_width - 2.0 * CONFIG.banner_side_margin)
+	_banner.offset_left = (screen_width - width) / 2.0
+	_banner.offset_right = (screen_width + width) / 2.0
+	# Tall enough for every line (wrapped to the panel's inner width) plus margins.
+	var text_height: float = font.get_multiline_string_size(_banner.text, HORIZONTAL_ALIGNMENT_CENTER, width - 44.0, font_size).y
+	_banner.offset_bottom = _banner.offset_top + text_height + 44.0
+
+
+## True once the end screen has its dark panel. Public for the tests.
+func has_end_panel() -> bool:
+	return _banner.has_theme_stylebox_override(&"normal")
 
 
 ## Signal handler: the third pod landed on the hidden shop and the cat is out.
@@ -1399,8 +1514,17 @@ func _on_cat_shop_opened() -> void:
 	_pause.bind_unlocked = true  # the pause menu may now list the bind control
 	lucky_found_wave = maxi(waves.wave, 1)
 
-	_show_banner("Lucky's gift: right-click a machine to bind it. Spare fuse fitted.", 4.0)
 	_radio_interrupt(_lucky_says(LuckyLines.greeting_for(lucky_found_wave)))
+	# LUCKY'S MOMENT (s18 round 4): the game all but stops, the camera pushes in
+	# on the shop, everything else goes dark, and the gift is spelled out. Only
+	# during a wave and with clips on (the older tests open the shop with neither).
+	if intro_clips_on and waves.wave > 0:
+		var gift: String = CONFIG.lucky_intro_title_touch if _is_touch() else CONFIG.lucky_intro_title
+		start_clip(cat_shop, gift, CONFIG.lucky_intro_seconds, CONFIG.lucky_intro_slow_scale)
+		start_drama(CONFIG.lucky_intro_seconds, cat_shop)
+		Engine.time_scale = CONFIG.lucky_intro_slow_scale  # start_drama set its own; the freeze wins
+	else:
+		_show_banner("Lucky's gift: right-click a machine to bind it. Spare fuse fitted.", 4.0)
 
 
 ## Seven talks to Lucky: the next small-talk line for the wave being played.
@@ -1433,7 +1557,8 @@ func _on_player_fuse_used() -> void:
 	# The game slows and darkens around the gold flash. (Only during a wave, like
 	# the knock-out: the older tests blow fuses with no wave running.)
 	if waves.wave > 0:
-		start_drama(CONFIG.fuse_drama_seconds)
+		start_clip(player, "", CONFIG.fuse_drama_seconds)
+		start_drama(CONFIG.fuse_drama_seconds, player)
 
 
 ## Signal handler: the player finished a vine zip. The "you can vine to this"
@@ -1610,9 +1735,10 @@ func park_cell() -> Vector2i:
 
 ## The upgrade cards are going up: move Seven beside the Heart Tree and lock it.
 func _park_player_for_cards() -> void:
-	var cell: Vector2i = park_cell()
-	# With nowhere open, Seven is locked where it stands.
-	player.park(grid.cell_to_world(cell) if cell != ArenaGrid.NO_CELL else player.global_position)
+	# s18 round 4: Seven is locked WHERE IT STANDS and starts the next wave from
+	# there. (It used to be moved beside the Heart Tree, see park_cell, which
+	# threw away the position the player had fought for.)
+	player.park(player.global_position)
 
 
 ## How much healthy forest stands: each grown tree counts as its share of health
@@ -1664,6 +1790,7 @@ func _on_heart_tree_felled() -> void:
 	if waves.wave == 0 or is_run_finished:
 		return
 	heart_tree_felled.emit()
+	_restart_pending = true
 	_show_banner("The Heart Tree fell! Wave %d starts again" % waves.wave, CONFIG.death_restart_delay)
 	await get_tree().create_timer(CONFIG.death_restart_delay, false).timeout
 	if not is_inside_tree():
@@ -1676,8 +1803,11 @@ func _on_player_died() -> void:
 	player_defeated.emit()
 	if waves.wave == 0:
 		return  # no wave is running (the tests do this): nothing to restart
+	_restart_pending = true
 	_show_banner("Down! Wave %d starts again" % waves.wave, CONFIG.death_restart_delay)
-	start_drama(CONFIG.knockout_drama_seconds)  # slow motion and a dark screen as Seven powers off
+	# Slow motion, the camera pushing in on Seven, and everything but Seven dark.
+	start_clip(player, "", CONFIG.knockout_drama_seconds)
+	start_drama(CONFIG.knockout_drama_seconds, player)
 	# `await` pauses this function here until the timer's `timeout` signal fires.
 	# The first `false` means "this timer stops while the game is paused"; the
 	# last `true` means "count real seconds, even while the game is in slow motion".

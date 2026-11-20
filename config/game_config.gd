@@ -49,7 +49,7 @@ extends Resource
 @export var player_hit_invulnerable_time: float = 0.8
 ## Seconds between the bot going down and the arena starting over. (s18 round 2:
 ## 1.8, was 1.2, so the knock-out can be watched. Real seconds, not slowed ones.)
-@export var death_restart_delay: float = 1.8
+@export var death_restart_delay: float = 2.8
 
 @export_group("Seed pod")
 @export var seed_speed: float = 720.0
@@ -217,20 +217,43 @@ extends Resource
 @export var drop_min_player_cells: float = 5.0
 ## The landing: how hard the screen shakes (pixels; a kill is 3, a hit on Seven
 ## 7), and how long the dust ring and the cracks in the concrete show.
-@export var shake_land_px: float = 12.0
-@export var land_fx_seconds: float = 0.6
+@export var shake_land_px: float = 20.0
+@export var land_fx_seconds: float = 0.9
 ## THE INTRO CLIP: the FIRST Linebreaker and the FIRST Arc Spitter of a run get
 ## a short clip as they drop in. The game runs at heavy_intro_slow_scale speed,
 ## the camera pushes in on the landing spot by heavy_intro_zoom (1.35 = 35%
 ## closer), black bars of heavy_intro_bar_px slide in at the top and bottom,
 ## and the machine's name is shown. All of it lasts heavy_intro_seconds of real
 ## time, then everything eases back.
-@export var heavy_intro_seconds: float = 2.6
+@export var heavy_intro_seconds: float = 4.6
 @export var heavy_intro_slow_scale: float = 0.4
 @export var heavy_intro_zoom: float = 1.35
 @export var heavy_intro_bar_px: float = 64.0
 @export var linebreaker_intro_title: String = "LINEBREAKER\nHelios heavy recovery unit"
 @export var arc_spitter_intro_title: String = "ARC SPITTER\nHelios escort unit"
+## The title shown in the intro clip of each kind of machine, the first time one
+## arrives in a run (s18 round 4: the three everyday machines get a clip too).
+## The key is the kind's name, as the wave director spells it.
+@export var intro_titles: Dictionary[StringName, String] = {
+	&"scrapper": "SCRAPPER\nHunts you down and swings. Two pods.",
+	&"spitter": "SPITTER\nShoots from range, hides behind your trees.",
+	&"sawbot": "SAWBOT\nIgnores you. Cuts your trees. Heads for the Heart Tree.",
+	&"linebreaker": "LINEBREAKER\nHeavy unit. Arrives with a Spitter escort.",
+	&"arc_spitter": "ARC SPITTER\nGuards the Sawbots. Fires three bolts.",
+}
+## A Linebreaker's escorts drop in one after another, this many seconds apart.
+@export var escort_drop_gap: float = 0.18
+## How dark the shadow under a falling machine is: when the fall starts, and
+## just before it lands (0 = invisible, 1 = solid black).
+@export var drop_shadow_alpha_far: float = 0.40
+@export var drop_shadow_alpha_near: float = 0.92
+## LUCKY'S MOMENT: when the shop opens the game all but stops
+## (lucky_intro_slow_scale; 1 = normal speed) for lucky_intro_seconds of real
+## time, with the camera on the shop and this text on screen.
+@export var lucky_intro_seconds: float = 5.0
+@export var lucky_intro_slow_scale: float = 0.03
+@export var lucky_intro_title: String = "LUCKY'S GIFT\nRight-click a machine to bind it with the vine.\nOne spare fuse: it saves Seven once this run."
+@export var lucky_intro_title_touch: String = "LUCKY'S GIFT\nVine a machine to bind it.\nOne spare fuse: it saves Seven once this run."
 
 @export_group("Lucky cat")
 ## Seed pods that must land on the shuttered shop before it opens.
@@ -285,9 +308,9 @@ extends Resource
 ## drama_dim_alpha (0 = not at all, 1 = black), both easing back over
 ## knockout_drama_seconds / fuse_drama_seconds of real time.
 @export var drama_slow_scale: float = 0.3
-@export var drama_dim_alpha: float = 0.6
-@export var knockout_drama_seconds: float = 0.7
-@export var fuse_drama_seconds: float = 1.3
+@export var drama_dim_alpha: float = 0.8
+@export var knockout_drama_seconds: float = 2.2
+@export var fuse_drama_seconds: float = 2.6
 ## WEAR AND TEAR: Seven shows its damage in three steps (player.gd wear_level).
 ##   level 1  at or under wear_dented_share of full health: scorch marks, a spark now and then
 ##   level 2  at or under wear_battered_share: more scorch, steady sparks, smoke
@@ -662,13 +685,19 @@ extends Resource
 ## Empty space kept on each side of the banner, in screen pixels.
 @export var banner_side_margin: float = 40.0
 @export var helios_end_line: String = "Account closed."
+## The dark panel behind the end screen's words (the last number is how solid
+## it is: 0 = invisible, 1 = solid).
+@export var end_panel_color: Color = Color(0.03, 0.04, 0.06, 0.84)
+## Canopy FM mentions, as this wave starts, that its music can be changed.
+@export var dj_music_hint_wave: int = 4
+@export var dj_music_hint: String = "Not your sound? Canopy FM has four stations. Pick another on the title screen."
 ## Seconds each radio line stays on the air once it has finished typing.
-@export var story_line_seconds: float = 3.0
+@export var story_line_seconds: float = 4.5
 
 @export_group("Radio")
 ## THE RADIO PANEL (radio.gd): Helios's broadcasts and Canopy FM's DJ.
 ## How fast words "type" onto the panel, in letters per second.
-@export var radio_chars_per_second: float = 40.0
+@export var radio_chars_per_second: float = 28.0
 ## Chance (0 to 1) that a letter of Helios's broadcast flickers into static.
 @export var radio_helios_static: float = 0.03
 ## Canopy FM's DJ, wave 1 (keyboard and mouse): the tutorial. Feeble signal.

@@ -23,6 +23,8 @@ const LUCKY: StringName = &"lucky"
 ## Where the panel sits on screen and how big it is, in pixels.
 const PANEL_RECT: Rect2 = Rect2(28.0, 84.0, 560.0, 64.0)
 const PANEL_COLOR: Color = Color(0.03, 0.04, 0.06, 0.78)
+## Lucky's portrait: a square this many pixels wide at the left of the panel.
+const FACE_SIZE: float = 52.0
 const TAG_FONT_SIZE: int = 15
 const TEXT_FONT_SIZE: int = 18
 ## Characters Helios's static may swap in while a line is still typing.
@@ -106,16 +108,18 @@ func _draw() -> void:
 	if not is_on():
 		return
 	var font: Font = ThemeDB.fallback_font
-	draw_rect(PANEL_RECT, PANEL_COLOR)
+	# The panel is as tall as the WHOLE line needs (not just the part typed so
+	# far), so it is the right size from the first letter and never jumps.
+	var panel: Rect2 = panel_rect()
+	draw_rect(panel, PANEL_COLOR)
 	# A thin bar down the left edge in the speaker's colour.
-	draw_rect(Rect2(PANEL_RECT.position, Vector2(4.0, PANEL_RECT.size.y)), TAG_COLORS[speaker])
+	draw_rect(Rect2(panel.position, Vector2(4.0, panel.size.y)), TAG_COLORS[speaker])
 
-	var left: float = PANEL_RECT.position.x + 14.0
+	var left: float = _text_left()
 	# Lucky gets a little portrait at the left of the panel, and the words move over.
 	if speaker == LUCKY and CONFIG.cat_texture != null:
-		var face := Rect2(PANEL_RECT.position + Vector2(10.0, 6.0), Vector2.ONE * (PANEL_RECT.size.y - 12.0))
+		var face := Rect2(PANEL_RECT.position + Vector2(10.0, 6.0), Vector2.ONE * FACE_SIZE)
 		draw_texture_rect(CONFIG.cat_texture, face, false)
-		left = face.end.x + 10.0
 	var tag_y: float = PANEL_RECT.position.y + 20.0
 	draw_string(font, Vector2(left, tag_y), TAGS[speaker], HORIZONTAL_ALIGNMENT_LEFT, -1.0, TAG_FONT_SIZE, TAG_COLORS[speaker])
 	if speaker == CANOPY:
@@ -125,8 +129,34 @@ func _draw() -> void:
 	if speaker == HELIOS:
 		shown = _add_static(shown)
 	# draw_multiline_string wraps the words to the panel's width.
+	# The -1 means "as many rows as it takes" (it used to stop at 2 and a long
+	# line ran out of the bottom of the box).
 	draw_multiline_string(font, Vector2(left, tag_y + 22.0), shown, HORIZONTAL_ALIGNMENT_LEFT,
-		PANEL_RECT.size.x - 28.0, TEXT_FONT_SIZE, 2, TEXT_COLORS[speaker])
+		_text_width(), TEXT_FONT_SIZE, -1, TEXT_COLORS[speaker])
+
+
+## Where the words start, in pixels from the left of the screen. Lucky's
+## portrait sits at the left of the panel, so Lucky's words start further in.
+func _text_left() -> float:
+	if speaker == LUCKY and CONFIG.cat_texture != null:
+		return PANEL_RECT.position.x + 10.0 + FACE_SIZE + 10.0
+	return PANEL_RECT.position.x + 14.0
+
+
+## How wide a row of words may be before it wraps onto the next row.
+func _text_width() -> float:
+	return PANEL_RECT.end.x - 14.0 - _text_left()
+
+
+## The panel's rectangle for the line on the air: PANEL_RECT, made taller when
+## the line wraps onto more rows than fit. Public for the tests.
+func panel_rect() -> Rect2:
+	# get_multiline_string_size measures wrapped text without drawing it.
+	var text_height: float = ThemeDB.fallback_font.get_multiline_string_size(
+		text, HORIZONTAL_ALIGNMENT_LEFT, _text_width(), TEXT_FONT_SIZE).y
+	# 26 px for the tag row above the words, 12 px of space under them.
+	var needed: float = 26.0 + text_height + 12.0
+	return Rect2(PANEL_RECT.position, Vector2(PANEL_RECT.size.x, maxf(PANEL_RECT.size.y, needed)))
 
 
 ## Four little bars, like a phone's signal meter: more of them light up as the

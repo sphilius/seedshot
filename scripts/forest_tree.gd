@@ -76,6 +76,11 @@ static var heart_marker_fade: float = 1.0
 ## True while a Sunburst is ready: every great sunroot then has a gold sheen.
 ## Shared by all trees and set by the arena each frame, like light_boost.
 static var sunburst_ready: bool = false
+## True between waves (and while the upgrade cards are up): saplings wait and
+## do not grow. Shared by all trees and set by the arena each frame.
+static var growth_paused: bool = false
+## Seconds until this sapling asks to become a tree. 0 or less = not counting.
+var _timer_left: float = 0.0
 
 ## Seconds this tree has spent as a sapling (fills the growth ring).
 var _sapling_age: float = 0.0
@@ -158,8 +163,14 @@ func take_damage(amount: int) -> void:
 ## grown tree does nothing here.
 func _process(delta: float) -> void:
 	var moving: bool = show_vine_hint or is_heart or is_great or stage == Stage.SAPLING or _pop_left > 0.0
-	if stage == Stage.SAPLING:
+	if stage == Stage.SAPLING and not growth_paused:
 		_sapling_age += delta
+		# The growing countdown (see _start_timer). It lives here, in _process,
+		# so it stops with the game: in the pause menu and between waves.
+		if _timer_left > 0.0:
+			_timer_left -= delta
+			if _timer_left <= 0.0:
+				_on_timer_timeout()
 	_pop_left = maxf(_pop_left - delta, 0.0)
 	_alarm_left = maxf(_alarm_left - delta, 0.0)
 	if is_great:
@@ -356,9 +367,11 @@ func _draw_vine_hint(cell_px: float) -> void:
 
 ## Waits `seconds`, then asks the arena whether this sapling may turn solid.
 func _start_timer(seconds: float) -> void:
-	# create_timer makes a one-shot timer; `timeout` is its signal, and connect()
-	# tells Godot which function to call when the signal fires.
-	get_tree().create_timer(seconds).timeout.connect(_on_timer_timeout)
+	# Only sets the countdown; _process counts it down and calls
+	# _on_timer_timeout at zero. (Until s18 round 4 this was a SceneTree timer,
+	# which keeps running while the game is paused: saplings grew, and made
+	# their "grown" sound, behind the pause menu.)
+	_timer_left = maxf(seconds, 0.001)  # maxf = the larger of the two: never zero
 
 
 ## Runs when the timer above fires. If the tree is still a sapling, it emits the
