@@ -352,6 +352,12 @@ extends Resource
 ## Talking to Lucky: Seven must be within this many cells of the open shop for
 ## the E key to work. (A tap on the shop works from anywhere.)
 @export var lucky_talk_range_cells: float = 3.5
+## Seconds one of Lucky's lines stays on the radio once it has finished typing
+## (s19: longer than story_line_seconds, which every other speaker uses).
+@export var lucky_line_seconds: float = 10.0
+## On a phone the open shop shows a paw button to tap, under its ledge. Its
+## radius in pixels. A tap on the button counts as a tap on Lucky.
+@export var lucky_button_radius_px: float = 24.0
 
 ## Lucky's greeting when the shutter opens, by the wave the cat was found in.
 ## Words only: nothing Lucky says changes the game. (Placeholders, STORY.md.)

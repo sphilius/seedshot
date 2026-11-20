@@ -140,6 +140,7 @@ func _ready() -> void:
 	await _test_s19_canopy_line_line()
 	await _test_s19_bramble_preview()
 	await _test_s19_bramble_intro()
+	await _test_s19_lucky()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -3317,3 +3318,43 @@ func _test_s19_bramble_intro() -> void:
 	_check(_arena.clip_left <= 0.0, "it does not play again after a restart")
 	_arena.intro_clips_on = false
 	Engine.time_scale = 1.0
+
+
+## s19 item 9: Lucky's lines stay up longer, and on a phone the open shop shows
+## a paw "Tap" button that counts as a tap on Lucky.
+func _test_s19_lucky() -> void:
+	# The shipped numbers (the checks shorten the shared config's holds, so ask a
+	# fresh GameConfig for the defaults).
+	var shipped := GameConfig.new()
+	_check(shipped.lucky_line_seconds > shipped.story_line_seconds, "Lucky's lines are held longer than everyone else's (%.0f s against %.0f s)" % [shipped.lucky_line_seconds, shipped.story_line_seconds])
+
+	await _fresh_arena()
+	# (CONFIG.set() from the test scene does not reach the arena's config, so these
+	# checks use the numbers as shipped.)
+	_check(is_equal_approx(_arena._hold_seconds_for(Radio.LUCKY), shipped.lucky_line_seconds), "Lucky's hold is her own number")
+	_check(is_equal_approx(_arena._hold_seconds_for(Radio.CANOPY), shipped.story_line_seconds) and is_equal_approx(_arena._hold_seconds_for(Radio.HELIOS), shipped.story_line_seconds), "Canopy FM and Helios keep the usual hold")
+	var line: String = "Hello, kid."
+	var typing: float = float(line.length()) / shipped.radio_chars_per_second
+	_arena._radio_interrupt(_arena._lucky_says(line))
+	_check(is_equal_approx(_arena._story_time_left, shipped.lucky_line_seconds + typing), "a Lucky line is on the air for her hold plus its typing time")
+	_arena._radio_interrupt(Arena._radio_line(Radio.CANOPY, line))
+	_check(is_equal_approx(_arena._story_time_left, shipped.story_line_seconds + typing), "a Canopy FM line is on the air for the usual hold")
+
+	# The tap button: only when the shop is open and the player is on a phone.
+	await _fresh_arena()
+	var shop: CatShop = _arena.cat_shop
+	_arena.player.touch_mode = true
+	await _wait_drawn_frames(2)
+	_check(not shop.show_tap_button, "a shut shop shows no button")
+	for i: int in CONFIG.cat_hits_needed:
+		shop.hit_by_seed()
+	await _wait_drawn_frames(2)
+	_check(shop.show_tap_button, "the open shop shows the paw button on a phone")
+	var button_at: Vector2 = shop.get_global_transform_with_canvas().origin + CatShop.button_offset()
+	_check(_arena._is_on_shop(button_at), "a tap on the button counts as a tap on Lucky")
+	_check(_arena._is_on_shop(button_at + Vector2(CONFIG.lucky_button_radius_px - 2.0, 0.0)), "also near its edge")
+	_check(not _arena._is_on_shop(button_at + Vector2(CONFIG.lucky_button_radius_px + 40.0, 0.0)), "but not well outside it")
+	_check(CatShop.button_offset().y > float(CONFIG.cell_size) / 2.0 + CatShop.STICK_OUT, "the button sits below the shop's ledge")
+	_arena.player.touch_mode = false
+	await _wait_drawn_frames(2)
+	_check(not shop.show_tap_button, "on a desktop the button is not shown (the shop says 'E: talk' instead)")

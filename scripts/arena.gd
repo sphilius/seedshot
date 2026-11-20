@@ -460,6 +460,8 @@ func _process(delta: float) -> void:
 	var wanted_tint: Color = ambient_tint_for(light_level())
 	if cat_shop != null:
 		cat_shop.show_talk_hint = is_near_lucky()
+		# On a phone the open shop shows a paw button instead of "E: talk".
+		cat_shop.show_tap_button = cat_shop.is_open and (player.touch_mode or _is_touch())
 	# Lights shine brighter than white while the lot is dark, and normally once
 	# it is fully lit; otherwise the end of the run turns into a yellow glare.
 	var boost: float = light_boost_for(light_level())
@@ -1084,7 +1086,13 @@ func _show_next_story_line() -> void:
 	if radio_static_on and line.speaker == Radio.CANOPY:
 		shown = with_static(shown, light_level())
 	radio.say(line.speaker, shown)
-	_story_time_left = CONFIG.story_line_seconds + float(line.text.length()) / CONFIG.radio_chars_per_second
+	_story_time_left = _hold_seconds_for(line.speaker) + float(line.text.length()) / CONFIG.radio_chars_per_second
+
+
+## How long a line from `speaker` stays up after it has finished typing: Lucky's
+## own, longer hold, or the usual one for everyone else (s19).
+func _hold_seconds_for(speaker: StringName) -> float:
+	return CONFIG.lucky_line_seconds if speaker == Radio.LUCKY else CONFIG.story_line_seconds
 
 
 ## The player asked to move the radio along (a tap on its panel): finish typing
@@ -1095,7 +1103,7 @@ func skip_radio_line() -> void:
 		return
 	if not radio.is_fully_typed():
 		radio.finish_typing()
-		_story_time_left = CONFIG.story_line_seconds
+		_story_time_left = _hold_seconds_for(_current_line.get("speaker", &""))
 	else:
 		_show_next_story_line()
 
@@ -2047,7 +2055,10 @@ func _on_tree_felled(tree: ForestTree) -> void:
 func _is_on_shop(screen_point: Vector2) -> bool:
 	var centre: Vector2 = cat_shop.get_global_transform_with_canvas().origin
 	var half := Vector2(CatShop.WIDTH_CELLS, 1.5) * float(CONFIG.cell_size) / 2.0
-	return Rect2(centre - half, half * 2.0).has_point(screen_point)
+	if Rect2(centre - half, half * 2.0).has_point(screen_point):
+		return true
+	# The paw button under the shop counts as the shop too (a phone shows it).
+	return cat_shop.show_tap_button and screen_point.distance_to(centre + CatShop.button_offset()) <= CONFIG.lucky_button_radius_px
 
 
 ## Extra windows lit by the tap trees standing right now (grown ones only).
