@@ -384,6 +384,20 @@ From the kickoff. `config/game_config.tres` holds every speed, cooldown and size
 - The thunk and spit candidates came back very quiet (mean below -36 dB) and need a lot of gain; listen for hiss.
 - The listening page now plays every take evened out to its in-game loudness.
 
+## D-056: Round 5, the last fixes before the feature stop (Made, 2026-11-19)
+
+Sasha played round 4 and sent 16 notes at 11:33 PM, 27 minutes before his own midnight feature stop. Built: the fixes and number changes. Parked: the eight notes that are new systems.
+
+Built:
+- **Clips no longer cut each other off.** A machine arriving while another clip played took over the camera and still counted as "introduced", which is how a Linebreaker arrived unannounced. Now it waits: the next machine of that kind gets the clip. New Game + shows every intro, the same as a regular game.
+- **Restart health:** the health Seven began the wave with, plus 1 pip (`restart_bonus_pips`), never above 80% of full (`restart_hp_cap_share`). The wave-start number is not overwritten by a restart, so dying again does not add another pip.
+- **Heart Tree under attack:** a 0.9 s clip at 55% speed and 1.15 zoom, then not again for 3 s (`heart_clip_*`).
+- **Canopy FM in the dark:** the hiss is louder (-11 dB, was -19), the song quieter (13 dB down, was 7), and its lines carry a `[static]` break between whole words while the light is under 45% (`Arena.with_static`).
+- **Numbers:** Ripsaw 20% faster (was 30%); one Sunburst a wave (was 2); radio 22 letters a second and 6 s hold (was 28 and 4.5); Lucky's moment 8 s (was 5); "Seed Pouch" is now "Seed Loader Pouch".
+
+Parked for after the jam, each a system of its own: a reload after 10 shots with reload upgrades and Klad art (6); Brambles and the Vine Trip Line as unlocks after wave 3 (4); a logbook in the pause menu (9); Resume buttons on Lucky, revive and the intros (10); pausing the fight during tutorial transmissions (8); great sunroots returning to saplings after a Sunburst, and a +2 Sunburst card (11); a freeze, spark and smoke animation on each machine a Sunburst hits (12); moving the front homes to show their faces and taking graffiti off their roofs (2). Also open: the mute button and the pause menu's audio switches working together (14: I am not sure which behaviour is wanted), and "the fuse saved Seven more than once" (the code fits one fuse per run and never refits it; I could not find a second source).
+
+A test lesson: the radio check let Seven stand still through wave 2, and a knock-out's slow motion then stretched its timing. It now makes Seven unhittable.
 ## D-055: The intro clip plays as the web loading screen (Made, 2026-11-19)
 
 Sasha's 7.8 s clip (`web/intro.mp4`, a copy of `art/video/opening sequence/intro_v7_hard_cut_web_720p.mp4`; the original is untouched) plays over Godot's loading screen in the web build. Done the small way: the Web preset's `html/head_include` adds two tags to Godot's default page, which load `web/intro.css` and `web/intro.js`; `tools\godot.ps1 export` copies the three files next to `index.html` after the export. No custom HTML shell and no game script changed.
