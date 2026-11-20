@@ -17,6 +17,9 @@ different texture. This script removes as much of that jump as it can:
 USE (from the project folder):
     python tools/stitch_intro.py            build the clip
     python tools/stitch_intro.py --measure  only print the measurements
+    python tools/stitch_intro.py --blend 0 --out intro_v7_hard_cut.mp4
+                                            a hard cut (no dissolve), saved
+                                            under another name in the clips folder
 
 Needs: opencv-python, numpy, and ffmpeg on the PATH.
 """
@@ -144,8 +147,23 @@ def ease(t: float) -> float:
     return t * t * (3.0 - 2.0 * t)
 
 
+def option(name: str, default: str) -> str:
+    """The word that follows `name` on the command line, or `default` if absent.
+
+    sys.argv is the list of words typed after "python"; e.g. for
+    "--blend 0" this finds "--blend" and returns the next word, "0".
+    """
+    if name in sys.argv and sys.argv.index(name) + 1 < len(sys.argv):
+        return sys.argv[sys.argv.index(name) + 1]
+    return default
+
+
 def main() -> None:
     """Measures the two clips, then (unless --measure) builds the joined clip."""
+    # "global" lets this function replace the settings named at the top of the file.
+    global BLEND_FRAMES, OUT
+    BLEND_FRAMES = int(option("--blend", str(BLEND_FRAMES)))
+    OUT = CLIPS / option("--out", OUT.name)
     part_2 = read_frames(PART_2)
     plain = read_frames(PART_1_PLAIN)
     upscaled = read_frames(PART_1_UPSCALED)
