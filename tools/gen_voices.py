@@ -17,6 +17,9 @@ USAGE (from the project root; needs the ELEVENLABS_API_KEY user environment vari
     python tools/gen_voices.py design --only helios   (or canopy_girl, canopy_boy)
     python tools/gen_voices.py speak               speak every line that has no file yet
     python tools/gen_voices.py speak --only helios (or canopy)
+    python tools/gen_voices.py previews --only helios --round 2   make 3 NEW previews and keep
+                                                   them (and their ids) without saving a voice
+    python tools/gen_voices.py save helios 2 1     save preview 1 of round 2 as the voice
     python tools/gen_voices.py swap helios 2       replace a designed voice with a clone of its
                                                    candidate preview N (see the note on `swap`)
     python tools/gen_voices.py level               even out every line's loudness (run after speak)
@@ -319,6 +322,41 @@ def api(method: str, path: str, body=None, raw_body=None, content_type="applicat
         sys.exit(f"ElevenLabs refused ({error.code}): {error.read().decode('utf-8', 'replace')[:400]}")
 
 
+def previews(only, round_number: int) -> None:
+    """Make a new set of 3 previews for a voice and keep them, WITHOUT saving a voice.
+    The audio goes to candidates/<voice>_r<round>_preview<N>.mp3 and the ids to
+    preview_ids.json (key "<voice>_r<round>"), so Sasha can listen and pick; `save` then
+    turns the chosen one into a real voice. Previews are only valid for a limited time."""
+    OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / "candidates").mkdir(exist_ok=True)
+    ids_file = OUT / "preview_ids.json"
+    known = json.loads(ids_file.read_text(encoding="utf-8")) if ids_file.exists() else {}
+    for key, voice in VOICES.items():
+        if only and key != only:
+            continue
+        reply = call("/v1/text-to-voice/design", {"voice_description": voice["description"], "text": voice["sample"]})
+        for number, preview in enumerate(reply["previews"]):
+            (OUT / "candidates" / f"{key}_r{round_number}_preview{number}.mp3").write_bytes(base64.b64decode(preview["audio_base_64"]))
+        known[f"{key}_r{round_number}"] = [p["generated_voice_id"] for p in reply["previews"]]
+        ids_file.write_text(json.dumps(known, indent=2), encoding="utf-8")
+        print(f"{key}: {len(reply['previews'])} previews saved as {key}_r{round_number}_preview0..2")
+
+
+def save(speaker: str, round_number: int, number: int) -> None:
+    """Save the chosen preview as the speaker's real voice (needs a free custom-voice slot)
+    and point voices.json at it. The id comes from preview_ids.json, written by `previews`."""
+    known = json.loads((OUT / "preview_ids.json").read_text(encoding="utf-8"))
+    generated_id = known[f"{speaker}_r{round_number}"][number]
+    created = call("/v1/text-to-voice", {
+        "voice_name": VOICES[speaker]["name"], "voice_description": VOICES[speaker]["description"],
+        "generated_voice_id": generated_id,
+    })
+    saved = load_voices()
+    saved[speaker] = created["voice_id"]
+    (OUT / "voices.json").write_text(json.dumps(saved, indent=2), encoding="utf-8")
+    print(f"saved {speaker} from round {round_number} preview {number}")
+
+
 def swap(speaker: str, preview: int) -> None:
     """Replace a designed voice with a CLONE of one of its candidate previews.
     WHY: a preview can only be saved as a voice using the id it was given when it was made,
@@ -393,13 +431,18 @@ def count() -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=["design", "use", "speak", "level", "swap", "count"])
+    parser.add_argument("command", choices=["design", "use", "speak", "level", "swap", "previews", "save", "count"])
     parser.add_argument("extra", nargs="*", help="swap: <speaker> <preview number>")
+    parser.add_argument("--round", type=int, default=2, help="previews: which round number to label the set")
     parser.add_argument("--only", help="design: helios|canopy_girl|canopy_boy; speak: helios|canopy")
     parser.add_argument("--force", action="store_true", help="speak again even if the file exists")
     args = parser.parse_args()
     if args.command == "design":
         design(args.only)
+    elif args.command == "previews":
+        previews(args.only, args.round)
+    elif args.command == "save":
+        save(args.extra[0], int(args.extra[1]), int(args.extra[2]))
     elif args.command == "swap":
         swap(args.extra[0], int(args.extra[1]))
     elif args.command == "level":
