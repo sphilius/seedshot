@@ -55,6 +55,21 @@ extends Resource
 @export var seed_speed: float = 720.0
 ## Minimum time between two shots while the fire button is held.
 @export var seed_cooldown: float = 0.22
+## RELOAD (s22): the seed shooter holds this many pods. When the last one is fired
+## it reloads by itself; R reloads early. Every new wave starts with a full load.
+@export var seed_clip_size: int = 10
+## Seconds a reload takes before any Quick Reload cards (they take time off this).
+@export var reload_seconds: float = 3.0
+## The ring that fills round Seven while reloading, and the small pips under
+## Seven that show the pods left (full pips, then dim empty ones). Values above 1
+## stay bright under the night tint (like the grove rest glow).
+@export var reload_ring_color: Color = Color(1.5, 1.15, 0.45, 0.95)
+@export var reload_ring_radius_cells: float = 0.62
+@export var clip_pip_color: Color = Color(1.5, 1.35, 0.8, 1.0)
+@export var clip_pip_empty_color: Color = Color(0.2, 0.2, 0.2, 0.55)
+## How far below Seven's centre the pips sit, in cells, and the gap between them in pixels.
+@export var clip_pips_below_cells: float = 0.62
+@export var clip_pip_spacing: float = 6.0
 ## A pod that hits nothing deletes itself after this long.
 @export var seed_lifetime: float = 1.6
 @export var seed_damage: int = 1
@@ -625,6 +640,11 @@ extends Resource
 ## Seed Pouch multiplies the time between pods by this (0.9 = 10% faster). Every
 ## pick multiplies again, so the upgrade stacks.
 @export var upgrade_fire_cooldown_factor: float = 0.9
+## QUICK RELOAD (s22): each pick takes this many seconds off reload_seconds, and the
+## card stops being dealt after upgrade_reload_max_picks picks. With 3.0 s, 0.6 s
+## and 4 picks the reload goes 3.0, 2.4, 1.8, 1.2, 0.6 s.
+@export var upgrade_reload_seconds_off: float = 0.6
+@export var upgrade_reload_max_picks: int = 4
 ## Heavy Seeds: extra damage per pod, added once for every pick (so it stacks).
 ## Half a point: a machine keeps the leftover half, see Enemy.take_damage.
 @export var upgrade_seed_damage: float = 0.5
@@ -769,6 +789,11 @@ extends Resource
 @export var radio_chars_per_second: float = 22.0
 ## Chance (0 to 1) that a letter of Helios's broadcast flickers into static.
 @export var radio_helios_static: float = 0.03
+## The spoken voices (audio/voice, played by radio.gd): their loudness in decibels
+## (0 = as the file is; each -6 is about half as loud), and how many decibels quieter
+## Canopy FM's voices are while the block is dark and the signal weak.
+@export var radio_voice_db: float = -4.0
+@export var radio_voice_dark_drop_db: float = -9.0
 ## Canopy FM's DJ, wave 1 (keyboard and mouse): the tutorial. Feeble signal.
 @export var dj_intro: Array[String] = [
 	"...is this thing on? Hello? Meter-bot? Seven? If you can hear me, move. WASD, you know the drill. Or you don't, so: WASD.",

@@ -59,26 +59,105 @@ var signal_strength: float = 0.0
 var _typed: float = 0.0
 ## Random numbers for Helios's static.
 var _rng := RandomNumberGenerator.new()
+## Plays the spoken version of the line on the air (audio/voice), if there is one.
+var _voice: AudioStreamPlayer
+## Which config variables hold lines that have a spoken file. The file for entry i
+## of variable `name` is audio/voice/<name>_<i>.mp3. KEEP THIS LIST THE SAME AS
+## tools/gen_voices.py (HELIOS_VARS + CANOPY_VARS); a test checks every file exists.
+const VOICE_VARS: Array[StringName] = [
+	&"helios_lines", &"helios_end_line", &"dj_intro", &"dj_intro_touch", &"dj_first_tree",
+	&"dj_first_tree_touch", &"dj_bramble", &"dj_bramble_touch", &"dj_first_sawbot",
+	&"dj_first_ripsaw", &"dj_first_linebreaker", &"dj_first_arc_spitter", &"dj_tap_points",
+	&"heart_intro_line", &"heart_alarm_line", &"canopy_line_intro_line", &"sunburst_intro_line",
+	&"grove_rest_line", &"dj_music_hint", &"ng_plus_wakeup_line", &"ng_plus_threat_line",
+	&"dj_ng_plus_intro", &"dj_cat_hints",
+]
+const VOICE_DIR: String = "res://audio/voice/"
+## Line text -> voice file id, built the first time it is needed (see voice_ids).
+## `static var` is one shared copy for the whole game, not one per Radio.
+static var _voice_ids: Dictionary = {}
 
 
 ## _ready runs once: the panel lets mouse clicks pass through to the game.
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	_voice = AudioStreamPlayer.new()
+	add_child(_voice)
+
+
+## Line text -> voice file id, for every line that has been spoken. Built from the
+## config on first use: the same words the game shows, so a voice can never be
+## matched to the wrong line. A line with a "%d" in it (the Sunburst tip) is also
+## listed with its number filled in, because that is how the arena sends it.
+## Public and static so the tests can read it.
+static func voice_ids() -> Dictionary:
+	if _voice_ids.is_empty():
+		for variable: StringName in VOICE_VARS:
+			var value: Variant = CONFIG.get(variable)
+			# One config variable is either a single String or an Array of them.
+			var texts: Array = value if value is Array else [value]
+			for index: int in texts.size():
+				var text: String = texts[index]
+				var id: String = "%s_%d" % [variable, index]
+				_voice_ids[text] = id
+				if text.contains("%d"):
+					_voice_ids[text % CONFIG.sunburst_charges_per_wave] = id
+	return _voice_ids
+
+
+## The file that speaks `line_text`, or "" if it has none (Lucky's lines, say).
+static func voice_path_for(line_text: String) -> String:
+	var ids: Dictionary = voice_ids()
+	if not ids.has(line_text):
+		return ""
+	return VOICE_DIR + str(ids[line_text]) + ".mp3"
 
 
 ## Puts a new line on the air, replacing whatever was there.
-func say(new_speaker: StringName, line: String) -> void:
+## `voice_text` is the line as written in the config (`line` may have static
+## mixed in, which would not match), so the right recording can be found. Leave it
+## empty for a line that is not spoken.
+func say(new_speaker: StringName, line: String, voice_text: String = "") -> void:
 	speaker = new_speaker
 	text = line
 	_typed = 0.0
+	_play_voice(voice_text)
 	queue_redraw()
+
+
+## Starts the recording of `voice_text`, cutting off the one still speaking. Silent
+## when: there is no recording, the sound is not unlocked yet (a browser blocks sound
+## before the first click or key), or Sound effects are switched off in the pause menu.
+## Canopy FM is quieter while the block is dark: a weak signal.
+func _play_voice(voice_text: String) -> void:
+	if _voice == null:  # not in the scene tree yet
+		return
+	_voice.stop()
+	if voice_text == "" or not Sfx.is_unlocked or not Sfx.effects_on:
+		return
+	var path: String = voice_path_for(voice_text)
+	if path == "" or not ResourceLoader.exists(path):
+		return
+	_voice.stream = load(path)
+	var drop: float = 0.0
+	if speaker == CANOPY:
+		drop = lerpf(CONFIG.radio_voice_dark_drop_db, 0.0, clampf(signal_strength, 0.0, 1.0))
+	_voice.volume_db = CONFIG.radio_voice_db + drop
+	_voice.play()
+
+
+## True while a recording is playing. Public for the tests.
+func is_voice_playing() -> bool:
+	return _voice != null and _voice.playing
 
 
 ## Takes everyone off the air.
 func clear() -> void:
 	speaker = &""
 	text = ""
+	if _voice != null:
+		_voice.stop()
 	queue_redraw()
 
 

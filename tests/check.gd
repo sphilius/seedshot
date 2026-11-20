@@ -98,6 +98,7 @@ func _ready() -> void:
 
 	# Layer 2i: the story words (STORY.md step 1).
 	await _test_story_words()
+	await _test_radio_voices()
 	# Layer 2j: the night look and the windows (STORY.md step 2).
 	await _test_windows_and_night()
 	await _test_tree_pictures()
@@ -143,6 +144,8 @@ func _ready() -> void:
 	await _test_s19_lucky()
 	await _test_s19_bigger_trees()
 	await _test_s19_fuse_saves_once()
+	# s22: phase 3, the seed shooter's reload.
+	await _test_s22_reload()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -185,6 +188,68 @@ func _fresh_arena(with_heart: bool = false) -> void:
 	# Give the physics engine two steps to register the new bodies.
 	await get_tree().physics_frame
 	await get_tree().physics_frame
+
+
+## s22 RELOAD: the shooter holds seed_clip_size pods, reloads by itself when empty
+## (or on R), each Quick Reload card takes time off, and a new wave refills it.
+func _test_s22_reload() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	_check(InputMap.has_action(&"reload"), "input action 'reload' exists (R)")
+	_check(CONFIG.seed_clip_size == 10 and is_equal_approx(CONFIG.reload_seconds, 3.0), "a load is 10 pods and the first reload is 3 s")
+	_check(player.seeds_in_clip == CONFIG.seed_clip_size, "Seven starts with a full load")
+	_check(not player.start_reload(), "R with a full load does nothing")
+
+	# Fire the whole load. Clearing the private cooldown between shots skips the
+	# 0.22 s wait, so the check does not have to sit through it.
+	var fired: int = 0
+	for i: int in CONFIG.seed_clip_size:
+		player._fire_cooldown_left = 0.0
+		if player.fire(Vector2.RIGHT):
+			fired += 1
+	_check(fired == CONFIG.seed_clip_size, "all %d pods of a load fire" % CONFIG.seed_clip_size)
+	_check(player.is_reloading() and is_equal_approx(player.reload_left, CONFIG.reload_seconds), "the last pod starts a %.1f s reload by itself" % CONFIG.reload_seconds)
+	player._fire_cooldown_left = 0.0
+	_check(not player.fire(Vector2.RIGHT), "the 11th pod does not fire while reloading")
+
+	# Let the reload run in game time. 170 physics frames is 2.83 s: not done yet.
+	await _wait_frames_physics(170)
+	_check(player.is_reloading() and player.seeds_in_clip == 0, "still reloading just before 3 s")
+	var done: Callable = func() -> bool: return not player.is_reloading()
+	_check(await _wait_until(done, 0.5), "the reload finishes at 3 s")
+	_check(player.seeds_in_clip == CONFIG.seed_clip_size, "and the load is full again")
+	player._fire_cooldown_left = 0.0
+	_check(player.fire(Vector2.RIGHT), "and Seven can fire again")
+
+	# R reloads early once a pod has gone.
+	_check(player.start_reload(), "R with pods missing starts a reload")
+	_check(not player.start_reload(), "a second R while reloading does nothing")
+
+	# A new wave refills the load at once.
+	_arena.waves.start_wave(2)
+	_check(not player.is_reloading() and player.seeds_in_clip == CONFIG.seed_clip_size, "a new wave starts with a full load")
+
+	# The Quick Reload card: 0.6 s off per pick, four picks, ending at 0.6 s.
+	var expected: Array[float] = [3.0, 2.4, 1.8, 1.2, 0.6]
+	for picks: int in expected.size():
+		_check(is_equal_approx(Arena.reload_seconds_after(picks), expected[picks]), "after %d Quick Reloads the reload takes %.1f s" % [picks, expected[picks]])
+	for i: int in CONFIG.upgrade_reload_max_picks:
+		_check(not _arena.upgrades_left_out().has(&"quick_reload"), "Quick Reload is still dealt after %d picks" % i)
+		_arena.apply_upgrade(&"quick_reload")
+		_check(is_equal_approx(player.reload_seconds, expected[i + 1]), "pick %d: Seven's reload is now %.1f s" % [i + 1, expected[i + 1]])
+	_check(_arena.upgrades_left_out().has(&"quick_reload"), "after %d picks Quick Reload is no longer dealt" % CONFIG.upgrade_reload_max_picks)
+	# The shorter reload is the one really used.
+	player.seeds_in_clip = 1
+	player._fire_cooldown_left = 0.0
+	player.fire(Vector2.RIGHT)
+	_check(is_equal_approx(player.reload_left, 0.6), "with four picks a reload really takes 0.6 s")
+	_check(UpgradePicker._describe(&"quick_reload") == "Reloads 0.6 s faster. Stacks 4 times.", "the Quick Reload card reads right")
+
+
+## Lets `count` physics frames go by (one frame is 1/60 s of game time).
+func _wait_frames_physics(count: int) -> void:
+	for i: int in count:
+		await get_tree().physics_frame
 
 
 ## Lets the game run until `condition` returns true or `max_seconds` pass.
@@ -244,6 +309,58 @@ func _test_art_is_the_right_size() -> void:
 	# 1.3333 x 48 is 63.998, not exactly 64, so allow a tenth of a pixel of slack.
 	# absf() gives the size of a number without its sign.
 	_check(absf(CONFIG.sprite_size_cells * CONFIG.cell_size - 64.0) < 0.1, "sprites are drawn at their real size")
+
+
+## The spoken radio lines (audio/voice, made by tools/gen_voices.py): every line the
+## radio can say has a recording, the recording matches the words now in the config,
+## and the radio plays and stops it.
+func _test_radio_voices() -> void:
+	# 1. Every spoken variable has a file for every entry, and the words the tool
+	#    spoke (manifest.json) are the words in the config today.
+	var manifest_file: FileAccess = FileAccess.open("res://audio/voice/manifest.json", FileAccess.READ)
+	_check(manifest_file != null, "the voice manifest is there")
+	var manifest: Dictionary = {}
+	if manifest_file != null:
+		manifest = JSON.parse_string(manifest_file.get_as_text())
+	var missing: Array[String] = []
+	var stale: Array[String] = []
+	var spoken_count: int = 0
+	for variable: StringName in Radio.VOICE_VARS:
+		var value: Variant = CONFIG.get(variable)
+		var texts: Array = value if value is Array else [value]
+		for index: int in texts.size():
+			var id: String = "%s_%d" % [variable, index]
+			spoken_count += 1
+			if not ResourceLoader.exists("res://audio/voice/%s.mp3" % id):
+				missing.append(id)
+			if not manifest.has(id) or manifest[id]["text"] != texts[index]:
+				stale.append(id)
+	_check(missing.is_empty(), "every spoken line has a recording (%d lines; missing: %s)" % [spoken_count, ", ".join(missing)])
+	_check(stale.is_empty(), "the recordings were made from today's words (run tools/gen_voices.py speak --force if not; stale: %s)" % ", ".join(stale))
+	# 2. A line is found by its words, with the Sunburst number filled in as the arena sends it.
+	_check(Radio.voice_path_for(CONFIG.helios_lines[0]) == "res://audio/voice/helios_lines_0.mp3", "Helios's first line finds its recording")
+	_check(Radio.voice_path_for(CONFIG.sunburst_intro_line % CONFIG.sunburst_charges_per_wave).ends_with("sunburst_intro_line_0.mp3"), "the Sunburst tip finds its recording with its number filled in")
+	_check(Radio.voice_path_for("Lucky speaks.") == "", "an unspoken line has no recording")
+	# 3. The radio plays it, cuts it when a new line comes, and stops it when taken off the air.
+	await _fresh_arena()
+	var was_unlocked: bool = Sfx.is_unlocked
+	var was_effects: bool = Sfx.effects_on
+	Sfx.is_unlocked = true
+	Sfx.effects_on = true
+	var radio: Radio = _arena.radio
+	radio.say(Radio.HELIOS, CONFIG.helios_lines[0], CONFIG.helios_lines[0])
+	_check(radio.is_voice_playing(), "Helios's line is spoken")
+	radio.say(Radio.LUCKY, "Lucky speaks.", "Lucky speaks.")
+	_check(not radio.is_voice_playing(), "a line with no recording cuts the voice that was speaking")
+	radio.say(Radio.CANOPY, CONFIG.dj_intro[0], CONFIG.dj_intro[0])
+	_check(radio.is_voice_playing(), "a Canopy FM line is spoken")
+	radio.clear()
+	_check(not radio.is_voice_playing(), "taking the radio off the air stops the voice")
+	Sfx.effects_on = false
+	radio.say(Radio.HELIOS, CONFIG.helios_lines[0], CONFIG.helios_lines[0])
+	_check(not radio.is_voice_playing(), "with Sound effects off there is no voice")
+	Sfx.is_unlocked = was_unlocked
+	Sfx.effects_on = was_effects
 
 
 ## Layer 3b: the ElevenLabs sounds. Every sound name the game plays must come

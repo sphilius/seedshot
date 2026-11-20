@@ -1,0 +1,266 @@
+{
+  "helios_lines_0": {
+    "speaker": "helios",
+    "text": "Good evening, valued customer. Your sector's account is 90 minutes past due, and we hate to bring it up.",
+    "spoken": "Good evening, valued customer. Your sector's account is 90 minutes past due, and we hate to bring it up.",
+    "file": "audio/voice/helios_lines_0.mp3"
+  },
+  "helios_lines_1": {
+    "speaker": "helios",
+    "text": "Good news: a technician is on the way to help you. Please stay exactly where you are.",
+    "spoken": "Good news: a technician is on the way to help you. Please stay exactly where you are.",
+    "file": "audio/voice/helios_lines_1.mp3"
+  },
+  "helios_lines_2": {
+    "speaker": "helios",
+    "text": "Unlicensed generation is theft of sunlight. We say that with a smile.",
+    "spoken": "Unlicensed generation is theft of sunlight. We say that with a smile.",
+    "file": "audio/voice/helios_lines_2.mp3"
+  },
+  "helios_lines_3": {
+    "speaker": "helios",
+    "text": "Disconnection crews have been dispatched. Thank you for your patience. We'll need a little more of it.",
+    "spoken": "Disconnection crews have been dispatched. Thank you for your patience. We'll need a little more of it.",
+    "file": "audio/voice/helios_lines_3.mp3"
+  },
+  "helios_lines_4": {
+    "speaker": "helios",
+    "text": "We'd hate to lose you! Ask about our amnesty plan, open to anyone who stops.",
+    "spoken": "We'd hate to lose you! Ask about our amnesty plan, open to anyone who stops.",
+    "file": "audio/voice/helios_lines_4.mp3"
+  },
+  "helios_lines_5": {
+    "speaker": "helios",
+    "text": "Your neighbours are paying for your choices. Awkward for everyone, really.",
+    "spoken": "Your neighbours are paying for your choices. Awkward for everyone, really.",
+    "file": "audio/voice/helios_lines_5.mp3"
+  },
+  "helios_lines_6": {
+    "speaker": "helios",
+    "text": "Unit MR-7, we know that's you in there. Please return to your dock. This is the friendly version.",
+    "spoken": "Unit M R seven, we know that's you in there. Please return to your dock. This is the friendly version.",
+    "file": "audio/voice/helios_lines_6.mp3"
+  },
+  "helios_lines_7": {
+    "speaker": "helios",
+    "text": "Your amnesty offer has expired. Recovery crews are on site, and they're looking forward to meeting you.",
+    "spoken": "Your amnesty offer has expired. Recovery crews are on site, and they're looking forward to meeting you.",
+    "file": "audio/voice/helios_lines_7.mp3"
+  },
+  "helios_lines_8": {
+    "speaker": "helios",
+    "text": "Service area reclassified. We're recovering all assets. Yes, the trees too.",
+    "spoken": "Service area reclassified. We're recovering all assets. Yes, the trees too.",
+    "file": "audio/voice/helios_lines_8.mp3"
+  },
+  "helios_lines_9": {
+    "speaker": "helios",
+    "text": "Final notice.",
+    "spoken": "Final notice.",
+    "file": "audio/voice/helios_lines_9.mp3"
+  },
+  "helios_end_line_0": {
+    "speaker": "helios",
+    "text": "Account closed.",
+    "spoken": "Account closed.",
+    "file": "audio/voice/helios_end_line_0.mp3"
+  },
+  "dj_intro_0": {
+    "speaker": "canopy_girl",
+    "text": "...is this thing on? Hello? Meter-bot? Seven? If you can hear me, move. WASD, you know the drill. Or you don't, so: WASD.",
+    "spoken": "... is this thing on? Hello? Meter-bot? Seven? If you can hear me, move. W, A, S, D, you know the drill. Or you don't, so: W, A, S, D.",
+    "file": "audio/voice/dj_intro_0.mp3"
+  },
+  "dj_intro_1": {
+    "speaker": "canopy_boy",
+    "text": "Okay, see that Helios machine? Point the mouse at it and hold left click. Plant a seed in it. Trust me.",
+    "spoken": "Okay, see that Helios machine? Point the mouse at it and hold left click. Plant a seed in it. Trust me.",
+    "file": "audio/voice/dj_intro_1.mp3"
+  },
+  "dj_intro_touch_0": {
+    "speaker": "canopy_boy",
+    "text": "...is this thing on? Hello? Meter-bot? Seven? If you can hear me, move. Left thumb.",
+    "spoken": "... is this thing on? Hello? Meter-bot? Seven? If you can hear me, move. Left thumb.",
+    "file": "audio/voice/dj_intro_touch_0.mp3"
+  },
+  "dj_intro_touch_1": {
+    "speaker": "canopy_girl",
+    "text": "Right thumb aims and fires. Put a seed in that Helios machine. Go on.",
+    "spoken": "Right thumb aims and fires. Put a seed in that Helios machine. Go on.",
+    "file": "audio/voice/dj_intro_touch_1.mp3"
+  },
+  "dj_first_tree_0": {
+    "speaker": "canopy_girl",
+    "text": "Ha! It rooted! A Helios machine, now a tree. Spitter shots die on bark, so get behind it.",
+    "spoken": "Ha! It rooted! A Helios machine, now a tree. Spitter shots die on bark, so get behind it.",
+    "file": "audio/voice/dj_first_tree_0.mp3"
+  },
+  "dj_first_tree_1": {
+    "speaker": "canopy_boy",
+    "text": "Oh, and Seven? Right-click any tree. The vine zips you straight to it.",
+    "spoken": "Oh, and Seven? Right-click any tree. The vine zips you straight to it.",
+    "file": "audio/voice/dj_first_tree_1.mp3"
+  },
+  "dj_first_tree_touch_0": {
+    "speaker": "canopy_boy",
+    "text": "Ha! It rooted! A Helios machine, now a tree. Spitter shots die on bark, so get behind it.",
+    "spoken": "Ha! It rooted! A Helios machine, now a tree. Spitter shots die on bark, so get behind it.",
+    "file": "audio/voice/dj_first_tree_touch_0.mp3"
+  },
+  "dj_first_tree_touch_1": {
+    "speaker": "canopy_girl",
+    "text": "Oh, and Seven? Tap any tree. The vine zips you straight to it.",
+    "spoken": "Oh, and Seven? Tap any tree. The vine zips you straight to it.",
+    "file": "audio/voice/dj_first_tree_touch_1.mp3"
+  },
+  "dj_bramble_0": {
+    "speaker": "canopy_girl",
+    "text": "Okay, new toy: press Q or Space to throw a Bramble Seed. Thorns grow where it lands, and every machine inside slows down and takes damage.",
+    "spoken": "Okay, new toy: press Q or Space to throw a Bramble Seed. Thorns grow where it lands, and every machine inside slows down and takes damage.",
+    "file": "audio/voice/dj_bramble_0.mp3"
+  },
+  "dj_bramble_1": {
+    "speaker": "canopy_boy",
+    "text": "Lob it at a crowd, or into a gateway they all have to squeeze through. You hold three, and they grow back.",
+    "spoken": "Lob it at a crowd, or into a gateway they all have to squeeze through. You hold three, and they grow back.",
+    "file": "audio/voice/dj_bramble_1.mp3"
+  },
+  "dj_bramble_touch_0": {
+    "speaker": "canopy_boy",
+    "text": "Okay, new toy: tap the bramble button, right side, to throw a Bramble Seed. Thorns grow where it lands, and every machine inside slows down and takes damage.",
+    "spoken": "Okay, new toy: tap the bramble button, right side, to throw a Bramble Seed. Thorns grow where it lands, and every machine inside slows down and takes damage.",
+    "file": "audio/voice/dj_bramble_touch_0.mp3"
+  },
+  "dj_bramble_touch_1": {
+    "speaker": "canopy_girl",
+    "text": "Lob it at a crowd, or into a gateway they all have to squeeze through. You hold three, and they grow back.",
+    "spoken": "Lob it at a crowd, or into a gateway they all have to squeeze through. You hold three, and they grow back.",
+    "file": "audio/voice/dj_bramble_touch_1.mp3"
+  },
+  "dj_first_sawbot_0": {
+    "speaker": "canopy_girl",
+    "text": "Sawbot on the lot! It's not after you, it's after the trees. Drop it first.",
+    "spoken": "Sawbot on the lot! It's not after you, it's after the trees. Drop it first.",
+    "file": "audio/voice/dj_first_sawbot_0.mp3"
+  },
+  "dj_first_sawbot_1": {
+    "speaker": "canopy_boy",
+    "text": "It'll head straight for the Heart, the big old tree in the middle. Lose the Heart, lose the wave. No pressure.",
+    "spoken": "It'll head straight for the Heart, the big old tree in the middle. Lose the Heart, lose the wave. No pressure.",
+    "file": "audio/voice/dj_first_sawbot_1.mp3"
+  },
+  "dj_first_ripsaw_0": {
+    "speaker": "canopy_boy",
+    "text": "Uh oh. That big red one is a Ripsaw. It fells a tree in half the time, so stop it before it reaches the Heart Tree.",
+    "spoken": "Uh oh. That big red one is a Ripsaw. It fells a tree in half the time, so stop it before it reaches the Heart Tree.",
+    "file": "audio/voice/dj_first_ripsaw_0.mp3"
+  },
+  "dj_first_linebreaker_0": {
+    "speaker": "canopy_girl",
+    "text": "Whoa, big one. That's a Linebreaker: shielded, slow, hits twice as hard. It brings three Spitters to cover for it.",
+    "spoken": "Whoa, big one. That's a Linebreaker: shielded, slow, hits twice as hard. It brings three Spitters to cover for it.",
+    "file": "audio/voice/dj_first_linebreaker_0.mp3"
+  },
+  "dj_first_arc_spitter_0": {
+    "speaker": "canopy_boy",
+    "text": "Arc Spitter. It fires a fan of three bolts and it's guarding the Sawbots. One tree won't cover you, so find a thicket.",
+    "spoken": "Arc Spitter. It fires a fan of three bolts and it's guarding the Sawbots. One tree won't cover you, so find a thicket.",
+    "file": "audio/voice/dj_first_arc_spitter_0.mp3"
+  },
+  "dj_tap_points_0": {
+    "speaker": "canopy_girl",
+    "text": "See those gold rings on the floor? Old grid taps. Grow a tree on one and Seven gets a pip back, plus more homes light up.",
+    "spoken": "See those gold rings on the floor? Old grid taps. Grow a tree on one and Seven gets a pip back, plus more homes light up.",
+    "file": "audio/voice/dj_tap_points_0.mp3"
+  },
+  "heart_intro_line_0": {
+    "speaker": "canopy_boy",
+    "text": "That big tree in the middle? The Heart Tree. If it falls, the wave starts over, so don't let it.",
+    "spoken": "That big tree in the middle? The Heart Tree. If it falls, the wave starts over, so don't let it.",
+    "file": "audio/voice/heart_intro_line_0.mp3"
+  },
+  "heart_alarm_line_0": {
+    "speaker": "canopy_girl",
+    "text": "They're cutting the Heart Tree! Middle of the lot, Seven, go!",
+    "spoken": "They're cutting the Heart Tree! Middle of the lot, Seven, go!",
+    "file": "audio/voice/heart_alarm_line_0.mp3"
+  },
+  "canopy_line_intro_line_0": {
+    "speaker": "canopy_boy",
+    "text": "See those glowing vines between the great sunroots? The roots string them up all by themselves, and they snare any machine that wanders across.",
+    "spoken": "See those glowing vines between the great sunroots? The roots string them up all by themselves, and they snare any machine that wanders across.",
+    "file": "audio/voice/canopy_line_intro_line_0.mp3"
+  },
+  "sunburst_intro_line_0": {
+    "speaker": "canopy_girl",
+    "text": "Look at the great sunroots glowing gold. Zip to one for a Sunburst: it stuns every machine nearby, and any great sunroots close by catch the flare too. You get %d each wave.",
+    "spoken": "Look at the great sunroots glowing gold. Zip to one for a Sunburst: it stuns every machine nearby, and any great sunroots close by catch the flare too. You get 1 each wave.",
+    "file": "audio/voice/sunburst_intro_line_0.mp3"
+  },
+  "grove_rest_line_0": {
+    "speaker": "canopy_boy",
+    "text": "Dented? Stand near four grown trees and the grove patches you up, one pip at a time.",
+    "spoken": "Dented? Stand near four grown trees and the grove patches you up, one pip at a time.",
+    "file": "audio/voice/grove_rest_line_0.mp3"
+  },
+  "dj_music_hint_0": {
+    "speaker": "canopy_girl",
+    "text": "Not feeling this song? We've got four stations. Pick another on the title screen.",
+    "spoken": "Not feeling this song? We've got four stations. Pick another on the title screen.",
+    "file": "audio/voice/dj_music_hint_0.mp3"
+  },
+  "ng_plus_wakeup_line_0": {
+    "speaker": "canopy_boy",
+    "text": "Seven, you're back up! No idea what happened, but we need you again. Do you remember how this goes?",
+    "spoken": "Seven, you're back up! No idea what happened, but we need you again. Do you remember how this goes?",
+    "file": "audio/voice/ng_plus_wakeup_line_0.mp3"
+  },
+  "ng_plus_threat_line_0": {
+    "speaker": "canopy_girl",
+    "text": "Heads up: Helios sent tougher, faster drones this time. They've clearly been studying you.",
+    "spoken": "Heads up: Helios sent tougher, faster drones this time. They've clearly been studying you.",
+    "file": "audio/voice/ng_plus_threat_line_0.mp3"
+  },
+  "dj_ng_plus_intro_0": {
+    "speaker": "canopy_boy",
+    "text": "Big news: trees that stand a whole wave grow GREAT now.",
+    "spoken": "Big news: trees that stand a whole wave grow GREAT now.",
+    "file": "audio/voice/dj_ng_plus_intro_0.mp3"
+  },
+  "dj_ng_plus_intro_1": {
+    "speaker": "canopy_girl",
+    "text": "Two great ones in sight of each other string up a Canopy line, and machines get tangled in it.",
+    "spoken": "Two great ones in sight of each other string up a Canopy line, and machines get tangled in it.",
+    "file": "audio/voice/dj_ng_plus_intro_1.mp3"
+  },
+  "dj_ng_plus_intro_2": {
+    "speaker": "canopy_boy",
+    "text": "Zip to a great one and it bursts with light. Save it for when they crowd you.",
+    "spoken": "Zip to a great one and it bursts with light. Save it for when they crowd you.",
+    "file": "audio/voice/dj_ng_plus_intro_2.mp3"
+  },
+  "dj_cat_hints_0": {
+    "speaker": "canopy_girl",
+    "text": "Shout-out to Mrs. Maneki. Her shop on the north wall's been shuttered since Helios came. Her cat never left.",
+    "spoken": "Shout-out to Mrs. Maneki. Her shop on the north wall's been shuttered since Helios came. Her cat never left.",
+    "file": "audio/voice/dj_cat_hints_0.mp3"
+  },
+  "dj_cat_hints_1": {
+    "speaker": "canopy_boy",
+    "text": "Funny thing about shutters. They don't blink. Just saying.",
+    "spoken": "Funny thing about shutters. They don't blink. Just saying.",
+    "file": "audio/voice/dj_cat_hints_1.mp3"
+  },
+  "dj_cat_hints_2": {
+    "speaker": "canopy_girl",
+    "text": "Lucky cats like a polite knock. Three seeds, if anybody's asking.",
+    "spoken": "Lucky cats like a polite knock. Three seeds, if anybody's asking.",
+    "file": "audio/voice/dj_cat_hints_2.mp3"
+  },
+  "dj_cat_hints_3": {
+    "speaker": "canopy_boy",
+    "text": "Still dark up by the north wall. Somebody should knock.",
+    "spoken": "Still dark up by the north wall. Somebody should knock.",
+    "file": "audio/voice/dj_cat_hints_3.mp3"
+  }
+}

@@ -30,6 +30,8 @@ const CATALOG: Dictionary[StringName, Array] = {
 	&"quick_roots": ["Quick Roots", "Saplings root %d%% faster. Stacks."],
 	# The id is still "long_trellis" (its picture file is named after it).
 	&"long_trellis": ["Vine Trip Line", "Zip tree to tree: the vine left behind lasts %s s longer. Stacks."],
+	# s22: takes time off the seed shooter's reload, up to a limit (see the config).
+	&"quick_reload": ["Quick Reload", "Reloads %s s faster. Stacks %d times."],
 }
 
 ## (Wider and taller since s18, to make room for the picture on the left.)
@@ -184,6 +186,8 @@ static func _describe(id: StringName) -> String:
 		&"long_trellis":
 			# "%.1f" writes the number with one digit after the point: 1.5.
 			return template % ("%.1f" % CONFIG.upgrade_trellis_seconds)
+		&"quick_reload":
+			return template % ["%.1f" % CONFIG.upgrade_reload_seconds_off, CONFIG.upgrade_reload_max_picks]
 	return template
 
 
