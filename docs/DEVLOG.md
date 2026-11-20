@@ -384,6 +384,9 @@ From the kickoff. `config/game_config.tres` holds every speed, cooldown and size
 - The thunk and spit candidates came back very quiet (mean below -36 dB) and need a lot of gain; listen for hiss.
 - The listening page now plays every take evened out to its in-game loudness.
 
+## D-057: Build 35d2323 uploaded to itch (Made, 2026-11-19)
+
+Sasha said "Yes, upload now" at 11:52 PM ET. `butler push build\web kingriot/seedshot:html5 --userversion 35d2323` replaced build `9daf41a` (itch build #2444322). Checked on the live files: the engine started, the intro clip played to its end, the title screen showed, and `intro.mp4` is served as `video/mp4`. It carries rounds 2 to 5 and the intro loading screen. Round 5 went up without a human playthrough; the branch `s18-playtest-fixes` is still not merged or pushed.
 ## D-056: Round 5, the last fixes before the feature stop (Made, 2026-11-19)
 
 Sasha played round 4 and sent 16 notes at 11:33 PM, 27 minutes before his own midnight feature stop. Built: the fixes and number changes. Parked: the eight notes that are new systems.
