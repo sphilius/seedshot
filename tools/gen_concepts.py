@@ -30,8 +30,19 @@ ROUND 2: TWO HYBRIDS (python tools/gen_concepts.py --set hybrid)
                      scuffs, soot and one red status light.
     The prompts never contain the numbers 70 or 30.
 
+ROUND 3: AN EVEN SPLIT (python tools/gen_concepts.py --set split)
+    With the same six elements (FORM, MARKINGS, CONDITION, SURFACE, COLOUR, FACE) an even
+    split gives each art direction exactly three of them. There are two ways to deal them out,
+    so the set has two styles, each the other's mirror:
+      split_a  "hard shell, happy paint": brutalist FORM, MARKINGS and CONDITION; cheerful
+               SURFACE (glossy enamel), COLOUR (Helios blue, white, yellow) and FACE.
+      split_b  "soft shell, hard paint": cheerful FORM, MARKINGS and CONDITION; brutalist
+               SURFACE (matte raw metal), COLOUR (grey and safety orange) and FACE (none).
+    Again no ratio is typed into any prompt.
+
 USAGE (from the project root; needs the GEMINI_API_KEY user environment variable)
     python tools/gen_concepts.py                       all machines, both directions, 2 takes
+    python tools/gen_concepts.py --set split           the two even-split styles (round 3)
     python tools/gen_concepts.py --set hybrid          the two hybrid directions (round 2)
     python tools/gen_concepts.py --machine ripsaw      one machine
     python tools/gen_concepts.py --direction brutalist one direction
@@ -41,6 +52,7 @@ USAGE (from the project root; needs the GEMINI_API_KEY user environment variable
 OUT
     art/concept/robot_redesign_v2/<machine>_<direction>_<take>.png          (--set pure, the default)
     art/concept/robot_redesign_v3_hybrid/<machine>_<direction>_<take>.png   (--set hybrid)
+    art/concept/robot_redesign_v4_split/<machine>_<direction>_<take>.png    (--set split)
     ...and a contact_sheet.png beside each set
 
 COST
@@ -61,6 +73,7 @@ from PIL import Image, ImageDraw
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "art/concept/robot_redesign_v2"
 OUT_HYBRID = ROOT / "art/concept/robot_redesign_v3_hybrid"
+OUT_SPLIT = ROOT / "art/concept/robot_redesign_v4_split"
 MODEL = "gemini-nano-banana-2.1"  # the "Nano Banana 2.1" image model the first art used
 ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
@@ -132,6 +145,40 @@ HYBRID_DIRECTIONS = {
     ),
 }
 
+# ---- Round 3: an even split, dealt out element by element ----------------------------------
+SPLIT_DIRECTIONS = {
+    "split_a": (
+        "ART DIRECTION: HARD SHELL, HAPPY PAINT. Brutal, armoured hardware wearing a cheerful "
+        "company paint job and a smiling face. Describe it exactly like this:\n"
+        "- FORM: hard blocky slabs, wedges and cylinders with sharp angular edges and parts "
+        "sticking out of the silhouette. Nothing soft or toy-like in the shape.\n"
+        "- MARKINGS: visible bolts, vents, panel seams, yellow-and-black hazard stripes on the "
+        "edges, and a few tiny red status lights.\n"
+        "- CONDITION: battle-worn. The paint is chipped, scratched and burnt in places, with "
+        "orange rust streaks and soot showing through.\n"
+        "- SURFACE: glossy painted enamel, like a plastic toy or a new appliance, wherever the "
+        "paint has not worn away.\n"
+        "- COLOUR: bright Helios blue (about #3f7cb8) and white, with sunny yellow (#f2c230) trim.\n"
+        "- FACE: a friendly smiling face plate with two dot eyes and a smile, set into a flat "
+        "armour slab on the front."
+    ),
+    "split_b": (
+        "ART DIRECTION: SOFT SHELL, HARD PAINT. A cute, toy-shaped machine made of cold raw "
+        "industrial metal with no face. Describe it exactly like this:\n"
+        "- FORM: chubby, rounded, toy-like body with smooth soft curves and friendly proportions. "
+        "A clean, simple, strong silhouette with no sharp angular slabs.\n"
+        "- MARKINGS: neat, tidy uniform stripe bands, a small sun badge and small tidy rivets, "
+        "all placed symmetrically like factory branding.\n"
+        "- CONDITION: clean and intact, like it has just left the factory. No rust, no dents, "
+        "no soot.\n"
+        "- SURFACE: matte, raw, unpainted-looking steel and cast metal. No gloss, no shiny plastic.\n"
+        "- COLOUR: concrete grey and gunmetal with safety-orange accents and white stripes. No blue "
+        "and no yellow anywhere. Red appears only as warning lights and where the brief says so.\n"
+        "- FACE: no face at all. Where a head or sensor would be there is a black slot lens with "
+        "one small red light. No smile, no eyes."
+    ),
+}
+
 # ---- The machines: job, and the NEW SHAPE for each art direction ---------------------------
 MACHINES = {
     "arc_spitter": {
@@ -145,6 +192,18 @@ MACHINES = {
             "short splayed legs, with three fat coil emitters on top, angled outward in a fan, "
             "like a three-barrel mortar. Wide and low, nothing tall. Rust and soot around the "
             "barrels. One small red light on the front slab."
+        ),
+        "split_a": (
+            "SHAPE: the squat tripod battery. A heavy square bunker body low on three short "
+            "splayed legs, with three thick corrugated emitter barrels fanning outward from the "
+            "top, the tips glowing electric blue. The glossy blue-and-white paint covers the "
+            "bunker, chipped at the corners, and the smiling face plate is set in the front slab."
+        ),
+        "split_b": (
+            "SHAPE: the round bobbing pod. A plump spherical body of matte grey metal hovering on "
+            "a short stalk and three little feet, with three small petal-shaped emitter fins "
+            "fanning from the top, their tips glowing electric blue. Safety-orange and white "
+            "stripe bands circle it. A black slot lens with one red light on the front."
         ),
         "hybrid_brutal": (
             "SHAPE: the squat tripod battery. A heavy square bunker body with chamfered corners, "
@@ -180,6 +239,18 @@ MACHINES = {
             "heavy chunky tracks or rollers underneath. Like a bulldozer made of a bunker. "
             "A single narrow black viewing slot and one small red light."
         ),
+        "split_a": (
+            "SHAPE: the battering-ram plough. A very wide, low wedge of angular armour with a "
+            "thick angled plough blade across the front, two piston arms, and heavy tracks. "
+            "Glossy blue-and-white paint on the armour with yellow trim, chipped and rusted, and a "
+            "smiling face plate set in the front armour slab above the blade."
+        ),
+        "split_b": (
+            "SHAPE: the giant round mascot. A tall, chubby barrel body of matte grey metal on "
+            "four fat wheels, with a huge soft rounded bumper at the front striped in safety "
+            "orange and white. A small sun badge on the side and a black slot lens with one red "
+            "light high on the body."
+        ),
         "hybrid_brutal": (
             "SHAPE: the battering-ram plough. A very wide, low wedge of grey armour with a thick "
             "angled plough blade across the front, two piston arms, and heavy tracks. The plough "
@@ -213,6 +284,18 @@ MACHINES = {
             "vertical circular saw blade at the front, taller than the body, with big jagged "
             "teeth, like a giant sawblade wheel with an engine strapped behind it. Twin "
             "exhaust stacks at the back, red warning paint on the blade guard, rust streaks."
+        ),
+        "split_a": (
+            "SHAPE: the rolling blade. A long, low, aggressive body behind ONE huge vertical "
+            "circular saw blade taller than the body, with big jagged teeth painted in red and "
+            "yellow stripes. The engine body has glossy blue-and-white paint, chipped and rusty, "
+            "twin exhaust stacks, and a smiling face plate set in the front of the engine cowling."
+        ),
+        "split_b": (
+            "SHAPE: the sunburst blade. A big round saw blade shaped like a sun, in matte raw "
+            "steel, rolling on a compact chubby grey body with two stubby legs. The blade's rim "
+            "guard is painted warning red, with safety-orange and white stripe bands on the body "
+            "and a small sun badge. The hub is a black slot lens with one red light."
         ),
         "hybrid_brutal": (
             "SHAPE: the rolling blade. A long, low, aggressive grey body built behind ONE huge "
@@ -282,7 +365,7 @@ def split_name(stem: str) -> tuple:
     """Split 'arc_spitter_hybrid_brutal_1' into ('arc_spitter', 'hybrid_brutal', '1').
     A direction name is found inside the file name, the take is the last piece, and
     whatever comes before the direction is the machine."""
-    for direction in list(DIRECTIONS) + list(HYBRID_DIRECTIONS):
+    for direction in list(DIRECTIONS) + list(HYBRID_DIRECTIONS) + list(SPLIT_DIRECTIONS):
         marker = f"_{direction}_"
         if marker in stem:
             machine, take = stem.split(marker)
@@ -329,15 +412,17 @@ def main() -> None:
     `"\\n\\n".join([...])` glues the four prompt parts together with a blank line between."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--machine", choices=list(MACHINES))
-    parser.add_argument("--set", choices=["pure", "hybrid"], default="pure", help="pure = round 1, hybrid = round 2")
-    parser.add_argument("--direction", choices=list(DIRECTIONS) + list(HYBRID_DIRECTIONS))
+    parser.add_argument("--set", choices=["pure", "hybrid", "split"], default="pure",
+                        help="pure = round 1, hybrid = round 2, split = round 3")
+    parser.add_argument("--direction", choices=list(DIRECTIONS) + list(HYBRID_DIRECTIONS) + list(SPLIT_DIRECTIONS))
     parser.add_argument("--takes", type=int, default=2)
     parser.add_argument("--force", action="store_true", help="redo pictures that already exist")
     parser.add_argument("--sheet", action="store_true", help="only rebuild the contact sheet")
     args = parser.parse_args()
     # Pick the set: which art directions, and which folder the pictures go to.
-    directions = HYBRID_DIRECTIONS if args.set == "hybrid" else DIRECTIONS
-    out = OUT_HYBRID if args.set == "hybrid" else OUT
+    # A dictionary used as a lookup table: set name -> (its art directions, its folder).
+    sets = {"pure": (DIRECTIONS, OUT), "hybrid": (HYBRID_DIRECTIONS, OUT_HYBRID), "split": (SPLIT_DIRECTIONS, OUT_SPLIT)}
+    directions, out = sets[args.set]
     if args.sheet:
         build_sheet(out)
         return
