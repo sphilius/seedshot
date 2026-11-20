@@ -182,7 +182,7 @@ func _physics_process(delta: float) -> void:
 	# 5. Nowhere to hide. Player too close: step straight back, still facing them.
 	_route_kind = &""
 	if distance < CONFIG.spitter_min_range_cells * CONFIG.cell_size:
-		velocity = -to_target.normalized() * _speed() * speed_scale
+		velocity = -to_target.normalized() * _speed() * speed_scale * movement_factor()
 		move_and_slide()  # slides along walls and trees if it backs into one
 		_face(to_target)
 		return

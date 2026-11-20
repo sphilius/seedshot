@@ -136,6 +136,7 @@ func _ready() -> void:
 	# s19: phase 1 of the post-jam backlog.
 	await _test_s19_phase1()
 	await _test_s19_contact()
+	await _test_s19_snare()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -1633,7 +1634,7 @@ func _test_great_powers() -> void:
 	# A machine walking across the cable is caught, and the cable recharges.
 	var scrapper: Scrapper = _arena.spawn_scrapper_at(Vector2i(6, 12))
 	await _wait_frames(2)
-	_check(scrapper.is_bound, "a machine on the Canopy line is bound")
+	_check(scrapper.is_snared, "a machine on the Canopy line is snared")
 	_check(not powers.is_charged(powers.lines[0]), "then the line recharges before it catches again")
 
 	# A wall of wood between them: a third (ordinary) tree blocks the view.
@@ -1681,7 +1682,7 @@ func _test_trellis() -> void:
 	_check(powers.trellises.size() == 1, "a zip from one tree to another strings a trellis")
 	var scrapper: Scrapper = _arena.spawn_scrapper_at(Vector2i(6, 12))
 	await _wait_frames(2)
-	_check(scrapper.is_bound, "a machine crossing the trellis is snared")
+	_check(scrapper.is_snared, "a machine crossing the trellis is snared")
 	# A zip that did not start beside a tree strings nothing.
 	_arena.player.zip_from = _arena.grid.cell_to_world(Vector2i(20, 7))
 	_arena._on_player_zip_finished()
@@ -1948,20 +1949,20 @@ func _test_canopy_line_caps() -> void:
 	b.mature()
 	var scrapper: Scrapper = _arena.spawn_scrapper_at(Vector2i(6, 12))
 	await _wait_frames(3)
-	_check(scrapper.is_bound and powers.is_immune(scrapper), "a machine on the Canopy line is bound")
-	var released: Callable = func() -> bool: return not scrapper.is_bound
+	_check(scrapper.is_snared and powers.is_immune(scrapper), "a machine on the Canopy line is snared")
+	var released: Callable = func() -> bool: return not scrapper.is_snared
 	_check(await _wait_until(released, CONFIG.canopy_line_bind_seconds + 1.0), "the line lets it go after %.1f s" % CONFIG.canopy_line_bind_seconds)
 	# Put it straight back on the cable with the cable fully charged: before s18
 	# it would be caught again at once, for ever.
 	powers._recharge.clear()
 	scrapper.global_position = _arena.grid.cell_to_world(Vector2i(6, 12))
 	await _wait_frames(3)
-	_check(powers.is_charged(powers.lines[0]) and not scrapper.is_bound, "a machine just let go is not snared again: it can walk free")
+	_check(powers.is_charged(powers.lines[0]) and not scrapper.is_snared, "a machine just let go is not snared again: it can walk free")
 	# Once the immunity has run out, the cable can catch it again.
 	powers._immune.clear()
 	scrapper.global_position = _arena.grid.cell_to_world(Vector2i(6, 12))
 	await _wait_frames(3)
-	_check(scrapper.is_bound, "after %.0f s it can be caught again" % CONFIG.canopy_line_immunity_seconds)
+	_check(scrapper.is_snared, "after %.0f s it can be caught again" % CONFIG.canopy_line_immunity_seconds)
 
 
 ## s18, "must fix before I submit": Sasha forgot the Heart Tree existed, could
@@ -3159,3 +3160,58 @@ func _test_s19_contact() -> void:
 	var landed_past: Callable = func() -> bool: return not player.is_zipping
 	await _wait_until(landed_past, 3.0)
 	_check(player.global_position.x > in_the_way.global_position.x + 20.0, "and the zip carries Seven past the machine")
+
+
+## s19 items 4 and 5: the forest's vines SNARE (slowed, can still act); only
+## Seven's own vine BINDS (frozen, cannot act).
+func _test_s19_snare() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	player._invulnerable_left = 999.0  # the shots are not what these checks are about
+	player.global_position = _arena.grid.cell_to_world(Vector2i(5, 12))
+	var snared: Spitter = _arena.spawn_spitter_at(Vector2i(10, 12))
+	var bound: Spitter = _arena.spawn_spitter_at(Vector2i(10, 14))
+	await _wait_frames(2)
+	snared.snare_for(30.0)
+	bound.yank_and_bind(bound.global_position, 0.0, 30.0)
+	_check(snared.is_snared and not snared.is_bound, "a snared machine is snared, not bound")
+	_check(bound.is_bound and not bound.is_snared, "a bound machine is bound, not snared")
+	_check(is_equal_approx(snared.movement_factor(), CONFIG.snare_speed_factor) and is_equal_approx(bound.movement_factor(), 1.0), "snaring slows walking; a bind is handled separately")
+
+	# The snared Spitter still winds up and fires; the bound one never does.
+	var shots: Node = _arena.get_node("Shots")
+	var winding: Callable = func() -> bool: return snared.is_winding_up
+	_check(await _wait_until(winding, CONFIG.spitter_cooldown + 2.0), "a Spitter caught on a forest vine still winds up")
+	var fired: Callable = func() -> bool: return shots.get_child_count() >= 1
+	_check(await _wait_until(fired, CONFIG.spitter_windup + 1.0), "and still fires")
+	_check(not bound.is_winding_up, "a Spitter bound by Seven's vine never winds up")
+	_check(snared.is_snared, "and the snare was still holding when it fired")
+
+	# A snare slows a walker; the same walk unsnared goes further.
+	await _fresh_arena()
+	player = _arena.player
+	player._invulnerable_left = 999.0
+	player.global_position = _arena.grid.cell_to_world(Vector2i(3, 12))
+	var held: Scrapper = _arena.spawn_scrapper_at(Vector2i(20, 12))
+	var free: Scrapper = _arena.spawn_scrapper_at(Vector2i(20, 8))
+	await _wait_frames(2)
+	held.snare_for(30.0)
+	var held_start: Vector2 = held.global_position
+	var free_start: Vector2 = free.global_position
+	await _wait_frames(30)
+	var held_walked: float = held.global_position.distance_to(held_start)
+	var free_walked: float = free.global_position.distance_to(free_start)
+	_check(free_walked > 20.0 and held_walked < free_walked * 0.5, "a snared Scrapper crawls (%.0f px against %.0f px)" % [held_walked, free_walked])
+
+	# A snare wears off, and Seven's vine on a snared machine binds it outright.
+	held._snared_time_left = 0.0
+	held._tick_bound(0.016)
+	_check(not held.is_snared, "a snare wears off")
+	held.snare_for(30.0)
+	held.yank_and_bind(held.global_position, 0.0, 5.0)
+	_check(held.is_bound and not held.is_snared, "Seven's vine on a snared machine binds it and ends the snare")
+	held.snare_for(30.0)
+	_check(not held.is_snared, "a bound machine cannot also be snared")
+
+	# Item 5 (numbers only): the forest's grip is shorter than it was.
+	_check(CONFIG.canopy_line_bind_seconds < 2.5 and CONFIG.trellis_bind_seconds < 2.0, "the forest's snares are shorter than the old binds (%.1f s and %.1f s)" % [CONFIG.canopy_line_bind_seconds, CONFIG.trellis_bind_seconds])

@@ -423,14 +423,16 @@ extends Resource
 @export var tree_great_texture: Texture2D
 
 ## CANOPY LINE (great_powers.gd): two great sunroots within this many cells of
-## each other, with nothing between them, string a cable that binds machines.
+## each other, with nothing between them, string a cable that snares machines.
 @export var canopy_line_range_cells: float = 8.0
 ## How close (pixels) a machine's centre must come to the cable to be caught.
 @export var canopy_line_catch_px: float = 16.0
-## Seconds a caught machine stays bound.
-@export var canopy_line_bind_seconds: float = 2.5
-## Seconds a cable needs to recharge after catching a machine.
-@export var canopy_line_recharge: float = 4.0
+## Seconds a caught machine stays SNARED (slowed, not frozen; see snare_speed_factor).
+## s19 round 6: 1.5 (was 2.5), because the forest handled the machines so well
+## that New Game + nearly played itself.
+@export var canopy_line_bind_seconds: float = 1.5
+## Seconds a cable needs to recharge after catching a machine. s19: 8.0 (was 4.0).
+@export var canopy_line_recharge: float = 8.0
 ## Colour of a charged cable (alpha = how solid it looks).
 @export var canopy_line_color: Color = Color(0.75, 1.0, 0.45, 0.85)
 ## THE CAPS (s18). A late New Game + run had 70+ great sunroots and a cable
@@ -513,8 +515,9 @@ extends Resource
 ## TRELLIS (great_powers.gd): a zip from beside one tree to another leaves the
 ## vine strung between them. Seconds it lasts:
 @export var trellis_seconds: float = 6.0
-## Seconds a machine snared by the trellis stays bound.
-@export var trellis_bind_seconds: float = 2.0
+## Seconds a machine snared by the trellis stays snared (slowed, not frozen).
+## s19: 1.2 (was 2.0).
+@export var trellis_bind_seconds: float = 1.2
 ## How close (cells) Seven must start a zip to a tree for it to count as "from" it.
 @export var trellis_start_reach_cells: float = 1.6
 ## Colour of a trellis vine.
@@ -903,6 +906,17 @@ extends Resource
 ## "touching" is really "pressed against". A few pixels covers the physics
 ## engine's own small safety gap.
 @export var contact_margin_px: float = 6.0
+
+@export_group("Snare")
+## s19: the forest's own vines (canopy lines and the Vine Trip Line) SNARE a
+## machine; only Seven's own vine on a machine fully BINDS it. A snared machine is
+## slowed to this share of its walking speed (0 = held in place, 1 = not slowed)
+## but can still wind up, swing, shoot and saw. How long a snare lasts is
+## canopy_line_bind_seconds and trellis_bind_seconds (in the New Game + group).
+@export_range(0.0, 1.0) var snare_speed_factor: float = 0.25
+## Colour of the net drawn over a snared machine (amber, so it never looks like
+## the green of a bound one or the red of an attack about to land).
+@export var snare_color: Color = Color(1.0, 0.78, 0.2, 0.55)
 
 @export_group("Art")
 ## The sprites are 64 x 64 pixel art drawn with Klad (recipes in art/source/klad).
