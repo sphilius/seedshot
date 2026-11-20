@@ -13,7 +13,7 @@ Continue Phase 3 of Seedshot: new systems, **one per session, each on its own br
   - s22 Reload (D-066)
   - s23 Full screen button (D-068, an extra I asked for)
   - s24 Skill unlocks (D-069)
-  - s25 Logbook (D-070): pause button 6. Quit is now 7, and the pause menu has 7 buttons.
+  - s25 Logbook (D-077): pause button 6. Quit is now 7, and the pause menu has 7 buttons.
 - 976 headless checks pass.
 - Play link: https://sphilius.github.io/seedshot/ (GitHub Pages, from `gh-pages`). Newest release zip: `web-efc8385`.
   - Publish a new build with `.\tools\publish_pages.ps1 -Export`, then make a GitHub release zip named `web-<short sha>`. Easiest: `git tag web-<sha> <sha>`, push the tag, then `gh release create web-<sha> <zip> --verify-tag` (a short SHA as `--target` is refused).
@@ -52,7 +52,7 @@ Then wait for my yes. If I say "fix the obvious issues you expect", do that and 
 
 ## Remaining Phase 3 items, in order
 
-1. ~~**Logbook**~~ done in s25 (D-070). `scripts/logbook.gd`; every radio line passes `Arena._show_next_story_line`, which writes it down.
+1. ~~**Logbook**~~ done in s25 (D-077). `scripts/logbook.gd`; every radio line passes `Arena._show_next_story_line`, which writes it down.
 2. **Resume buttons** after Lucky's moment, a fuse revive and each machine intro, instead of going back to the game on a timer.
    - The intro clips are `start_clip` / `clip_left` in `scripts/arena.gd`.
    - The fuse is in `receive_cat_gift` and the player's revive.
@@ -81,5 +81,5 @@ Then wait for my yes. If I say "fix the obvious issues you expect", do that and 
 
 1. Run the full suite and say the count.
 2. Export, open the preview, and say what you saw on screen for each item. Say plainly what you couldn't check (sound, a real phone, anything that needs a person playing).
-3. Update the devlog (next ID is D-071), `AI_LOG.md`, `.feedback/checklist.html` in the main folder (never committed) and the guidebook.
+3. Update the devlog (next ID is D-078), `AI_LOG.md`, `.feedback/checklist.html` in the main folder (never committed) and the guidebook.
 4. Tell me the branch name and ask whether to merge and push. Do neither until I say yes.

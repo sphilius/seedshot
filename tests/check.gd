@@ -152,6 +152,8 @@ func _ready() -> void:
 	await _test_s24_skill_unlocks()
 	# s25: the Logbook in the pause menu keeps every Canopy FM and Lucky line.
 	await _test_s25_logbook()
+	# s26: HD display (128 px art, drawn at the device's real resolution).
+	_test_s26_hd_display()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -441,9 +443,10 @@ func _wait_until(condition: Callable, max_seconds: float) -> bool:
 	return condition.call()
 
 
-## Layer 3a: the Klad art. Every sprite must be 64 x 64 and the floor slab one
-## cell big, or the game would stretch pixels and the slab would not line up
-## with the grid. Reading the config here is fine; only WRITING to it is ignored.
+## Layer 3a: the art. Every sprite must be 64-class (64 px times the config's
+## art_texture_scale: 128 px for the s26 HD art) and the floor slab one cell at
+## that scale, or the frame cuts would not line up. On-screen sizes come from the
+## config either way. Reading the config here is fine; only WRITING to it is ignored.
 func _test_art_is_the_right_size() -> void:
 	var sprites: Dictionary[String, Texture2D] = {
 		"player": CONFIG.player_texture,
@@ -451,17 +454,26 @@ func _test_art_is_the_right_size() -> void:
 		"sawbot": CONFIG.sawbot_texture,
 		"spitter": CONFIG.spitter_texture,
 		"cat": CONFIG.cat_texture,
+		"linebreaker": CONFIG.linebreaker_texture,
+		"ripsaw": CONFIG.ripsaw_texture,
+		"arc spitter": CONFIG.arc_spitter_texture,
 	}
 	for sprite_name: String in sprites:
 		var texture: Texture2D = sprites[sprite_name]
-		_check(texture != null and texture.get_size() == Vector2(64.0, 64.0), "the %s sprite is 64 x 64" % sprite_name)
+		# s26: sprites are 64 px per side times the art's texture scale (128 px for the HD art).
+		_check(texture != null and texture.get_size() == Vector2.ONE * 64.0 * CONFIG.art_texture_scale,
+			"the %s sprite is %d px square" % [sprite_name, 64 * CONFIG.art_texture_scale])
 	# The floor tiles are one row of cell-sized squares: one cell tall, a whole
 	# number of cells wide, with at least one detail tile after the plain ones.
 	var tiles: Texture2D = CONFIG.floor_tiles
-	_check(tiles != null and tiles.get_height() == CONFIG.cell_size, "the floor tiles are one cell tall")
+	# s26: one cell is 48 layout px, so a tile is 48 x the art's texture scale picture pixels.
+	_check(tiles != null and tiles.get_height() == CONFIG.cell_size * CONFIG.art_texture_scale, "the floor tiles are one cell tall at the art's scale")
 	if tiles != null:
-		var tile_count: int = tiles.get_width() / CONFIG.cell_size
-		_check(tiles.get_width() % CONFIG.cell_size == 0, "the floor row is a whole number of tiles")
+		var tile_count: int = Arena.floor_tile_count(tiles.get_width(), tiles.get_height())
+		_check(tiles.get_width() % tiles.get_height() == 0, "the floor row is a whole number of tiles")
+		_check(tile_count == 9, "the floor row holds nine tiles (%d)" % tile_count)
+		_check(Arena.floor_tile_count(432, 48) == 9 and Arena.floor_tile_count(864, 96) == 9 and Arena.floor_tile_count(10, 0) == 0,
+			"the tile count comes from the picture: 64-class and HD sheets both give nine")
 		_check(CONFIG.floor_plain_count > 0 and CONFIG.floor_plain_count < tile_count, "there are plain and detail floor tiles")
 		# Every cell of the arena picks a tile that exists, and the same cell
 		# always picks the same tile (so the floor does not shuffle each frame).
@@ -485,7 +497,7 @@ func _test_art_is_the_right_size() -> void:
 			"detail tiles are rare but present (%d of %d cells)" % [details, cells])
 	# 1.3333 x 48 is 63.998, not exactly 64, so allow a tenth of a pixel of slack.
 	# absf() gives the size of a number without its sign.
-	_check(absf(CONFIG.sprite_size_cells * CONFIG.cell_size - 64.0) < 0.1, "sprites are drawn at their real size")
+	_check(absf(CONFIG.sprite_size_cells * CONFIG.cell_size - 64.0) < 0.1, "sprites are drawn 64 layout px wide (the same on-screen size as before s26)")
 
 
 ## The spoken radio lines (audio/voice, made by tools/gen_voices.py): every line the
@@ -1532,8 +1544,12 @@ func _test_windows_and_night() -> void:
 	# The roof picture holds six units side by side, each exactly one unit wide,
 	# and the units packed edge to edge exactly fill the bottom wall.
 	var roofs: Texture2D = CONFIG.home_roofs
-	_check(roofs != null and is_equal_approx(roofs.get_width(), BlockWindows.UNIT_WIDTH * BlockWindows.ROOF_DESIGNS)
-		and is_equal_approx(roofs.get_height(), BlockWindows.ROOF_HEIGHT), "the roof picture holds six whole roof units")
+	# s26: the picture is the layout size times the art's texture scale (104 x 64 per roof in HD).
+	var roof_scale: float = float(CONFIG.art_texture_scale)
+	_check(roofs != null and is_equal_approx(roofs.get_width(), BlockWindows.UNIT_WIDTH * BlockWindows.ROOF_DESIGNS * roof_scale)
+		and is_equal_approx(roofs.get_height(), BlockWindows.ROOF_HEIGHT * roof_scale), "the roof picture holds six whole roof units at the art's scale")
+	_check(BlockWindows.roof_source_rect(2, Vector2(624, 64)) == Rect2(208, 0, 104, 64) and BlockWindows.roof_source_rect(2, Vector2(312, 32)) == Rect2(104, 0, 52, 32),
+		"a roof design is cut from the picture's own size (HD and 64-class)")
 	_check(is_equal_approx(BlockWindows.UNIT_WIDTH * total, CONFIG.grid_cols * CONFIG.cell_size),
 		"one roof unit per window exactly fills the bottom wall")
 
@@ -1723,8 +1739,12 @@ func _test_tree_pictures() -> void:
 	var pictures: Array[Texture2D] = [CONFIG.tree_sapling_texture, CONFIG.tree_grown_texture, CONFIG.tree_cut_texture]
 	var all_sized: bool = true
 	for picture: Texture2D in pictures:
-		all_sized = all_sized and picture != null and picture.get_size() == Vector2(64.0, 64.0)
-	_check(all_sized, "the three tree pictures are 64 x 64")
+		all_sized = all_sized and picture != null and picture.get_size() == Vector2.ONE * 64.0 * CONFIG.art_texture_scale
+	_check(all_sized, "the three tree pictures are %d px square" % (64 * CONFIG.art_texture_scale))
+	# s26: the great sunroot's picture is 72-class (144 px in HD), and its draw ratio matches that.
+	var great: Texture2D = CONFIG.tree_great_texture
+	_check(great != null and great.get_size() == Vector2.ONE * 72.0 * CONFIG.art_texture_scale, "the great sunroot picture is 72-class")
+	_check(is_equal_approx(CONFIG.tree_great_size_ratio, 72.0 / 64.0), "the great sunroot is drawn 72 / 64 the size of a tree")
 	_check(CONFIG.graffiti_font != null, "the graffiti has its marker font")
 	# Seven in the locked design faces the viewer and mirrors to follow the aim.
 	await _fresh_arena()
@@ -1748,9 +1768,16 @@ func _test_tree_pictures() -> void:
 	_check(Player.facing_frame(Vector2.from_angle(deg_to_rad(-30.0)), 8) == 7, "aiming 30 degrees above East picks North-East")
 	_check(seven_sprite.hframes == CONFIG.player_facing_count, "Seven's sprite is cut into one frame per facing")
 	var facings: Texture2D = CONFIG.player_facings_texture
-	_check(facings != null and facings.get_size() == Vector2(64.0 * CONFIG.player_facing_count, 64.0), "the facings strip is one 64 x 64 frame per facing")
+	var frame_px: float = 64.0 * CONFIG.art_texture_scale  # s26: 128 px frames in the HD art
+	_check(facings != null and facings.get_size() == Vector2(frame_px * CONFIG.player_facing_count, frame_px), "the facings strip is one square frame per facing at the art's scale")
+	# Whatever the picture size, Seven is drawn sprite_size_cells cells wide on screen.
+	var seven_on_screen: float = seven_sprite.scale.x * float(seven_sprite.texture.get_width()) / float(seven_sprite.hframes)
+	_check(absf(seven_on_screen - CONFIG.sprite_size_cells * CONFIG.cell_size) < 0.1, "Seven's on-screen size comes from the config (%.1f px)" % seven_on_screen)
+	var aiming_strip: Texture2D = CONFIG.player_facings_aiming_texture
+	_check(aiming_strip != null and aiming_strip.get_size() == facings.get_size(), "the aiming strip (no resting nozzle) is the same size as the facings strip")
+	_check(seven_sprite.texture == aiming_strip, "Seven shows the no-nozzle strip while its aim arm is drawn")
 	var repair: Texture2D = CONFIG.repair_icon_texture
-	_check(repair != null and repair.get_size() == Vector2(64.0, 64.0), "the repair icon is 64 x 64")
+	_check(repair != null and repair.get_size() == Vector2.ONE * 64.0 * CONFIG.art_texture_scale, "the repair icon is at the art's scale")
 	await _fresh_arena()
 	var tree: ForestTree = _arena.spawn_tree(Vector2i(5, 5), false)
 	_check(tree != null and tree.current_texture() == CONFIG.tree_sapling_texture, "a new tree shows the sapling picture")
@@ -2132,7 +2159,9 @@ func _test_upgrades() -> void:
 ## The art pass: props from concept 05_props_b (corner props are solid), and
 ## Lucky's two-frame wave.
 func _test_props_and_lucky_art() -> void:
-	_check(CONFIG.props_texture != null and CONFIG.props_texture.get_width() == Props.FRAMES.size() * 64, "the props picture holds one 64 px frame per prop")
+	_check(CONFIG.props_texture != null and CONFIG.props_texture.get_width() == Props.FRAMES.size() * 64 * CONFIG.art_texture_scale, "the props picture holds one square frame per prop at the art's scale")
+	_check(Props.frame_source_rect(3, Vector2(1152, 128)) == Rect2(384, 0, 128, 128) and Props.frame_source_rect(3, Vector2(576, 64)) == Rect2(192, 0, 64, 64),
+		"a prop frame is cut from the picture's own size (HD and 64-class)")
 	_check(CONFIG.cat_wave_texture != null, "Lucky has a second, paw-down frame")
 	await _fresh_arena()
 	var props: Props = _arena.props
@@ -3896,3 +3925,54 @@ func _test_s24_skill_unlocks() -> void:
 	_check(not _arena.skill_cards_on and _arena.player.bramble_unlocked and _arena.trip_line_unlocked, "without skill cards both skills are there from the start")
 	_arena.waves.wave = 3
 	_check(_arena.upgrades_left_out().has(&"bramble_seed") and _arena.upgrades_left_out().has(&"trip_line") and _arena.upgrades_always_shown().is_empty(), "and their cards are never dealt")
+
+
+## s26 HD display: the window-scale filter rule, the settings that let the web build
+## draw at the device's real resolution, and mipmaps on every sprite (needed by the
+## smooth filter used in small windows).
+func _test_s26_hd_display() -> void:
+	var layout: Vector2 = DisplayFilter.layout_size()
+	_check(layout == Vector2(1280, 720), "the layout is still 1280 x 720 (%s)" % layout)
+	# window_scale: the smaller of the two ratios (stretch aspect "keep" letterboxes the other).
+	_check(is_equal_approx(DisplayFilter.window_scale(Vector2(1280, 720), layout), 1.0), "a 1280 x 720 window is scale 1")
+	_check(is_equal_approx(DisplayFilter.window_scale(Vector2(2560, 1440), layout), 2.0), "a 1440p window is scale 2")
+	_check(is_equal_approx(DisplayFilter.window_scale(Vector2(3840, 1080), layout), 1.5), "a wide window uses the smaller ratio (height)")
+	_check(is_equal_approx(DisplayFilter.window_scale(Vector2(1280, 720), Vector2.ZERO), 1.0), "a zero layout does not divide by zero")
+	# The rule, at the config's threshold and either side of it.
+	var limit: float = CONFIG.pixel_filter_min_scale
+	var nearest := Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
+	var smooth := Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_check(limit > 1.0 and limit <= 2.0, "the pixel-filter threshold is between 1 and 2 (%.2f)" % limit)
+	_check(DisplayFilter.filter_for(layout * limit, layout, limit) == nearest, "exactly at the threshold: hard pixels")
+	_check(DisplayFilter.filter_for(layout * (limit - 0.01), layout, limit) == smooth, "just below the threshold: smooth with mipmaps")
+	_check(DisplayFilter.filter_for(Vector2(1280, 720), layout, 1.5) == smooth, "a 720p window is smooth")
+	_check(DisplayFilter.filter_for(Vector2(1920, 1080), layout, 1.5) == nearest, "a 1080p window has hard pixels")
+	_check(DisplayFilter.filter_for(Vector2(3840, 2160), layout, 1.5) == nearest, "a 4K window has hard pixels")
+	# Phones held in landscape: 812 x 375 CSS pixels at device ratio 3 is 2436 x 1125 (scale 1.56),
+	# at ratio 2 it is 1624 x 750 (scale 1.04).
+	_check(DisplayFilter.filter_for(Vector2(2436, 1125), layout, 1.5) == nearest, "a ratio-3 phone in landscape has hard pixels")
+	_check(DisplayFilter.filter_for(Vector2(1624, 750), layout, 1.5) == smooth, "a ratio-2 phone in landscape is smooth")
+	# The autoload has applied the rule to the real root viewport.
+	var root: Window = get_tree().root
+	_check(root.canvas_item_default_texture_filter == DisplayFilter.filter_for(Vector2(root.size), layout, limit),
+		"the root viewport's filter follows the rule for this window (%s)" % root.size)
+	# Project settings: draw at the device's real resolution, layout unchanged.
+	_check(ProjectSettings.get_setting("display/window/dpi/allow_hidpi") == true, "high-DPI drawing is allowed")
+	_check(ProjectSettings.get_setting("display/window/stretch/mode") == "canvas_items", "stretch mode is still canvas_items")
+	_check(ProjectSettings.get_setting("display/window/stretch/aspect") == "keep", "stretch aspect is still keep")
+	_check(ProjectSettings.get_setting("rendering/renderer/rendering_method") == "gl_compatibility", "the Compatibility renderer is kept")
+	# The web export preset: no threads (iPhone Safari), canvas resized to the page (2 = adaptive).
+	var presets := ConfigFile.new()
+	_check(presets.load("res://export_presets.cfg") == OK, "export_presets.cfg reads")
+	_check(presets.get_value("preset.0.options", "variant/thread_support", true) == false, "the web build has no thread support")
+	_check(presets.get_value("preset.0.options", "html/canvas_resize_policy", 0) == 2, "the web canvas resize policy is adaptive")
+	# Mipmaps on every sprite, or the smooth filter has nothing to use when the art is shrunk.
+	var missing: PackedStringArray = []
+	for folder: String in ["res://art/sprites/", "res://art/sprites/upgrades/"]:
+		for file: String in DirAccess.get_files_at(folder):
+			if not file.ends_with(".png"):
+				continue
+			var settings := ConfigFile.new()
+			if settings.load(folder + file + ".import") != OK or settings.get_value("params", "mipmaps/generate", false) != true:
+				missing.append(file)
+	_check(missing.is_empty(), "every sprite is imported with mipmaps (missing: %s)" % ", ".join(missing))

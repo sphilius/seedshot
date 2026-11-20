@@ -22,6 +22,7 @@ config/features=PackedStringArray("4.7", "GL Compatibility")
 Sfx="*res://scripts/sfx.gd"
 CanopyFM="*res://scripts/canopy_fm.gd"
 RunState="*res://scripts/run_state.gd"
+DisplayFilter="*res://scripts/display_filter.gd"
 
 [display]
 
@@ -29,6 +30,7 @@ window/size/viewport_width=1280
 window/size/viewport_height=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="keep"
+window/dpi/allow_hidpi=true
 
 [input]
 

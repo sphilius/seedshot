@@ -34,9 +34,22 @@ extends Resource
 @export var aim_line_cells: float = 9.0
 @export var aim_line_color: Color = Color(1.6, 1.5, 0.9, 0.5)
 @export var aim_line_width: float = 2.5
-## The nozzle drawn over Seven, pointing along the aim, and its length in pixels.
-@export var aim_nozzle_color: Color = Color(1.3, 1.25, 1.0)
-@export var aim_nozzle_length: float = 16.0
+## THE NOZZLE ARM (s24): while Seven aims, its RIGHT arm is drawn reaching out along the aim and
+## ending in the gold watering-spout nozzle (it replaced a grey gun-barrel). The arm is an emerald
+## line from the right shoulder to the hand; the spout is a gold tube that flares into a bell.
+## Lengths are pixels, offsets are fractions of a cell. Gold's first number is above 1 so the
+## spout stays bright under the night tint, like the aim line.
+@export var aim_nozzle_length: float = 15.0
+@export var aim_arm_color: Color = Color(0.06, 0.62, 0.40)
+@export var aim_arm_width: float = 5.0
+@export var aim_spout_color: Color = Color(1.25, 1.0, 0.35)
+@export var aim_spout_rim_color: Color = Color(1.5, 1.35, 0.7)
+@export var aim_spout_width: float = 4.0
+@export var aim_spout_bell_width: float = 9.0
+## Where the right shoulder is, measured from the middle of Seven: sideways (left or right on the
+## screen, depending on which way Seven faces) and down from the middle, in cells.
+@export var aim_shoulder_reach_cells: float = 0.2
+@export var aim_shoulder_height_cells: float = 0.06
 ## How far Seven's body leans toward the aim, in radians (0.2 is about 11 degrees).
 @export var aim_lean_radians: float = 0.2
 ## Collision circle radius as a fraction of a cell. Under 0.5 so the player fits
@@ -191,7 +204,7 @@ extends Resource
 ## than 3. New Game +: from wave 4, never more than 5. Used as written.
 @export var wave_ripsaws: Array[int] = [0, 0, 0, 0, 0, 0, 1, 2, 2, 3]
 @export var ng_plus_wave_ripsaws: Array[int] = [0, 0, 0, 1, 2, 2, 3, 4, 4, 5]
-@export var dj_first_ripsaw: Array[String] = ["Uh oh. That big red one is a Ripsaw. It fells a tree in half the time, so stop it before it reaches the Heart Tree."]
+@export var dj_first_ripsaw: Array[String] = ["Uh oh. That big one with the striped blade is a Ripsaw. It fells a tree in half the time, so stop it before it reaches the Heart Tree."]
 @export_range(0.1, 0.49) var sawbot_radius_cells: float = 0.36
 ## How often a Sawbot picks its next tree and recalculates its route.
 @export var sawbot_repath_interval: float = 0.5
@@ -1010,6 +1023,10 @@ extends Resource
 ## North-West, North, North-East. Leave it empty to use the single front picture
 ## (player_texture), which is then mirrored left or right to follow the aim.
 @export var player_facings_texture: Texture2D
+## The same strip with the resting gold nozzle painted out (tools/gen_seven_sprites.py). While Seven
+## is aiming, the game draws its own gold nozzle ARM along the aim (player.gd `_draw_nozzle`), so
+## it shows this strip instead, to avoid two nozzles. Optional: empty means always use the plain strip.
+@export var player_facings_aiming_texture: Texture2D
 ## How many frames the facings strip holds (8 = a frame every 45 degrees).
 @export var player_facing_count: int = 8
 ## How big the repair icon is drawn, in pixels (the picture is 64 x 64).
@@ -1017,6 +1034,11 @@ extends Resource
 @export var scrapper_texture: Texture2D
 @export var sawbot_texture: Texture2D
 @export var spitter_texture: Texture2D
+## The heavy variants have their own pictures (s21 redesign). Each is optional: left empty, the
+## variant falls back to its plain sibling's picture plus the old colour tint.
+@export var linebreaker_texture: Texture2D
+@export var ripsaw_texture: Texture2D
+@export var arc_spitter_texture: Texture2D
 @export var cat_texture: Texture2D
 ## Lucky's second frame, paw dipped (tools/lucky_wave.py). The shop swaps between
 ## the two every cat_wave_seconds, so Lucky beckons.
@@ -1050,6 +1072,24 @@ extends Resource
 ## quieter floor, so the sprites stand out more.
 @export var floor_tint: Color = Color(0.85, 0.85, 0.88)
 ## Drawn size of a sprite relative to one cell (1.0 = exactly one cell wide).
-## 64 / 48 = 1.3333 draws a 64 px sprite at its real size, so no pixel is
-## stretched or squeezed.
+## 64 / 48 = 1.3333 draws a sprite 64 layout pixels wide (the game's layout is
+## 1280 x 720). s26: this is the ONLY thing that sets a sprite's on-screen size;
+## the picture's own pixel size never does, so 128 px art shows at the same size.
 @export var sprite_size_cells: float = 1.3333
+## s26 HD art: how many picture pixels the art has per layout pixel. 1 = the old
+## 64 px art (64 px sprites, 48 px floor tiles, 52 x 32 roofs); 2 = the 128 px art
+## (128 px sprites, 96 px tiles, 104 x 64 roofs). Unit: picture pixels per layout
+## pixel. It does NOT change any on-screen size; the checks use it to confirm
+## every picture has the size the art set should have.
+@export var art_texture_scale: int = 2
+## How much bigger the great sunroot is drawn than a normal tree (its picture is
+## 72 to the others' 64, so 1.125). Unit: a multiplier of the normal tree size.
+@export var tree_great_size_ratio: float = 1.125
+
+@export_group("HD display")
+## s26: below this window scale the art is drawn SMOOTHED (linear filtering with
+## mipmaps, so nothing shimmers when the 128 px art is shrunk); at or above it,
+## with hard pixel edges (nearest). Window scale = min(window width / 1280,
+## window height / 720), in real screen pixels. Unit: a multiplier (1.5 = a
+## 1920 x 1080 window or a 1280 x 720 one on a 150% display).
+@export var pixel_filter_min_scale: float = 1.5

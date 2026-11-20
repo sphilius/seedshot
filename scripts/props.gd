@@ -13,13 +13,20 @@ extends Node2D
 ##              table, one in each corner of the floor. These are SOLID, like a
 ##              tree that can't be cut: they block walking, pods and shots.
 ##
-## The pictures are frames of art/sprites/props.png (tools/prop_sprites.py), one
-## 64 x 64 frame each, in the order of FRAMES.
+## The pictures are frames of art/sprites/props.png, one square frame each, in the
+## order of FRAMES (128 x 128 since the s26 HD art, from tools/gen_128.py).
 
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
 ## Frame order in props.png. Must match PROPS in tools/prop_sprites.py.
 const FRAMES: Array[StringName] = [&"meter", &"notice", &"notice_x", &"planter", &"barrel", &"cable", &"panel", &"bike", &"chair"]
-const FRAME_PX: float = 64.0
+
+
+## The square of props.png that holds frame number `frame`, in PICTURE pixels.
+## s26: the frame size comes from the picture (its width / the number of frames),
+## so 64 px and 128 px art both work. `static` = the tests can call it alone.
+static func frame_source_rect(frame: int, picture_size: Vector2) -> Rect2:
+	var frame_px: float = picture_size.x / float(FRAMES.size())
+	return Rect2(frame * frame_px, 0.0, frame_px, frame_px)
 
 ## Brick size in pixels, and the mortar colour (darker than the wall, see-through).
 const BRICK: Vector2 = Vector2(24.0, 12.0)
@@ -117,7 +124,7 @@ func _draw() -> void:
 	for placement: Array in _placements:
 		var frame: int = FRAMES.find(placement[0])
 		var centre: Vector2 = _grid.cell_to_world(placement[1])
-		var source := Rect2(frame * FRAME_PX, 0.0, FRAME_PX, FRAME_PX)
-		# Drawn at the same size as other sprites (64 px picture -> sprite size).
+		var source: Rect2 = frame_source_rect(frame, CONFIG.props_texture.get_size())
+		# Drawn at the same on-screen size as other sprites, whatever the picture's size.
 		var size: float = CONFIG.sprite_size_cells * float(CONFIG.cell_size)
 		draw_texture_rect_region(CONFIG.props_texture, Rect2(centre - Vector2.ONE * size / 2.0, Vector2.ONE * size), source)

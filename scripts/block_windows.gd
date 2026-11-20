@@ -247,6 +247,15 @@ func _process(delta: float) -> void:
 		queue_redraw()
 
 
+## The part of the roof picture that holds roof design `design` (0 to
+## ROOF_DESIGNS - 1), in PICTURE pixels: the picture is ROOF_DESIGNS equal roofs
+## side by side in one row. s26: from the picture's size, not from UNIT_WIDTH,
+## so the HD roofs (104 x 64 each) are cut correctly. `static` = testable alone.
+static func roof_source_rect(design: int, picture_size: Vector2) -> Rect2:
+	var width: float = picture_size.x / float(ROOF_DESIGNS)
+	return Rect2(design * width, 0.0, width, picture_size.y)
+
+
 ## _draw paints the homes, their windows, and the next block's row.
 func _draw() -> void:
 	var unit: int = 0  # counts units along the whole row, left to right
@@ -258,7 +267,10 @@ func _draw() -> void:
 				# The roof picture holds six designs side by side. Stepping by 5
 				# (not 1) through them keeps two neighbours from repeating a pattern.
 				var design: int = (unit * 5) % ROOF_DESIGNS
-				var source := Rect2(design * UNIT_WIDTH, 0.0, UNIT_WIDTH, ROOF_HEIGHT)
+				# s26: the SOURCE is cut from the picture's own size (six designs
+				# across, one row high), so 52 x 32 or 104 x 64 art both work; the
+				# TARGET roof_rect stays UNIT_WIDTH x ROOF_HEIGHT layout pixels.
+				var source := roof_source_rect(design, CONFIG.home_roofs.get_size())
 				draw_texture_rect_region(CONFIG.home_roofs, roof_rect, source)
 			else:
 				draw_rect(roof_rect, HOME_COLOR)

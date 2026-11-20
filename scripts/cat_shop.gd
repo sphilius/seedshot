@@ -95,10 +95,11 @@ func _ready() -> void:
 	_cat = Sprite2D.new()
 	_cat.texture = CONFIG.cat_texture
 	_cat.visible = false
-	# The cat is drawn smaller than its 64 px art to fit the window. Smooth
+	# The cat is drawn much smaller than its 128 px art to fit the shop. Smooth
 	# (linear) scaling keeps its face readable; hard-pixel scaling would drop
-	# whole rows of pixels at this size.
-	_cat.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	# whole rows of pixels at this size. s26: WITH MIPMAPS (pre-shrunk copies of
+	# the picture), because plain linear still sparkles when shrinking this far.
+	_cat.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	if _cat.texture != null:
 		# Scale the art to 80% of the shop's height.
 		_cat.scale = Vector2.ONE * (cell_px * 0.8 / float(_cat.texture.get_height()))

@@ -39,7 +39,8 @@ signal hurt
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
 ## Physics layer 1 ("world") as a bit mask, for ray and shape queries.
 const WORLD_MASK: int = 1
-const FALLBACK_COLOR: Color = Color(0.30, 0.70, 0.72)
+# Emerald (#0b8f5c), Seven's colour since the s24 redesign; used only if the texture is missing.
+const FALLBACK_COLOR: Color = Color(0.043, 0.561, 0.361)
 const VINE_COLOR: Color = Color(0.45, 0.85, 0.35)
 const RETICLE_COLOR: Color = Color(1.0, 1.0, 1.0, 0.8)
 ## How long the vine stays drawn after it lashes a machine.
@@ -804,6 +805,10 @@ func _update_aim() -> void:
 	if _sprite.hframes > 1:
 		_sprite.frame = facing_frame(aim_direction, _sprite.hframes)
 		_sprite.rotation = 0.0
+		# While the aim arm is drawn (see _draw_nozzle) show the strip without the resting
+		# nozzle; when Seven is down or locked on the upgrade cards, show the plain strip.
+		if CONFIG.player_facings_aiming_texture != null:
+			_sprite.texture = CONFIG.player_facings_aiming_texture if is_aim_shown() else CONFIG.player_facings_texture
 		return
 	# Without it, Seven stands facing the viewer (the locked design,
 	# tools/seven_sprite.py) and does not spin round: it turns to look left or right
@@ -863,17 +868,44 @@ func _draw_aim_line() -> void:
 	draw_circle(end, 3.0, Color(CONFIG.aim_line_color, 0.8))
 
 
-## Draws the nozzle on the overlay node: a short thick barrel pointing along the
-## aim, so Seven visibly points where it shoots. (Every draw call starts with
-## "_aim_overlay." because we are painting on that node, above the sprite.)
+## Draws Seven's nozzle ARM on the overlay node: the right arm reaches out along the aim and
+## ends in the gold watering-spout nozzle, so Seven visibly points where it shoots. (Every draw
+## call starts with "_aim_overlay." because we are painting on that node, above the sprite.)
 func _draw_nozzle() -> void:
 	if not is_aim_shown():
 		return
-	var base: Vector2 = aim_direction * (CONFIG.player_radius_cells * CONFIG.cell_size - 4.0)
-	var tip: Vector2 = base + aim_direction * CONFIG.aim_nozzle_length
-	_aim_overlay.draw_line(base, tip, Color(0.05, 0.07, 0.09), 8.0)  # dark outline
-	_aim_overlay.draw_line(base, tip, CONFIG.aim_nozzle_color, 4.0)
-	_aim_overlay.draw_circle(tip, 3.0, CONFIG.aim_line_color)
+	var cell_px: float = float(CONFIG.cell_size)
+	# The hand: where the arm ends and the spout begins (the same spot the old barrel started).
+	var hand: Vector2 = aim_direction * (CONFIG.player_radius_cells * cell_px - 4.0)
+	# The right shoulder. "Right" is a quarter turn clockwise from the facing direction (on the
+	# screen, y grows downward): Seven facing down the screen has its right arm on the screen's
+	# left, facing right has it nearest the viewer. Only the sideways part moves the shoulder.
+	var right: Vector2 = Vector2(-aim_direction.y, aim_direction.x)
+	var shoulder: Vector2 = Vector2(right.x * CONFIG.aim_shoulder_reach_cells * cell_px, CONFIG.aim_shoulder_height_cells * cell_px)
+	var dark: Color = Color(0.05, 0.07, 0.09)
+	# The arm: a dark line under a slightly thinner emerald one gives it an outline.
+	_aim_overlay.draw_line(shoulder, hand, dark, CONFIG.aim_arm_width + 3.0)
+	_aim_overlay.draw_line(shoulder, hand, CONFIG.aim_arm_color, CONFIG.aim_arm_width)
+	# The spout: a tube that flares into a bell. `across` is a unit vector at right angles to the
+	# aim, so +/- across * half_width gives the two sides of the shape.
+	var across: Vector2 = right
+	var neck: Vector2 = hand + aim_direction * CONFIG.aim_nozzle_length * 0.5
+	var tip: Vector2 = hand + aim_direction * CONFIG.aim_nozzle_length
+	var tube: float = CONFIG.aim_spout_width / 2.0
+	var bell: float = CONFIG.aim_spout_bell_width / 2.0
+	# Dark outline first (the same shape, a little bigger), then the gold fill on top of it.
+	var outline: PackedVector2Array = PackedVector2Array([
+		hand + across * (tube + 1.5), neck + across * (tube + 1.5), tip + aim_direction * 1.5 + across * (bell + 1.5),
+		tip + aim_direction * 1.5 - across * (bell + 1.5), neck - across * (tube + 1.5), hand - across * (tube + 1.5),
+	])
+	_aim_overlay.draw_colored_polygon(outline, dark)
+	var spout: PackedVector2Array = PackedVector2Array([
+		hand + across * tube, neck + across * tube, tip + across * bell,
+		tip - across * bell, neck - across * tube, hand - across * tube,
+	])
+	_aim_overlay.draw_colored_polygon(spout, CONFIG.aim_spout_color)
+	# A pale rim across the mouth of the bell, so it reads as an opening.
+	_aim_overlay.draw_line(tip + across * bell, tip - across * bell, CONFIG.aim_spout_rim_color, 2.0)
 
 
 ## Returns the machine nearest to `world_point`, if one is within `pick_radius`

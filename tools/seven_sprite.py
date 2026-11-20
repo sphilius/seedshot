@@ -1,4 +1,8 @@
-"""seven_sprite.py - draw Seven, the player's robot, in Sasha's locked design.
+"""OBSOLETE since s24: Seven was redesigned (emerald Engineer) and its pixel strip now comes from
+tools/gen_seven_sprites.py. DO NOT RUN THIS FILE: it would overwrite the new sprites with the old teal
+cream-dome robot. Kept as history.
+
+seven_sprite.py - draw Seven, the player's robot, in Sasha's locked design.
 
 THE LOCKED DESIGN (art/ART_DIRECTION.md, the robot in concept 07_key_art_b)
     A cream dome head with a teal stripe and two small dark rectangular eyes; a teal barrel

@@ -69,8 +69,10 @@ var _cooldown_left: float = 0.0
 ## _ready runs once when the Spitter enters the scene.
 func _ready() -> void:
 	var start_hp: int = CONFIG.arc_spitter_hp if arc else CONFIG.spitter_hp
-	_configure_body(start_hp, CONFIG.spitter_radius_cells, CONFIG.spitter_texture, FALLBACK_COLOR)
-	if arc:
+	# An Arc Spitter has its own picture; without one it is the Spitter's picture, tinted.
+	var own_picture: bool = arc and CONFIG.arc_spitter_texture != null
+	_configure_body(start_hp, CONFIG.spitter_radius_cells, CONFIG.arc_spitter_texture if own_picture else CONFIG.spitter_texture, FALLBACK_COLOR)
+	if arc and not own_picture:
 		_sprite.self_modulate = CONFIG.arc_spitter_tint
 	# A Spitter that has just walked in waits half a cooldown before its first
 	# shot, so nothing fires the instant it appears.

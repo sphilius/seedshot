@@ -1,4 +1,8 @@
-"""seven_facings.py - turn Seven (the locked cream-dome design) to face 8 directions.
+"""OBSOLETE since s24: Seven was redesigned (emerald Engineer) and its pixel strip now comes from
+tools/gen_seven_sprites.py. DO NOT RUN THIS FILE: it would overwrite the new sprites with the old teal
+cream-dome robot. Kept as history.
+
+seven_facings.py - turn Seven (the locked cream-dome design) to face 8 directions.
 
 WHY
     tools/seven_sprite.py draws Seven facing the viewer. The game used to mirror that one

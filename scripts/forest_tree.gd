@@ -291,11 +291,13 @@ func _draw() -> void:
 	var cell_px: float = float(CONFIG.cell_size)
 	var picture: Texture2D = current_texture()
 	if picture != null:
-		# Drawn at the same size as every other sprite (64 px), centred on the cell.
-		# 64 px pictures are drawn at sprite size; a bigger picture (the great
-		# sunroot is 72 px) is drawn bigger by the same proportion.
+		# Drawn at the same size as every other sprite, centred on the cell. s26:
+		# the size comes from the config only, never from the picture's pixel
+		# size, so 64 px and 128 px art show the same. The great sunroot is drawn
+		# tree_great_size_ratio bigger (its picture is 72 to the others' 64).
 		# pop_scale() is 1.0 except during the brief "it grew!" swell.
-		var size: float = CONFIG.sprite_size_cells * cell_px * float(picture.get_width()) / 64.0 * pop_scale() * drawn_scale()
+		var size_ratio: float = CONFIG.tree_great_size_ratio if picture == CONFIG.tree_great_texture else 1.0
+		var size: float = CONFIG.sprite_size_cells * cell_px * size_ratio * pop_scale() * drawn_scale()
 		# A tap tree is drawn with a warm gold tint (the last argument multiplies its colours).
 		var tint: Color = CONFIG.tap_tree_tint if is_tap else Color.WHITE
 		if is_heart:
