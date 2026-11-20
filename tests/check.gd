@@ -144,6 +144,8 @@ func _ready() -> void:
 	await _test_s19_lucky()
 	await _test_s19_bigger_trees()
 	await _test_s19_fuse_saves_once()
+	# s22: phase 3, the seed shooter's reload.
+	await _test_s22_reload()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -186,6 +188,68 @@ func _fresh_arena(with_heart: bool = false) -> void:
 	# Give the physics engine two steps to register the new bodies.
 	await get_tree().physics_frame
 	await get_tree().physics_frame
+
+
+## s22 RELOAD: the shooter holds seed_clip_size pods, reloads by itself when empty
+## (or on R), each Quick Reload card takes time off, and a new wave refills it.
+func _test_s22_reload() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	_check(InputMap.has_action(&"reload"), "input action 'reload' exists (R)")
+	_check(CONFIG.seed_clip_size == 10 and is_equal_approx(CONFIG.reload_seconds, 3.0), "a load is 10 pods and the first reload is 3 s")
+	_check(player.seeds_in_clip == CONFIG.seed_clip_size, "Seven starts with a full load")
+	_check(not player.start_reload(), "R with a full load does nothing")
+
+	# Fire the whole load. Clearing the private cooldown between shots skips the
+	# 0.22 s wait, so the check does not have to sit through it.
+	var fired: int = 0
+	for i: int in CONFIG.seed_clip_size:
+		player._fire_cooldown_left = 0.0
+		if player.fire(Vector2.RIGHT):
+			fired += 1
+	_check(fired == CONFIG.seed_clip_size, "all %d pods of a load fire" % CONFIG.seed_clip_size)
+	_check(player.is_reloading() and is_equal_approx(player.reload_left, CONFIG.reload_seconds), "the last pod starts a %.1f s reload by itself" % CONFIG.reload_seconds)
+	player._fire_cooldown_left = 0.0
+	_check(not player.fire(Vector2.RIGHT), "the 11th pod does not fire while reloading")
+
+	# Let the reload run in game time. 170 physics frames is 2.83 s: not done yet.
+	await _wait_frames_physics(170)
+	_check(player.is_reloading() and player.seeds_in_clip == 0, "still reloading just before 3 s")
+	var done: Callable = func() -> bool: return not player.is_reloading()
+	_check(await _wait_until(done, 0.5), "the reload finishes at 3 s")
+	_check(player.seeds_in_clip == CONFIG.seed_clip_size, "and the load is full again")
+	player._fire_cooldown_left = 0.0
+	_check(player.fire(Vector2.RIGHT), "and Seven can fire again")
+
+	# R reloads early once a pod has gone.
+	_check(player.start_reload(), "R with pods missing starts a reload")
+	_check(not player.start_reload(), "a second R while reloading does nothing")
+
+	# A new wave refills the load at once.
+	_arena.waves.start_wave(2)
+	_check(not player.is_reloading() and player.seeds_in_clip == CONFIG.seed_clip_size, "a new wave starts with a full load")
+
+	# The Quick Reload card: 0.6 s off per pick, four picks, ending at 0.6 s.
+	var expected: Array[float] = [3.0, 2.4, 1.8, 1.2, 0.6]
+	for picks: int in expected.size():
+		_check(is_equal_approx(Arena.reload_seconds_after(picks), expected[picks]), "after %d Quick Reloads the reload takes %.1f s" % [picks, expected[picks]])
+	for i: int in CONFIG.upgrade_reload_max_picks:
+		_check(not _arena.upgrades_left_out().has(&"quick_reload"), "Quick Reload is still dealt after %d picks" % i)
+		_arena.apply_upgrade(&"quick_reload")
+		_check(is_equal_approx(player.reload_seconds, expected[i + 1]), "pick %d: Seven's reload is now %.1f s" % [i + 1, expected[i + 1]])
+	_check(_arena.upgrades_left_out().has(&"quick_reload"), "after %d picks Quick Reload is no longer dealt" % CONFIG.upgrade_reload_max_picks)
+	# The shorter reload is the one really used.
+	player.seeds_in_clip = 1
+	player._fire_cooldown_left = 0.0
+	player.fire(Vector2.RIGHT)
+	_check(is_equal_approx(player.reload_left, 0.6), "with four picks a reload really takes 0.6 s")
+	_check(UpgradePicker._describe(&"quick_reload") == "Reloads 0.6 s faster. Stacks 4 times.", "the Quick Reload card reads right")
+
+
+## Lets `count` physics frames go by (one frame is 1/60 s of game time).
+func _wait_frames_physics(count: int) -> void:
+	for i: int in count:
+		await get_tree().physics_frame
 
 
 ## Lets the game run until `condition` returns true or `max_seconds` pass.

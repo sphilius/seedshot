@@ -220,6 +220,8 @@ var tree_hp_bonus: int = 0
 var sapling_time_scale: float = 1.0
 ## How many Quick Roots have been picked (each one adds to the rooting rate).
 var quick_roots_taken: int = 0
+## How many Quick Reload cards have been picked (s22). Public for the tests.
+var quick_reloads_taken: int = 0
 ## Pips the last Patch Kit gave back. Public for the tests.
 var last_repair_pips: int = 0
 ## Every upgrade picked this run, in order. Public for tests.
@@ -1170,6 +1172,8 @@ func _on_wave_started(number: int, total: int) -> void:
 			_tap_trees_at_wave_start.append(cell)
 		if _trees_by_cell[cell].is_great:
 			_great_trees_at_wave_start.append(cell)
+	# Every wave starts with a full load of seed pods (s22 reload).
+	player.refill_seeds()
 	# Remember Seven's health too: a restarted wave gives back exactly this much.
 	# (A restart calls this again, right after the revive, so the number stays.)
 	if not player.is_dead and not _is_restarting:
@@ -1820,6 +1824,9 @@ func apply_upgrade(id: StringName) -> void:
 			sapling_time_scale = 1.0 / (1.0 + CONFIG.upgrade_sapling_rate_gain * float(quick_roots_taken))
 		&"long_trellis":
 			great_powers.trellis_bonus_seconds += CONFIG.upgrade_trellis_seconds
+		&"quick_reload":
+			quick_reloads_taken += 1
+			player.reload_seconds = reload_seconds_after(quick_reloads_taken)
 	_show_banner(UpgradePicker.CATALOG[id][0] + "!", 1.2)
 	Sfx.play(&"grow")
 	player.locked = false  # the cards are gone: Seven can move again
@@ -1832,7 +1839,17 @@ func upgrades_left_out() -> Array[StringName]:
 	var left_out: Array[StringName] = []
 	if player.hp >= player.max_hp:
 		left_out.append(&"thick_plating")
+	# Quick Reload stops being dealt once it has been taken as often as it stacks.
+	if quick_reloads_taken >= CONFIG.upgrade_reload_max_picks:
+		left_out.append(&"quick_reload")
 	return left_out
+
+
+## How long a reload takes after `picks` Quick Reload cards: the config's
+## reload_seconds, less upgrade_reload_seconds_off per pick (never below zero).
+## `static`: needs no arena, so the tests can call it on its own.
+static func reload_seconds_after(picks: int) -> float:
+	return maxf(CONFIG.reload_seconds - CONFIG.upgrade_reload_seconds_off * float(picks), 0.0)
 
 
 ## How many grown trees (of any kind) stand within `radius_cells` of `point`.

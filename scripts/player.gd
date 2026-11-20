@@ -27,6 +27,9 @@ signal bramble_thrown(at: Vector2)
 signal health_changed(current: int, maximum: int)
 ## Emitted once, when hit points reach zero. The arena restarts the run.
 signal died
+## Emitted when a reload starts, and when it is done and the load is full again.
+signal reload_started
+signal reloaded
 ## Emitted when the spare fuse saves Seven from going down.
 signal fuse_used
 ## Emitted for every hit that counts (also the one that knocks Seven out). The
@@ -70,6 +73,14 @@ var hp: int = 0
 var max_hp: int = CONFIG.player_max_hp
 ## Multiplies the time between seed pods (Seed Pouch upgrades make it smaller).
 var fire_cooldown_scale: float = 1.0
+## RELOAD (s22). Pods left in the shooter, out of CONFIG.seed_clip_size.
+var seeds_in_clip: int = CONFIG.seed_clip_size
+## How long a reload takes. Starts at the config's reload_seconds; the arena
+## lowers it when a Quick Reload card is picked ("call down").
+var reload_seconds: float = CONFIG.reload_seconds
+## Seconds left of the reload in progress; 0 = not reloading. Public so the HUD
+## drawing and the tests can read it.
+var reload_left: float = 0.0
 ## Bramble Seeds in hand (the third seed type), and seconds until the next one
 ## grows back. Public so the HUD and tests can read them.
 var bramble_charges: int = CONFIG.bramble_max_charges
@@ -160,6 +171,7 @@ func _ready() -> void:
 	_aim_overlay.draw.connect(_draw_hurt_arc)  # a signal can call several functions
 	_aim_overlay.draw.connect(_draw_wear)
 	_aim_overlay.draw.connect(_draw_fuse_shield)
+	_aim_overlay.draw.connect(_draw_reload)
 
 
 ## _physics_process runs 60 times per second: cooldowns, aiming, walking, firing.
@@ -173,6 +185,7 @@ func _physics_process(delta: float) -> void:
 	hurt_arc_left = maxf(hurt_arc_left - delta, 0.0)
 	_update_hit_blink(delta)
 	_tick_brambles(delta)
+	_tick_reload(delta)
 	if is_dead:
 		return  # a downed bot does nothing until the arena restarts
 	if locked:
@@ -211,6 +224,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed(&"bramble"):
 		throw_bramble()
+	if event.is_action_pressed(&"reload"):
+		start_reload()
 	if event.is_action_pressed(&"vine"):
 		try_vine(get_global_mouse_position())
 
@@ -323,10 +338,17 @@ func _tick_brambles(delta: float) -> void:
 
 
 ## Fires one seed pod along `direction`, if the cooldown allows. Returns true if fired.
+## While reloading (or with an empty load) nothing fires. The last pod of a load
+## starts the reload by itself.
 func fire(direction: Vector2) -> bool:
 	if is_dead or locked or _fire_cooldown_left > 0.0 or direction == Vector2.ZERO:
 		return false
+	if is_reloading() or seeds_in_clip <= 0:
+		return false
 	_fire_cooldown_left = CONFIG.seed_cooldown * fire_cooldown_scale
+	seeds_in_clip -= 1
+	if seeds_in_clip == 0:
+		start_reload()
 	var unit: Vector2 = direction.normalized()
 	# Start the pod just outside our own hit circle, so it never begins inside us.
 	var muzzle_distance: float = CONFIG.player_radius_cells * CONFIG.cell_size + CONFIG.seed_radius
@@ -334,6 +356,73 @@ func fire(direction: Vector2) -> bool:
 	seed_fired.emit(muzzle, unit)
 	Sfx.play(&"fire")
 	return true
+
+
+## True while a reload is under way.
+func is_reloading() -> bool:
+	return reload_left > 0.0
+
+
+## Starts a reload: the R key, or the last pod of a load. Does nothing if one is
+## already going, the load is full, or Seven is down. Returns true if it started.
+func start_reload() -> bool:
+	if is_dead or is_reloading() or seeds_in_clip >= CONFIG.seed_clip_size:
+		return false
+	# A reload time of 0 or less (too many cards) would never count down: refill now.
+	if reload_seconds <= 0.0:
+		refill_seeds()
+		return true
+	reload_left = reload_seconds
+	reload_started.emit()
+	return true
+
+
+## Fills the load at once and stops any reload. The arena calls this at the start
+## of every wave; revive() calls it too.
+func refill_seeds() -> void:
+	seeds_in_clip = CONFIG.seed_clip_size
+	reload_left = 0.0
+
+
+## Counts the reload down; when it reaches zero the load is full again. It keeps
+## counting while the cards are up, which only matters if the wave start refill
+## comes first (it always does).
+func _tick_reload(delta: float) -> void:
+	if not is_reloading():
+		return
+	reload_left = maxf(reload_left - delta, 0.0)
+	if reload_left == 0.0:
+		seeds_in_clip = CONFIG.seed_clip_size
+		Sfx.play(&"reload")
+		reloaded.emit()
+
+
+## Paints the reload state on the overlay node: while reloading, a ring that fills
+## clockwise from 12 o'clock; otherwise a row of small pips under Seven, one per
+## pod, bright for the pods left and dim for the ones used.
+func _draw_reload() -> void:
+	if not is_aim_shown():
+		return
+	var cell_px: float = float(CONFIG.cell_size)
+	if is_reloading():
+		# 0 just after the reload starts, 1 when it is done.
+		var done: float = 1.0 - reload_left / maxf(reload_seconds, 0.001)
+		var radius: float = CONFIG.reload_ring_radius_cells * cell_px
+		# A faint full circle first, so the player can see how far there is to go.
+		_aim_overlay.draw_arc(Vector2.ZERO, radius, 0.0, TAU, 40, Color(CONFIG.reload_ring_color, 0.2), 4.0, true)
+		_aim_overlay.draw_arc(Vector2.ZERO, radius, -PI / 2.0, -PI / 2.0 + TAU * done, 40, CONFIG.reload_ring_color, 4.0, true)
+		return
+	# The pips: centred under Seven, left to right. The leftmost ones are the full ones.
+	var count: int = CONFIG.seed_clip_size
+	var spacing: float = CONFIG.clip_pip_spacing
+	var first_x: float = -spacing * float(count - 1) / 2.0
+	var y: float = CONFIG.clip_pips_below_cells * cell_px
+	for i: int in count:
+		var at := Vector2(first_x + spacing * float(i), y)
+		var full: bool = i < seeds_in_clip
+		# A dark dot behind each pip, so the row reads on light and dark floor.
+		_aim_overlay.draw_circle(at, 2.6, Color(0.0, 0.0, 0.0, 0.6))
+		_aim_overlay.draw_circle(at, 1.8, CONFIG.clip_pip_color if full else CONFIG.clip_pip_empty_color)
 
 
 ## Tries to latch the vine onto the tree at `world_point` and zip to it.
@@ -424,6 +513,7 @@ func revive(world_position: Vector2, start_hp: int = 0) -> void:
 	is_zipping = false
 	bramble_charges = CONFIG.bramble_max_charges  # a fresh start refills the seeds
 	bramble_recharge_left = 0.0
+	refill_seeds()  # ...and a full load of seed pods
 	modulate = Color.WHITE
 	fuse_shield_left = 0.0
 	_reset_body()  # stand the picture back up after the knock-out

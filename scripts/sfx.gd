@@ -58,6 +58,9 @@ func _ready() -> void:
 	_streams[&"bind"] = _make_blip(900.0, 300.0, 0.16, 0.25)
 	_streams[&"spit"] = _make_blip(700.0, 250.0, 0.10, 0.25)
 	_streams[&"wave_clear"] = _make_blip(500.0, 1000.0, 0.35, 0.30)
+	# s22: the click-up of the seed shooter when a reload is done. (A beep for now;
+	# drop audio/sfx/reload.mp3 in to replace it.)
+	_streams[&"reload"] = _make_blip(350.0, 950.0, 0.09, 0.28)
 	# s18 round 3: how machines arrive. A gate rumbling open, the whistle of a
 	# heavy machine falling, and the crash of it landing on the concrete.
 	_streams[&"gate"] = _make_blip(110.0, 70.0, 0.22, 0.30)
