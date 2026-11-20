@@ -96,6 +96,9 @@ var _light_refresh_left: float = 0.0
 var _story_time_left: float = 0.0
 ## The radio line on the air right now ({} when the radio is quiet).
 var _current_line: Dictionary = {}
+## s25: every Canopy FM and Lucky line said this run, for the pause menu's
+## Logbook. A line is added the moment it goes on the air (_show_next_story_line).
+var logbook: Logbook = Logbook.new()
 ## THE WAVE END BEAT. wave_end_beat_seconds is how long the slow-down lasts, in
 ## real seconds (public so the tests can switch it off with 0). The other two
 ## count the beat down and remember which wave's cards to deal when it ends.
@@ -351,6 +354,7 @@ func _ready() -> void:
 	ForestTree.heart_marker_fade = 1.0  # a new run shows the Heart Tree's label again
 	# The pause menu: give it our numbers to show, and listen for its two requests.
 	_pause.stats_provider = pause_stats
+	_pause.logbook = logbook  # s25: the Logbook page reads the same book we write
 	_pause.restart_wave_requested.connect(_on_pause_restart_wave)
 	_pause.quit_requested.connect(_on_pause_quit)
 	# The banner wraps onto more lines instead of running off the screen edges.
@@ -1104,6 +1108,10 @@ func _show_next_story_line() -> void:
 		return
 	var line: Dictionary = _story_queue.pop_front()  # pop_front removes and returns the first entry
 	_current_line = line
+	# s25: into the Logbook as it is said. Every radio line passes here (tips,
+	# skill tips, cat hints, Lucky), so this one call catches them all. The book
+	# skips Helios and repeats, and keeps line.text: the words without "[static]".
+	logbook.add(line.speaker, line.text, waves.wave)
 	# While the block is still dark, Canopy FM's signal breaks up: its words are
 	# shown with a "[static]" gap (see with_static). Other speakers are clear.
 	var shown: String = line.text

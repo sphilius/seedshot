@@ -150,6 +150,8 @@ func _ready() -> void:
 	await _test_s23_fullscreen()
 	# s24: Bramble Seeds and the Vine Trip Line are cards, from wave 3 on.
 	await _test_s24_skill_unlocks()
+	# s25: the Logbook in the pause menu keeps every Canopy FM and Lucky line.
+	await _test_s25_logbook()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -197,6 +199,138 @@ func _fresh_arena(with_heart: bool = false, locked_skills: bool = false) -> void
 	await get_tree().physics_frame
 
 
+## Puts every waiting radio line on the air at once, the way they would come up
+## one by one over the next half minute. Each line passes _show_next_story_line,
+## which is where the Logbook writes them down.
+func _drain_radio() -> void:
+	while not _arena._story_queue.is_empty():
+		_arena._show_next_story_line()
+
+
+## s25 LOGBOOK: every Canopy FM and Lucky line said this run is kept, once each,
+## newest first, for a page in the pause menu. Helios is left out.
+func _test_s25_logbook() -> void:
+	# --- The book on its own (no arena). ---
+	var book := Logbook.new()
+	_check(book.add(Radio.CANOPY, "Plant a seed in it.", 1), "a Canopy FM line is kept")
+	_check(not book.add(Radio.CANOPY, "Plant a seed in it.", 2), "the same words are not kept twice")
+	_check(not book.add(Radio.HELIOS, "Unauthorised growth detected.", 1), "Helios is left out")
+	_check(not book.add(Radio.CANOPY, "   ", 1), "an empty line is left out")
+	_check(book.add(Radio.LUCKY, "Mrrp. Hello, little gardener.", 3), "a Lucky line is kept")
+	_check(book.size() == 2, "the book holds the two kept lines")
+	var first_page: Array = book.pages()[0]
+	_check(first_page[0].speaker == Radio.LUCKY and first_page[0].text.begins_with("W3 Lucky: "), "the newest line comes first, tagged with its wave and speaker")
+	_check(first_page[0].first and first_page[1].text.begins_with("W1 Canopy FM: "), "each line starts with a row marked first")
+	# Wrapping: whole words only, and no row over the limit.
+	var long_text: String = "one two three four five six seven eight nine ten eleven twelve"
+	var rows: Array[String] = Logbook.wrap_words(long_text, 20)
+	var fits: bool = true
+	for row: String in rows:
+		fits = fits and row.length() <= 20
+	_check(rows.size() > 1 and fits and " ".join(rows) == long_text, "a long line wraps between words, and no words are lost")
+	_check(Logbook.wrap_words("supercalifragilistic", 5) == ["supercalifragilistic"], "a word longer than a row gets a row of its own")
+	# Paging: a line is never split across two pages.
+	var made_up: Array[Dictionary] = []
+	for i: int in 5:
+		made_up.append({speaker = Radio.CANOPY, text = "aaa bbb ccc ddd eee fff", wave = 1})
+	# "W1 Canopy FM: aaa bbb ccc ddd" is 29 letters, so at 30 letters a row each
+	# made-up line takes 2 rows, and a 5-row page holds 2 lines.
+	var pages: Array = Logbook.pages_from(made_up, 5, 30)
+	_check(pages.size() == 3 and pages[0].size() == 4 and pages[2].size() == 2, "rows pack onto pages, two lines of two rows per five-row page")
+	_check(pages[1][0].first, "and every page starts on the first row of a line")
+	# Blocks: a two-line tip still reads top to bottom, under one tag.
+	var said_in_order: Array[Dictionary] = [
+		{speaker = Radio.CANOPY, text = "New toy: press Q.", wave = 4},
+		{speaker = Radio.CANOPY, text = "You hold three.", wave = 4},
+		{speaker = Radio.LUCKY, text = "Mrrp.", wave = 4},
+	]
+	var shown: Array[Dictionary] = Logbook.newest_blocks_first(said_in_order)
+	_check(shown[0].text == "Mrrp." and shown[1].text == "New toy: press Q." and shown[2].text == "You hold three.", "the newest block comes first, but a tip's own lines keep their order")
+	_check(shown[0].tagged and shown[1].tagged and not shown[2].tagged, "and only a block's first line carries the speaker tag")
+	var block_rows: Array = Logbook.pages_from(shown, 10, 60)[0]
+	_check(block_rows[2].text == "You hold three." and not block_rows[2].new_block and block_rows[1].new_block, "the tip's second line is drawn untagged, with no gap above it")
+	# A block that runs onto the next page names its speaker again there.
+	var split: Array = Logbook.pages_from(shown, 2, 60)
+	_check(split.size() == 2 and split[1][0].text.begins_with("W4 Canopy FM: You hold"), "a block that spills onto a new page is tagged again at its top")
+	# The cap: the oldest line goes.
+	var full := Logbook.new()
+	for i: int in CONFIG.logbook_max_entries + 5:
+		full.add(Radio.CANOPY, "tip %d" % i, 1)
+	_check(full.size() == CONFIG.logbook_max_entries and full.entries[0].text == "tip 5", "past logbook_max_entries the oldest lines are dropped")
+
+	# --- In the arena: wave 1's lines go in as they are said. ---
+	await _fresh_arena(true)  # with the Heart Tree, so its wave 1 line is said too
+	_check(_arena.logbook.size() == 0 and _arena._pause.logbook == _arena.logbook, "a run starts with an empty book, shared with the pause menu")
+	_arena.waves.time_scale = 0.0
+	_arena.waves.start_wave(1)
+	_check(not _arena.logbook.has_text(CONFIG.heart_intro_line), "a line still waiting for the radio is not in the book yet")
+	_drain_radio()
+	_check(_arena.logbook.has_text(CONFIG.heart_intro_line), "the Heart Tree line is in the book once said")
+	var intro: Array[String] = CONFIG.dj_intro_touch if Arena._is_touch() else CONFIG.dj_intro
+	_check(_arena.logbook.has_text(intro[0]) and _arena.logbook.has_text(intro[-1]), "and so is the controls tutorial")
+	_check(not _arena.logbook.has_text(_arena.helios_line_for(1)), "Helios's wave 1 notice is not")
+	# A restart says wave 1's lines again (and may add a fresh one, like the
+	# repair tip when Seven comes back dented). No words are in the book twice.
+	_arena._restart_current_wave()
+	_drain_radio()
+	var seen: Dictionary = {}
+	var repeats: int = 0
+	for entry: Dictionary in _arena.logbook.entries:
+		if seen.has(entry.text):
+			repeats += 1
+		seen[entry.text] = true
+	_check(repeats == 0 and _arena.logbook.has_text(CONFIG.heart_intro_line), "a restarted wave puts nothing in the book twice")
+
+	# --- Static never gets into the book. ---
+	_arena.radio_static_on = true
+	var tip: String = "Lob it at a crowd or into a gateway they all have to squeeze through tonight."
+	_arena._radio_urgent(Arena._radio_line(Radio.CANOPY, tip))
+	_drain_radio()
+	var clean: bool = true
+	for entry: Dictionary in _arena.logbook.entries:
+		clean = clean and not entry.text.contains("[static]")
+	_check(_arena.logbook.has_text(tip) and clean, "the book keeps the clean words, never '[static]'")
+	_arena.radio_static_on = false
+
+	# --- Skill tips and Lucky. ---
+	_arena.apply_upgrade(&"bramble_seed")
+	_arena.waves.start_wave(2)
+	_drain_radio()
+	var bramble: Array[String] = CONFIG.dj_bramble_touch if Arena._is_touch() else CONFIG.dj_bramble
+	_check(_arena.logbook.has_text(bramble[0]), "the Bramble Seed tip goes in at the wave after its card")
+	_arena._radio_interrupt(_arena._lucky_says(CONFIG.lucky_greeting_early))
+	_drain_radio()
+	var newest: Dictionary = _arena.logbook.entries[-1]
+	_check(newest.speaker == Radio.LUCKY and newest.text == CONFIG.lucky_greeting_early and newest.wave == 2, "Lucky's line goes in too, tagged with the wave")
+
+	# --- The pause menu's Logbook button. ---
+	var pause: PauseOverlay = _arena._pause
+	_check(PauseOverlay.Item.LOGBOOK == PauseOverlay.ITEM_COUNT - 2 and pause.menu_label(PauseOverlay.Item.LOGBOOK).begins_with("6   Logbook"), "Logbook is button 6, just above Quit")
+	pause.set_paused(true)
+	_check(pause.logbook_page == -1, "a pause opens on this run's numbers")
+	var key := InputEventKey.new()
+	key.physical_keycode = KEY_6
+	key.pressed = true
+	pause._input(key)
+	_check(pause.logbook_page == 0 and get_tree().paused, "key 6 opens the Logbook's newest page, and the game stays paused")
+	var page_count: int = _arena.logbook.pages().size()
+	for i: int in page_count:
+		pause.choose(PauseOverlay.Item.LOGBOOK)
+	_check(pause.logbook_page == -1, "pressing it once per page steps through and back to this run's numbers")
+	pause.choose(PauseOverlay.Item.LOGBOOK)
+	pause.choose(PauseOverlay.Item.RESUME)
+	pause.set_paused(true)
+	_check(pause.logbook_page == -1, "the next pause opens on this run's numbers again")
+	pause.choose(PauseOverlay.Item.RESUME)
+	# An empty book still opens (on a "nothing yet" page) and closes again.
+	var empty := PauseOverlay.new()
+	empty.next_logbook_page()
+	var opened: bool = empty.logbook_page == 0
+	empty.next_logbook_page()
+	_check(opened and empty.logbook_page == -1, "with no book yet, Logbook opens one empty page, then closes")
+	empty.free()
+
+
 ## s23 FULL SCREEN: the pause menu gains a sixth button, above Quit, that switches
 ## full screen. Headless Godot has no real window, so these check the button, its
 ## words, where it sits and that pressing it keeps the menu up; whether a phone's
@@ -204,13 +338,14 @@ func _fresh_arena(with_heart: bool = false, locked_skills: bool = false) -> void
 func _test_s23_fullscreen() -> void:
 	await _fresh_arena()
 	var pause: PauseOverlay = _arena.get_node("Hud/PauseOverlay") as PauseOverlay
-	_check(PauseOverlay.ITEM_COUNT == 6 and PauseOverlay.Item.FULLSCREEN == 4 and PauseOverlay.Item.QUIT == 5, "Full screen is button 5, and Quit stays last as button 6")
+	# (s25 added Logbook as button 6, so Quit moved down to 7.)
+	_check(PauseOverlay.Item.FULLSCREEN == 4 and PauseOverlay.Item.QUIT == PauseOverlay.ITEM_COUNT - 1, "Full screen is button 5, and Quit stays last")
 	_check(PauseOverlay.fullscreen_available(), "outside a browser, full screen is always offered")
 	_check(pause.menu_label(PauseOverlay.Item.FULLSCREEN).begins_with("5   Full screen: "), "its label reads '5   Full screen: On / Off'")
-	_check(pause.menu_label(PauseOverlay.Item.QUIT).begins_with("6   "), "Quit is now key 6")
-	# All six buttons, and the hint line under them, fit on the 720 px tall screen.
+	_check(pause.menu_label(PauseOverlay.Item.QUIT).begins_with("%d   " % PauseOverlay.ITEM_COUNT), "Quit's key is the last number")
+	# All the buttons, and the hint line under them, fit on the 720 px tall screen.
 	var last: Rect2 = pause.menu_button_rect(PauseOverlay.ITEM_COUNT - 1)
-	_check(last.end.y + 34.0 < 720.0, "the six buttons and the hint below them fit on screen")
+	_check(last.end.y + 34.0 < 720.0, "all the buttons and the hint below them fit on screen")
 	_check(CONFIG.fullscreen_lock_landscape, "a full-screen phone is asked to hold landscape")
 
 	pause.set_paused(true)
