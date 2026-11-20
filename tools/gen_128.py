@@ -45,10 +45,39 @@ import gen_concepts as concepts  # noqa: E402  (the shared image-model plumbing)
 import gen_sprites as sprites  # noqa: E402  (its `despeckle` is reused)
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "art/sprites"
 OUT = ROOT / "art/draft128"
+# s26: the game's art/sprites/ now holds the 128 px art, so the 64 px originals this tool starts from
+# are kept in art/draft128/source64/ (hidden from Godot by the folder's .gdignore).
+SRC = OUT / "source64"
+GAME = ROOT / "art/sprites"  # where `install` copies the finished 128 px sheets
 MAGENTA = np.array([255, 0, 255])
 CANVAS = 1024  # the size of every picture we send to / get from the model
+
+# s26: the takes chosen for the game (judged on the compare sheets). Any asset not listed uses take 1.
+# `build --pick name=N` still overrides one of these for a single run.
+DEFAULT_PICKS = {
+    "seven_e": 2,          # East matches West's seed tank (s25)
+    "lucky_cat": 2, "lucky_cat_wave": 2,   # the cleaner pair, same coin and collar
+    "prop_notice": 2,      # "NOTICE" is readable
+    "tree_grown": 2,       # take 1 grew yellow blobs the 64 px tree does not have
+    "tap_point": 2,        # take 2 keeps the gold ring
+}
+# How many times the roofs are smoothed after snapping (each pass = a 3 x 3 "majority vote" per pixel).
+ROOF_SMOOTH_PASSES = 2
+# Seven's hat: how many pixels up from the hat's lower edge stay gold (the rim); above it turns cream.
+HAT_RIM_PX = 5
+# Seven's hat colours (from the 64 px strip): cream, its shade, and the dark solar-panel seam.
+HAT_CREAM = (239, 230, 200)
+HAT_CREAM_SHADE = (201, 190, 156)
+HAT_SEAM = (20, 64, 58)
+OUTLINE = (27, 31, 29)  # Seven's outline colour
+
+
+def parts_of(name: str) -> list:
+    """Every snapped take of ONE asset, sorted by take number. (A plain glob such as "lucky_cat_*" would
+    also catch "lucky_cat_wave_1", so the part after the name must be only a take number.)"""
+    found = [p for p in (OUT / "parts").glob(f"{name}_*.png") if p.stem[len(name) + 1:].isdigit()]
+    return sorted(found, key=lambda p: int(p.stem[len(name) + 1:]))
 
 
 # ---- The list of assets ------------------------------------------------------------------
@@ -264,6 +293,20 @@ def vote_resize(index: np.ndarray, mask: np.ndarray, target_h: int, target_w: in
     return out, filled
 
 
+def majority_smooth(index: np.ndarray, passes: int) -> np.ndarray:
+    """Calm speckle: every pixel takes the commonest colour in its 3 x 3 neighbourhood, but only when
+    that colour holds at least 5 of the 9 (so lines 2 pixels wide and corners survive). `passes` repeats it.
+    ndimage.generic_filter runs a small function over every pixel's neighbourhood (a "sliding window")."""
+    def vote(window: np.ndarray) -> float:
+        counts = np.bincount(window.astype(np.int64))
+        best = int(counts.argmax())
+        return float(best) if counts[best] >= 5 else float(window[4])  # window[4] = the middle pixel
+    result = index.astype(float)
+    for _ in range(passes):
+        result = ndimage.generic_filter(result, vote, size=3, mode="nearest")
+    return result.astype(np.int32)
+
+
 def snap(a: dict, raw_path: Path) -> Image.Image:
     """Turn one raw drawing into the final 2x-size piece (RGBA)."""
     source = load_source(a)
@@ -299,6 +342,8 @@ def snap(a: dict, raw_path: Path) -> Image.Image:
     # A tile or roof: the whole picture is the artwork.
     index = nearest_index(pixels, palette)
     out, _ = vote_resize(index, np.ones(index.shape, dtype=bool), height * 2, width * 2, len(palette))
+    if a["mode"] == "roof":  # s26: roofs came out speckled, so smooth them
+        out = majority_smooth(out, ROOF_SMOOTH_PASSES)
     rgba = np.zeros((height * 2, width * 2, 4), dtype=np.uint8)
     rgba[..., :3] = palette.astype(np.uint8)[out]
     rgba[..., 3] = 255
@@ -338,31 +383,102 @@ def strip_nozzle(frame: Image.Image) -> Image.Image:
         ys, _ = np.where((groups == number) & goldish)
         if len(ys) >= 20 and 56 <= ys.mean() <= 104:
             remove |= (groups == number) & goldish
-    if remove.any():
-        # distance_transform_edt with return_indices tells, for each removed pixel, where the nearest
-        # pixel that is NOT removed is; we copy that pixel's colour.
-        # Only pixels that are solid, not removed and not dark (so not the outline) may be copied from:
-        # that way the hand is filled with body-green, not black.
-        brightness = pixels[..., :3].astype(int).sum(axis=2)
-        donors = (pixels[..., 3] > 0) & ~remove & (brightness > 200)
-        _, (near_y, near_x) = ndimage.distance_transform_edt(~donors, return_indices=True)
-        pixels[remove] = pixels[near_y[remove], near_x[remove]]
+    if not remove.any():
+        return Image.fromarray(pixels, "RGBA")
+    # s26: also take the nozzle's OUTLINE (the dark ring round the gold), or it is left behind as a
+    # small stub. `region` = the gold grown by 2 pixels, limited to the solid figure.
+    solid = pixels[..., 3] > 0
+    region = ndimage.binary_dilation(remove, iterations=2) & solid
+    # The BODY is what is left without that region; keep only its biggest piece, so loose bits of
+    # nozzle outline that are no longer joined to Seven are dropped.
+    body = solid & ~region
+    pieces, count = ndimage.label(body)
+    if count > 1:
+        sizes = ndimage.sum(body, pieces, range(1, count + 1))
+        body = pieces == (int(np.argmax(sizes)) + 1)
+    # A removed pixel is refilled only if it sits INSIDE Seven's outline (a "closing" fills small dents
+    # and gaps in the body shape); anything sticking OUT of the body becomes see-through.
+    inside = ndimage.binary_closing(body, iterations=3) | ndimage.binary_fill_holes(body)
+    refill = (region | (solid & ~body)) & inside
+    clear = solid & ~body & ~refill
+    # distance_transform_edt with return_indices tells, for each pixel, where the nearest donor pixel
+    # is; we copy that pixel's colour. Donors are solid, kept and not dark (so not the outline): that
+    # way the hand is filled with body-green, not black.
+    brightness = pixels[..., :3].astype(int).sum(axis=2)
+    donors = body & (brightness > 200)
+    _, (near_y, near_x) = ndimage.distance_transform_edt(~donors, return_indices=True)
+    pixels[refill] = pixels[near_y[refill], near_x[refill]]
+    pixels[clear] = 0
+    # Where the cut left an edge with no outline, draw one: refilled pixels that now touch see-through.
+    open_edge = refill & ndimage.binary_dilation(pixels[..., 3] == 0)
+    pixels[open_edge, :3] = OUTLINE
     return Image.fromarray(pixels, "RGBA")
+
+
+def cream_hat(frame: Image.Image) -> Image.Image:
+    """s26: the 128 px drawings gave Seven a solid gold hat. The 64 px Seven has a CREAM top with dark
+    solar-panel seams and a GOLD rim. This repaints the hat: gold pixels in the hat (gold groups that sit
+    in the top part of the frame) become cream / cream shade / seam by brightness, except the bottom
+    HAT_RIM_PX pixels of every column, which stay gold as the rim."""
+    pixels = np.array(frame.convert("RGBA"))
+    r, g, b = (pixels[..., i].astype(int) for i in range(3))
+    # Gold has more red than green; the lime seedling (more green than red) must not count.
+    goldish = (pixels[..., 3] > 0) & (r > 120) & (r > b + 80) & (g > b + 50) & (r > g)
+    groups, count = ndimage.label(ndimage.binary_dilation(goldish, iterations=1), structure=np.ones((3, 3)))
+    hat = np.zeros(goldish.shape, dtype=bool)
+    for number in range(1, count + 1):
+        ys, _ = np.where((groups == number) & goldish)
+        if len(ys) >= 40 and ys.mean() < 48:  # big and high up = the hat (the nozzle sits lower)
+            hat |= (groups == number) & goldish
+    if not hat.any():
+        return frame
+    # The lowest hat pixel in every column: the rim is the band just above it.
+    rows = np.arange(hat.shape[0])[:, None]
+    lowest = np.where(hat, rows, -1).max(axis=0)
+    rim = hat & (rows > lowest[None, :] - HAT_RIM_PX)
+    top = hat & ~rim
+    # Brightness ("luminance") decides the shade, the same weights the eye uses.
+    luminance = 0.3 * r + 0.59 * g + 0.11 * b
+    pixels[top & (luminance > 160), :3] = HAT_CREAM
+    pixels[top & (luminance <= 160) & (luminance > 120), :3] = HAT_CREAM_SHADE
+    pixels[top & (luminance <= 120), :3] = HAT_SEAM
+    return Image.fromarray(pixels, "RGBA")
+
+
+def restore_lost_colour(piece: Image.Image, source: Image.Image, hue_test) -> Image.Image:
+    """Copy back pixels of one colour family that the redraw dropped: the 64 px source is doubled (hard
+    edges) and wherever `hue_test` says a source pixel belongs to the family and the 128 px piece is
+    see-through there, the source pixel is used. (`hue_test` is a function passed in as a value.)"""
+    big = np.array(source.convert("RGBA").resize(piece.size, Image.NEAREST))
+    out = np.array(piece.convert("RGBA"))
+    wanted = (big[..., 3] > 0) & hue_test(big[..., 0].astype(int), big[..., 1].astype(int), big[..., 2].astype(int)) & (out[..., 3] == 0)
+    out[wanted] = big[wanted]
+    return Image.fromarray(out, "RGBA")
 
 
 def command_build(args) -> None:
     """Assemble the sheets using the picked take of every piece (take 1 unless --pick says otherwise)."""
-    picks = {pair.split("=")[0]: int(pair.split("=")[1]) for pair in args.pick}
+    # {**a, **b} merges two dicts; keys in b win. So --pick on the command line beats DEFAULT_PICKS.
+    picks = {**DEFAULT_PICKS, **{pair.split("=")[0]: int(pair.split("=")[1]) for pair in args.pick}}
     assets = build_assets()
     pieces = {}
     for a in assets:
         take = picks.get(a["name"], 1)
         path = OUT / "parts" / f"{a['name']}_{take}.png"
         if not path.exists():  # fall back to any take that exists
-            options = sorted((OUT / "parts").glob(f"{a['name']}_*.png"))
+            options = parts_of(a["name"])
             path = options[0] if options else None
         if path is not None:
             pieces[a["name"]] = Image.open(path).convert("RGBA")
+    # s26 repairs that need no new drawing: Seven's hat back to cream-and-gold, and the repair icon's
+    # green sprout (both 128 px takes left it out) copied back from the 64 px icon, doubled.
+    for name in list(pieces):
+        if name.startswith("seven_"):
+            pieces[name] = cream_hat(pieces[name])
+    if "repair_icon" in pieces:
+        source = Image.open(SRC / "repair_icon.png") if (SRC / "repair_icon.png").exists() else None
+        if source is not None and source.width * 2 == pieces["repair_icon"].width:
+            pieces["repair_icon"] = restore_lost_colour(pieces["repair_icon"], source, lambda r, g, b: (g > r + 40) & (g > b + 40))
     target = OUT / "sprites"
     (target / "upgrades").mkdir(parents=True, exist_ok=True)
 
@@ -413,8 +529,7 @@ def command_compare(args) -> None:
     for group, members in groups.items():
         cells = []
         for a in members:
-            draft = OUT / "sprites"
-            parts = sorted((OUT / "parts").glob(f"{a['name']}_*.png"))
+            parts = parts_of(a["name"])
             if not parts:
                 continue
             old = load_source(a)
@@ -441,16 +556,53 @@ def command_compare(args) -> None:
         print("saved", f"compare_{group}.png")
 
 
+def command_picks(args) -> None:
+    """One picture of every finished 128 px sheet (art/draft128/sprites/), on the dark floor colour, each
+    with its file name, so all the picks can be judged together: art/draft128/picks_all.png."""
+    floor = (58, 66, 72, 255)
+    files = sorted((OUT / "sprites").rglob("*.png"))
+    pictures = [(f.relative_to(OUT / "sprites").as_posix(), Image.open(f).convert("RGBA")) for f in files]
+    pad, label = 10, 14
+    width = max(1100, max(p.width for _, p in pictures) + 2 * pad)  # at least as wide as the widest sheet
+    # Lay the pictures out in rows, left to right, starting a new row when the next one does not fit.
+    placed, x, y, row_h = [], pad, pad, 0
+    for name, picture in pictures:
+        if x + picture.width > width - pad and x > pad:
+            x, y, row_h = pad, y + row_h + label + pad, 0
+        placed.append((name, picture, x, y))
+        x += max(picture.width, 7 * len(name)) + pad
+        row_h = max(row_h, picture.height)
+    sheet = Image.new("RGBA", (width, y + row_h + label + pad), floor)
+    pen = ImageDraw.Draw(sheet)
+    for name, picture, px, py in placed:
+        pen.text((px, py), name, fill=(235, 235, 225, 255))
+        sheet.alpha_composite(picture, (px, py + label))
+    sheet.save(OUT / "picks_all.png")
+    print("saved picks_all.png", sheet.size)
+
+
+def command_install(args) -> None:
+    """Copy the finished sheets from art/draft128/sprites/ over the game's art/sprites/ (same names), so
+    the game has ONE set of art. The old 64 px files stay in git history and in art/draft128/source64/."""
+    import shutil  # standard-library file copying; imported here because only this command needs it
+    for f in sorted((OUT / "sprites").rglob("*.png")):
+        target = GAME / f.relative_to(OUT / "sprites")
+        shutil.copyfile(f, target)
+        print("installed", target.relative_to(ROOT).as_posix())
+
+
 def main() -> None:
-    """Read the command line and run draw / snap / build / compare."""
+    """Read the command line and run draw / snap / build / compare / picks / install."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=["draw", "snap", "build", "compare"])
+    parser.add_argument("command", choices=["draw", "snap", "build", "compare", "picks", "install"])
     parser.add_argument("--only", nargs="+", default=[], help="asset names to limit the run to")
     parser.add_argument("--takes", type=int, default=2)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--pick", nargs="+", default=[], help="name=take pairs for build")
     args = parser.parse_args()
-    {"draw": command_draw, "snap": command_snap, "build": command_build, "compare": command_compare}[args.command](args)
+    commands = {"draw": command_draw, "snap": command_snap, "build": command_build, "compare": command_compare,
+                "picks": command_picks, "install": command_install}
+    commands[args.command](args)
 
 
 if __name__ == "__main__":
