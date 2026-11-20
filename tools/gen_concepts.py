@@ -40,6 +40,14 @@ ROUND 3: AN EVEN SPLIT (python tools/gen_concepts.py --set split)
                SURFACE (matte raw metal), COLOUR (grey and safety orange) and FACE (none).
     Again no ratio is typed into any prompt.
 
+ROUND 4: THE PICK (Sasha chose Split A, 2026-11-20)
+    Chosen: Arc Spitter split_a take 1, Linebreaker split_a take 2, and a Ripsaw built from
+    TWO takes: the body, paint and face plate of take 1 with the long extended saw arm and
+    blade of take 2 (python tools/gen_concepts.py --merge-ripsaw, which sends both pictures
+    to the model as references). The Scrapper, Sawbot and Spitter are added in Split A only,
+    with new shapes that differ from every machine above (python tools/gen_concepts.py
+    --set split --machine scrapper).
+
 USAGE (from the project root; needs the GEMINI_API_KEY user environment variable)
     python tools/gen_concepts.py                       all machines, both directions, 2 takes
     python tools/gen_concepts.py --set split           the two even-split styles (round 3)
@@ -321,6 +329,54 @@ MACHINES = {
 }
 
 
+# ---- Round 4: the rest of the cast, Split A only -------------------------------------------
+# Each shape is NEW and different from the other five machines: the tripod battery (Arc
+# Spitter), the plough (Linebreaker) and the rolling blade (Ripsaw) are taken.
+MACHINES["scrapper"] = {
+    "job": (
+        "MACHINE: the SCRAPPER, Helios's basic melee grunt. It walks up to the player's tiny "
+        "gardener robot and smashes it with a telegraphed swing. It is the most common machine. "
+        "Its current sprite is a rusty barrel with two tall claw arms raised: do NOT repeat that shape."
+    ),
+    "split_a": (
+        "SHAPE: a hunched brawler. An upright, wide-shouldered armoured torso on two thick stumpy "
+        "legs with big flat feet, leaning forward. One enormous hydraulic pincer claw hangs from a "
+        "heavy arm on one side and a small hooked arm on the other. A flat armour slab for a "
+        "head, with the smiling face plate set in it. Glossy blue-and-white paint, chipped and "
+        "rusted, hazard stripes on the shoulders, small red lights."
+    ),
+}
+MACHINES["sawbot"] = {
+    "job": (
+        "MACHINE: the SAWBOT, a small tree-cutter that ignores the player and walks to the "
+        "nearest tree to saw it down. It is the little sibling of the RIPSAW (a big, up-armoured "
+        "rolling saw with a long saw arm), so it shares that family look in a smaller, "
+        "lighter, simpler form. Its current sprite is a boxy body with a small round saw on top."
+    ),
+    "split_a": (
+        "SHAPE: a compact wheeled dolly. A small, low, open frame on two big chunky wheels with a "
+        "short forward saw arm carrying one modest circular blade with red-and-yellow striped teeth. "
+        "A small engine block with a single exhaust stack, lightly armoured, with the smiling face "
+        "plate on the front of the engine. Glossy blue-and-white paint, chipped and rusty, "
+        "hazard stripes, tiny red lights."
+    ),
+}
+MACHINES["spitter"] = {
+    "job": (
+        "MACHINE: the SPITTER, a ranged machine that stands off and fires single small spit shots "
+        "at the player. It is not the ARC SPITTER (that one is a squat three-barrel tripod "
+        "battery that fires a fan of bolts). Its current sprite is a bottle on spider legs."
+    ),
+    "split_a": (
+        "SHAPE: a tall slim sentry. A narrow, tall rectangular armoured tower balanced on a "
+        "single big spherical roller foot, with ONE long barrel pointing forward from the front of "
+        "the tower, and a small periscope antenna on top. The smiling face plate is set in the "
+        "tower's front slab. Glossy blue-and-white paint, chipped and rusty, hazard stripes at the "
+        "base, tiny red lights."
+    ),
+}
+
+
 def get_key() -> str:
     """The Gemini key: from this program's environment, else fresh from Windows' user-level
     variables (a shell started before the key was set would not have it). Never printed."""
@@ -335,12 +391,19 @@ def get_key() -> str:
     return key
 
 
-def generate(prompt: str, key: str) -> bytes:
+def generate(prompt: str, key: str, references: tuple = ()) -> bytes:
     """Ask the model for one picture and return its PNG/JPEG bytes.
     The reply holds a list of "parts"; a picture part carries its data base64-encoded
     under `inlineData`, so we look for the first part that has it."""
+    # Reference pictures go in as extra "parts" before the text: each is its raw bytes,
+    # base64-encoded, labelled with its file type. The prompt can then say "image 1" and "image 2".
+    parts = []
+    for reference in references:
+        data = Path(reference).read_bytes()
+        parts.append({"inlineData": {"mimeType": "image/png", "data": base64.b64encode(data).decode("ascii")}})
+    parts.append({"text": prompt})
     body = {
-        "contents": [{"parts": [{"text": prompt}]}],
+        "contents": [{"parts": parts}],
         "generationConfig": {"responseModalities": ["TEXT", "IMAGE"], "imageConfig": {"aspectRatio": "4:3"}},
     }
     request = urllib.request.Request(
@@ -361,6 +424,36 @@ def generate(prompt: str, key: str) -> bytes:
     sys.exit("no picture returned: " + " ".join(texts)[:400] + " " + json.dumps(data.get("promptFeedback", {}))[:300])
 
 
+MERGE_PROMPT = (
+    "You are given two reference concept pictures of the SAME enemy machine, the RIPSAW, made in the "
+    "same art style.\n"
+    "IMAGE 1 supplies the core: the compact blue-and-white tracked body, the engine cowling, the "
+    "twin exhaust stacks, the chipped glossy paint and hazard stripes, and the smiling face plate "
+    "on the front of the cowling. Keep all of that exactly as it is.\n"
+    "IMAGE 2 supplies the saw: the long extended saw ARM that reaches far out from the body, with the "
+    "big joint where it attaches, carrying the huge vertical circular blade with red-and-yellow "
+    "striped teeth, taller than the body.\n"
+    "Draw ONE new picture of a single machine: the body, paint and face plate of image 1 carrying "
+    "the long extended saw arm and blade of image 2, mounted on the body and reaching forward. Same "
+    "high three-quarter view, same flat light-grey background, same style. Beside the machine, add one "
+    "small panel with that machine as a pure solid black silhouette from the same angle. No text, no "
+    "extra machines."
+)
+
+
+def merge_ripsaw(key: str, takes: int) -> None:
+    """Make the Ripsaw Sasha asked for by sending split_a take 1 and take 2 together as
+    references. The results are named ripsaw_split_a_merged_<n>.png."""
+    sources = (OUT_SPLIT / "ripsaw_split_a_1.png", OUT_SPLIT / "ripsaw_split_a_2.png")
+    for take in range(1, takes + 1):
+        file = OUT_SPLIT / f"ripsaw_split_a_merged_{take}.png"
+        file.write_bytes(generate(MERGE_PROMPT, key, references=sources))
+        print(f"made {file.name}")
+
+
+# split_name turns a picture's file name back into (machine, direction, take) so the contact
+# sheet can group pictures into rows and columns. It checks the known direction names because
+# machine names (arc_spitter) and direction names (split_a) both contain underscores.
 def split_name(stem: str) -> tuple:
     """Split 'arc_spitter_hybrid_brutal_1' into ('arc_spitter', 'hybrid_brutal', '1').
     A direction name is found inside the file name, the take is the last piece, and
@@ -370,6 +463,10 @@ def split_name(stem: str) -> tuple:
         if marker in stem:
             machine, take = stem.split(marker)
             return machine, direction, take
+    # "ripsaw_split_a_merged_1": the merge results carry a word between direction and take.
+    if "_split_a_merged_" in stem:
+        machine, take = stem.split("_split_a_merged_")
+        return machine, "split_a_merged", take
     raise ValueError("unknown picture name: " + stem)
 
 
@@ -418,6 +515,7 @@ def main() -> None:
     parser.add_argument("--takes", type=int, default=2)
     parser.add_argument("--force", action="store_true", help="redo pictures that already exist")
     parser.add_argument("--sheet", action="store_true", help="only rebuild the contact sheet")
+    parser.add_argument("--merge-ripsaw", action="store_true", help="round 4: merge Ripsaw takes 1 and 2")
     args = parser.parse_args()
     # Pick the set: which art directions, and which folder the pictures go to.
     # A dictionary used as a lookup table: set name -> (its art directions, its folder).
@@ -428,11 +526,17 @@ def main() -> None:
         return
     out.mkdir(parents=True, exist_ok=True)
     key = get_key()
+    if args.merge_ripsaw:
+        merge_ripsaw(key, args.takes)
+        build_sheet(OUT_SPLIT)
+        return
     for machine, brief in MACHINES.items():
         if args.machine and machine != args.machine:
             continue
         for direction, look in directions.items():
             if args.direction and direction != args.direction:
+                continue
+            if direction not in brief:  # this machine was only designed in some directions
                 continue
             prompt = "\n\n".join([STYLE, look, brief["job"], brief[direction]])
             for take in range(1, args.takes + 1):
