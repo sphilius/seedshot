@@ -17,7 +17,7 @@
 | 6 | `bind.mp3` | The vine yanks and ties up a machine | 0.8 s | `Sharp whip crack of a vine, then a fast rising ratchet as it winds tight around metal with a creak, ending in a hard clamp, short, dry` |
 | 7 | `windup.mp3` | A Scrapper or Spitter is about to hit you (the warning) | 0.5 s | `Short rising mechanical whine, a servo charging up, tense warning tone, dry, no reverb` |
 | 8 | `spit.mp3` | A Spitter fires | 0.5 s | `Single small-calibre gunshot from a little cap pistol, a tight sharp crack with a short punchy snap, small and light, very short, dry, no reverb, no echo` |
-| 9 | `saw.mp3` | A Sawbot cuts a tree (repeats twice a second) | 0.6 s | `Short aggressive burst of a small chainsaw revving and biting into wood, raspy two-stroke engine buzz, instantly recognisable, dry, cut off cleanly` |
+| 9 | `saw.mp3` | A Sawbot cuts a tree (plays whole, then again, while the blade is on the tree) | 2.0 s | `A small chainsaw cutting through a log, a raspy two-stroke engine revving up, biting into wood with a steady ripping buzz, sawdust chatter, instantly recognisable, dry, no reverb, no voices, no music` |
 | 10 | `hurt.mp3` | You take a hit | 0.5 s | `Sharp electric zap with a glitchy digital stutter, a small robot short-circuiting for an instant, bright and painful, dry` |
 | 11 | `player_down.mp3` | You are defeated | 1.5 s | `Small friendly robot powering down, a descending electric hum that fades out, sad but soft` |
 | 12 | `wave_clear.mp3` | A wave is cleared | 1.5 s | `Bright triumphant four-note rising fanfare on marimba and small bells, clear, loud and joyful, short, clean ending` |
