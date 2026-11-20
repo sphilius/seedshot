@@ -1,7 +1,7 @@
 # Seedshot: Phase 3 handoff prompt
 
 Paste everything below the line into a new Claude Code session opened on the Seedshot repo.
-Recommended model: Opus 5.5. Written 2026-11-20, after s24 (skill unlocks) was merged.
+Recommended model: Opus 5.5. Written 2026-11-20, after s24 (skill unlocks) was merged; updated after s25 (Logbook).
 
 ---
 
@@ -9,20 +9,21 @@ Continue Phase 3 of Seedshot: new systems, **one per session, each on its own br
 
 ## Where things stand (2026-11-20)
 
-- `main` is at `208916b` (or later). Phase 3 done so far:
+- `main` is at `efc8385` (or later). Phase 3 done so far:
   - s22 Reload (D-066)
   - s23 Full screen button (D-068, an extra I asked for)
   - s24 Skill unlocks (D-069)
-- 944 headless checks pass.
-- Play link: https://sphilius.github.io/seedshot/ (GitHub Pages, from `gh-pages`). Newest release zip: `web-208916b`.
-  - Publish a new build with `.\tools\publish_pages.ps1 -Export`, then make a GitHub release zip named `web-<short sha>`. `gh release create` needs the full SHA as `--target`.
+  - s25 Logbook (D-070): pause button 6. Quit is now 7, and the pause menu has 7 buttons.
+- 976 headless checks pass.
+- Play link: https://sphilius.github.io/seedshot/ (GitHub Pages, from `gh-pages`). Newest release zip: `web-efc8385`.
+  - Publish a new build with `.\tools\publish_pages.ps1 -Export`, then make a GitHub release zip named `web-<short sha>`. Easiest: `git tag web-<sha> <sha>`, push the tag, then `gh release create web-<sha> <zip> --verify-tag` (a short SHA as `--target` is refused).
 - **Nov 28, 2026:** a reminder fires to make the repo private again and upload the latest build to itch.io. Going private takes the Pages link down. Don't do either without my yes.
 - Folders:
-  - `C:\Users\sphil\dev\seedshot` is the main folder. Another session uses it for concept art and keeps it on branch `s22-reload`. Don't switch its branch or touch its uncommitted files.
+  - `C:\Users\sphil\dev\seedshot` is the main folder. Another session uses it for concept art and keeps it on its own branch (`s26-v2-hd` on 2026-11-20). Don't switch its branch or touch its uncommitted files.
   - `C:\Users\sphil\dev\seedshot-main-wt` is a git worktree where `main` is checked out. Cut new branches from `main` there.
   - `C:\Users\sphil\dev\seedshot-pages` is the `gh-pages` worktree; `publish_pages.ps1` manages it.
   - In a fresh worktree, run `.\tools\godot.ps1 import` once before trusting errors.
-- Playtest guidebook: https://claude.ai/artifact/6mk43Ao4cMZZkvJuAagKfG (update it per the playtest-guidebook skill). S22, S23 and S24 are all "testing".
+- Playtest guidebook: https://claude.ai/artifact/6mk43Ao4cMZZkvJuAagKfG (update it per the playtest-guidebook skill). S22, S23, S24 and S25 are all "testing".
   - **Start by reading my playtest answers there**, especially S24's "waves 2 and 3 without brambles" scale and the wave 3 card questions. If they call for tuning, offer that first.
 
 ## Rules (from CLAUDE.md, repeated so nothing is missed)
@@ -51,11 +52,7 @@ Then wait for my yes. If I say "fix the obvious issues you expect", do that and 
 
 ## Remaining Phase 3 items, in order
 
-1. **Logbook** in the pause menu: every tip from Canopy FM and Lucky, added as it is said.
-   - Radio lines go through the arena's `_radio_line`, `_dj`, `_dj_once` and `_radio_interrupt`.
-   - Lucky's lines are in `scripts/lucky_lines.gd`.
-   - The pause menu is `scripts/pause_overlay.gd`: 6 buttons, plus THIS RUN and CONTROLS on the right.
-   - The skill tips from s24 (`skill_tip_lines`) belong in the Logbook too.
+1. ~~**Logbook**~~ done in s25 (D-070). `scripts/logbook.gd`; every radio line passes `Arena._show_next_story_line`, which writes it down.
 2. **Resume buttons** after Lucky's moment, a fuse revive and each machine intro, instead of going back to the game on a timer.
    - The intro clips are `start_clip` / `clip_left` in `scripts/arena.gd`.
    - The fuse is in `receive_cat_gift` and the player's revive.
@@ -84,5 +81,5 @@ Then wait for my yes. If I say "fix the obvious issues you expect", do that and 
 
 1. Run the full suite and say the count.
 2. Export, open the preview, and say what you saw on screen for each item. Say plainly what you couldn't check (sound, a real phone, anything that needs a person playing).
-3. Update the devlog (next ID is D-070), `AI_LOG.md`, `.feedback/checklist.html` in the main folder (never committed) and the guidebook.
+3. Update the devlog (next ID is D-071), `AI_LOG.md`, `.feedback/checklist.html` in the main folder (never committed) and the guidebook.
 4. Tell me the branch name and ask whether to merge and push. Do neither until I say yes.
