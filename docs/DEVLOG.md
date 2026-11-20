@@ -384,6 +384,28 @@ From the kickoff. `config/game_config.tres` holds every speed, cooldown and size
 - The thunk and spit candidates came back very quiet (mean below -36 dB) and need a lot of gain; listen for hiss.
 - The listening page now plays every take evened out to its in-game loudness.
 
+## D-061: Readability fixes: a ring for the bramble, a clearer intro, Lucky's button, bigger trees (Made, 2026-11-20)
+
+Four small changes from Sasha's round 5 notes, phase 1 of the post-jam backlog (s19).
+- **Bramble landing ring.** `Player.bramble_landing_point()` is `aim * bramble_range_cells`, kept inside `Player.bramble_bounds` (the arena fills it from `bramble_floor_rect()`, the same rectangle `spawn_bramble` clamps to). A faint ring the size of the patch is drawn there on the aim overlay whenever Seven holds a seed. On touch it is always on while a seed is in hand: the button is a tap, so there is no "held" state to show it on.
+- **Bramble intro.** The wave 2 lines now say what it does (slows and damages every machine inside), when to use it (a crowd, a gateway) and the key (Q or Space; the touch button is now labelled "bramble", not "thorns"). A clip plays once, the first moment in wave 2 that Seven holds a seed and no other clip is running (`_tick_bramble_clip`). It plays in New Game + too, since that mode shows every intro (D-056). It reuses `intro_titles` under the key `bramble`.
+- **Lucky.** Her lines hold `lucky_line_seconds` (10, was the shared 6). On a phone the open shop draws a pink paw button labelled "Tap" under the ledge instead of "E: talk"; a tap on the button counts as a tap on Lucky.
+- **Trees.** `tree_draw_scale` 1.5 enlarges the picture of every grown tree (a sapling keeps its size). The collision square is untouched and a check holds it to exactly one cell. Cost to watch: clumps of two or three neighbouring trees now overlap into one leafy mass. Before and after: `docs/s19/trees_before.png`, `trees_after.png` (made by `tests/capture_trees.gd`).
+
+## D-060: The forest's vines snare; only Seven's vine binds (Made, 2026-11-20)
+
+New Game + played itself: canopy lines and the Vine Trip Line called `yank_and_bind`, the same full freeze as Seven's own vine. Now they call `Enemy.snare_for`: the machine walks at `snare_speed_factor` (0.25) of its speed but still winds up, swings, shoots and saws. A Spitter on a forest vine still fires; one bound by Seven does not. A snare is drawn as an amber net on the machine's overlay (not a tint of the whole node, because the red attack warning already uses that). Seven's own vine on a snared machine binds it and ends the snare; a bound machine cannot be snared; the Sunburst still stuns (binds). Consequence to watch: a snared Sawbot keeps sawing, so the forest protects its trees less than before.
+Numbers only, as asked: `canopy_line_bind_seconds` 2.5 to 1.5, `canopy_line_recharge` 4.0 to 8.0, `trellis_bind_seconds` 2.0 to 1.2. Left alone: `canopy_line_immunity_seconds` (4.0), `trellis_seconds` (6.0). The first canopy line of a run also makes Canopy FM say, once, where the vines come from (`canopy_line_intro_line`).
+
+## D-059: Machines are solid to Seven and hurt on contact (Made, 2026-11-20)
+
+Why Seven walked over machines: she is on layer 2 with the default mask 1 (walls and trees), machines are on layer 4. Her mask is now 5 (walls, trees, machines). One-sided on purpose: machines still do not collide with Seven, so a crowd can never trap her against a tree (a machine that drifts onto her overlaps, and her own movement pushes her out). Contact damage follows the Scrapper's `struck` pattern: `Enemy.touched(damage)` fires from `_tick_bound` when the machine's edge is within `contact_margin_px` of Seven's, at most once per `contact_damage_cooldown` (1.0 s) per machine; the arena passes it to `player.take_damage`, whose blink still limits the total. A machine rolling out of a gate or dropping in, or a bound one, never gets that far in `_tick_bound`, so it does not hurt. A Scrapper stops at 0.8 cells and swings, so it rarely touches; walking into a Scrapper, Sawbot or Spitter does.
+
+## D-058: A restarted wave says its one-time radio lines again; Helios's opening line (Made, 2026-11-20)
+
+A restart re-queued Helios's notice and the wave's own Canopy FM lines but not the one-time ones (`_hook_shown`, anything in `_dj_said`), so an accidental restart could lose them for good. The wave start now snapshots both (`_dj_said_at_wave_start`, `_hook_shown_at_wave_start`, not on a restart), and a restart puts them back, so lines first said in the failed attempt are said again and lines from earlier waves are not. A restart also empties the radio queue and the line on the air, so nothing is said twice. Helios's first line is now "Courtesy Notice: This sector's account is 90 minutes past due." (STORY.md updated; no test quoted the old text).
+Open notes from the same round: "the fuse saved Seven more than once" is NOT reproduced (one fuse per shop opening, never refitted; a check goes down five times through restarts and extra pods and sees exactly one save). The mute button against the pause menu's switches, and Arc Spitters / Linebreaker escorts, wait on Sasha.
+
 ## D-057: Build 35d2323 uploaded to itch (Made, 2026-11-19)
 
 Sasha said "Yes, upload now" at 11:52 PM ET. `butler push build\web kingriot/seedshot:html5 --userversion 35d2323` replaced build `9daf41a` (itch build #2444322). Checked on the live files: the engine started, the intro clip played to its end, the title screen showed, and `intro.mp4` is served as `video/mp4`. It carries rounds 2 to 5 and the intro loading screen. Round 5 went up without a human playthrough; the branch `s18-playtest-fixes` is still not merged or pushed.
