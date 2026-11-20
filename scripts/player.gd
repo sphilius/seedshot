@@ -39,7 +39,8 @@ signal hurt
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
 ## Physics layer 1 ("world") as a bit mask, for ray and shape queries.
 const WORLD_MASK: int = 1
-const FALLBACK_COLOR: Color = Color(0.30, 0.70, 0.72)
+# Emerald (#0b8f5c), Seven's colour since the s24 redesign; used only if the texture is missing.
+const FALLBACK_COLOR: Color = Color(0.043, 0.561, 0.361)
 const VINE_COLOR: Color = Color(0.45, 0.85, 0.35)
 const RETICLE_COLOR: Color = Color(1.0, 1.0, 1.0, 0.8)
 ## How long the vine stays drawn after it lashes a machine.

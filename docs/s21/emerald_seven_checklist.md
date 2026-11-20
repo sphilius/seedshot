@@ -1,6 +1,6 @@
 # Emerald Seven: what needs updating (decided 2026-11-20)
 
-Sasha: "we'll go with an emerald green instead of teal for Seven." Nothing below is done yet.
+Sasha: "we'll go with an emerald green instead of teal for Seven." Status 2026-11-20: section 1 (sprites, code fallback colour) and the palette and art-direction entries are DONE (D-069); everything from section 4 down is still open.
 Seven's current teal is `#2f8f8a` (shade `#1f5f5c`). The hex for the emerald is not chosen yet: see
 the readability warning in section 6 before picking it.
 

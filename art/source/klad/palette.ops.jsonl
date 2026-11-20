@@ -10,3 +10,5 @@
 {"op": "palette", "add": "#4a5257", "name": "steel-dark"}
 {"op": "palette", "add": "#9aa5a8", "name": "steel-light"}
 {"op": "palette", "add": "#e0412f", "name": "enemy-red"}
+{"op": "palette", "add": "#0b8f5c", "name": "emerald"}
+{"op": "palette", "add": "#075f3c", "name": "emerald-dark"}
