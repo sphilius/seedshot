@@ -1103,6 +1103,11 @@ func _on_wave_started(number: int, total: int) -> void:
 	if number == 1 and is_instance_valid(heart_tree):
 		lines.append(_radio_line(Radio.CANOPY, CONFIG.heart_intro_line))
 	lines.append_array(_dj(dj_lines_for_wave(number)))
+	# The first wave with tap points on the floor: say what the gold-ringed soil
+	# patches are. (Sasha, after a full run: "it's not clear what they are".)
+	if not tap_points.is_empty() and not _dj_said.has(&"tap_points"):
+		_dj_said[&"tap_points"] = true
+		lines.append(_radio_line(Radio.CANOPY, CONFIG.dj_tap_points))
 	# The first wave that starts with a great sunroot standing: explain Sunburst.
 	# (Not _dj_once: this is said even when the New Game + tutorial was skipped.)
 	if count_great_trees() > 0 and not _dj_said.has(&"sunburst"):

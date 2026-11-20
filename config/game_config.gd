@@ -381,6 +381,8 @@ extends Resource
 ## while it stands, heals Seven when it grows, and is slow to saw. New patches
 ## are picked at the start of every wave from `tap_points_from_wave` on.
 @export var tap_points_per_wave: int = 2
+## What Canopy FM says the first time tap points appear.
+@export var dj_tap_points: String = "See the gold rings on the floor? Old grid taps. Grow a tree on one: Seven gets a pip back and more homes light up."
 @export var tap_points_from_wave: int = 2
 ## Extra windows each standing tap tree lights.
 @export var tap_tree_bonus_windows: int = 3
