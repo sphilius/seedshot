@@ -17,6 +17,8 @@ USAGE (from the project root; needs the ELEVENLABS_API_KEY user environment vari
     python tools/gen_voices.py design --only helios   (or canopy_girl, canopy_boy)
     python tools/gen_voices.py speak               speak every line that has no file yet
     python tools/gen_voices.py speak --only helios (or canopy)
+    python tools/gen_voices.py swap helios 2       replace a designed voice with a clone of its
+                                                   candidate preview N (see the note on `swap`)
     python tools/gen_voices.py level               even out every line's loudness (run after speak)
     python tools/gen_voices.py count               how many characters speak would use
 
@@ -226,6 +228,12 @@ def design(only) -> None:
             "voice_description": voice["description"], "text": voice["sample"],
         })
         previews = reply["previews"]
+        # Keep every preview's id: a preview can only be saved as a voice through its id,
+        # and the reply is the only place that id is ever shown.
+        ids_file = OUT / "preview_ids.json"
+        known = json.loads(ids_file.read_text(encoding="utf-8")) if ids_file.exists() else {}
+        known[key] = [p["generated_voice_id"] for p in previews]
+        ids_file.write_text(json.dumps(known, indent=2), encoding="utf-8")
         for number, preview in enumerate(previews):
             (OUT / "candidates" / f"{key}_preview{number}.mp3").write_bytes(base64.b64decode(preview["audio_base_64"]))
         created = call("/v1/text-to-voice", {
@@ -296,6 +304,64 @@ def speak(only, force: bool) -> None:
     print(f"done; this run cost {credits_used() - spent_before} credits")
 
 
+def api(method: str, path: str, body=None, raw_body=None, content_type="application/json"):
+    """One call to the API with any HTTP method (GET, DELETE, POST). Returns parsed JSON.
+    `body` is a dictionary sent as JSON; `raw_body` is ready-made bytes (a file upload)."""
+    data = raw_body if raw_body is not None else (json.dumps(body).encode("utf-8") if body is not None else None)
+    request = urllib.request.Request(
+        API + path, data=data, method=method,
+        headers={"xi-api-key": os.environ["ELEVENLABS_API_KEY"], "Content-Type": content_type},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=120) as reply:
+            return json.load(reply)
+    except urllib.error.HTTPError as error:
+        sys.exit(f"ElevenLabs refused ({error.code}): {error.read().decode('utf-8', 'replace')[:400]}")
+
+
+def swap(speaker: str, preview: int) -> None:
+    """Replace a designed voice with a CLONE of one of its candidate previews.
+    WHY: a preview can only be saved as a voice using the id it was given when it was made,
+    and for the first previews that id was not kept. A clone made from the preview's audio
+    sounds close to it, but it is a new voice, not the preview itself.
+    WARNING (tried 2026-11-20): ElevenLabs flagged both clones as needing "voice
+    verification" (a captcha you must pass by recording your own voice), and refused to
+    speak with them. A synthetic voice cannot pass that, so this command does not give a
+    usable voice. Prefer `design` (which now keeps preview ids in preview_ids.json) and
+    save the preview you choose.
+    Steps: check the old voice is one of ours ("Seedshot ..."), delete it (this also frees a
+    slot in the account's custom-voice limit), clone the preview's MP3 into a new voice,
+    and point voices.json at it. The file upload is "multipart/form-data": a body made of
+    named parts separated by a boundary line, built by hand here with plain bytes."""
+    saved = load_voices()
+    old_id = saved.get(speaker)
+    sample = OUT / "candidates" / f"{speaker}_preview{preview}.mp3"
+    if not old_id or not sample.exists():
+        sys.exit("need a saved voice for that speaker and a candidate preview file")
+    old = api("GET", f"/v1/voices/{old_id}")
+    if not old.get("name", "").startswith("Seedshot"):
+        sys.exit(f"refusing to delete a voice that is not ours: {old.get('name')}")
+    api("DELETE", f"/v1/voices/{old_id}")
+    print(f"deleted {old['name']}")
+    boundary = "----seedshot" + os.urandom(8).hex()
+    crlf = b"\r\n"  # multipart lines end with a carriage return and a line feed
+    parts = []
+    for name, value in (("name", f"{VOICES[speaker]['name']} (preview {preview})"),
+                        ("description", VOICES[speaker]["description"]),
+                        ("remove_background_noise", "false")):
+        header = f'--{boundary}'.encode() + crlf + f'Content-Disposition: form-data; name="{name}"'.encode() + crlf + crlf
+        parts.append(header + value.encode("utf-8") + crlf)
+    header = (f'--{boundary}'.encode() + crlf
+              + f'Content-Disposition: form-data; name="files"; filename="{sample.name}"'.encode() + crlf
+              + b"Content-Type: audio/mpeg" + crlf + crlf)
+    parts.append(header + sample.read_bytes() + crlf)
+    parts.append(f"--{boundary}--".encode() + crlf)
+    created = api("POST", "/v1/voices/add", raw_body=b"".join(parts), content_type=f"multipart/form-data; boundary={boundary}")
+    saved[speaker] = created["voice_id"]
+    (OUT / "voices.json").write_text(json.dumps(saved, indent=2), encoding="utf-8")
+    print(f"cloned preview {preview} as the new {speaker} voice")
+
+
 def level() -> None:
     """Even out the loudness of every spoken file with ffmpeg's `loudnorm` filter, so the
     two DJs and Helios sit at the same volume. Each file is processed into a temporary
@@ -327,12 +393,15 @@ def count() -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=["design", "use", "speak", "level", "count"])
+    parser.add_argument("command", choices=["design", "use", "speak", "level", "swap", "count"])
+    parser.add_argument("extra", nargs="*", help="swap: <speaker> <preview number>")
     parser.add_argument("--only", help="design: helios|canopy_girl|canopy_boy; speak: helios|canopy")
     parser.add_argument("--force", action="store_true", help="speak again even if the file exists")
     args = parser.parse_args()
     if args.command == "design":
         design(args.only)
+    elif args.command == "swap":
+        swap(args.extra[0], int(args.extra[1]))
     elif args.command == "level":
         level()
     elif args.command == "use":
