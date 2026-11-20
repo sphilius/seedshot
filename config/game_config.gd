@@ -551,7 +551,10 @@ extends Resource
 ## on every great tree, which made a late New Game + screen unreadable.)
 @export var sunburst_sheen_color: Color = Color(1.55, 1.25, 0.50)
 @export var sunburst_glow_color: Color = Color(1.0, 0.78, 0.30, 0.30)
-## Canopy FM explains it the first time great sunroots stand at a wave start.
+## Said once, the first time a canopy line forms between two great sunroots:
+## where the vines come from (s19).
+@export var canopy_line_intro_line: String = "Those glowing vines between the great sunroots? The roots string them on their own, and they snare any machine that crosses."
+## Canopy FM explains Sunburst the first time great sunroots stand at a wave start.
 ## %d is the number of charges.
 @export var sunburst_intro_line: String = "See the great sunroots glow gold? Zip to one for a Sunburst: it stuns every machine near it, and great sunroots close by catch and flare too. You get %d each wave."
 

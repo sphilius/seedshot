@@ -321,6 +321,7 @@ func _ready() -> void:
 	great_powers = GreatPowers.new()
 	great_powers.z_index = 1
 	add_child(great_powers)
+	great_powers.line_formed.connect(_on_canopy_line_formed)
 	# CanvasModulate multiplies the colour of everything drawn in this scene
 	# (floor, walls, sprites, trees) by one colour. The HUD is on its own
 	# CanvasLayer, so it is not tinted and stays readable. This is how the
@@ -1202,6 +1203,18 @@ func _on_wave_started(number: int, total: int) -> void:
 					start_clip(tree, CONFIG.sunburst_intro_title_touch if _is_touch() else CONFIG.sunburst_intro_title, CONFIG.heavy_intro_seconds)
 					break
 	_show_story_lines(lines)
+
+
+## Signal handler: a canopy line just formed between two great sunroots. The
+## first time, Canopy FM says where these vines come from (s19: Sasha did not
+## know why vines appeared by themselves in New Game +). Not _dj_once: it is said
+## in New Game + even when the tutorial was skipped, since that is the only place
+## great sunroots exist. It is marked in _dj_said so a restarted wave says it again.
+func _on_canopy_line_formed() -> void:
+	if _dj_said.has(&"canopy_line"):
+		return
+	_dj_said[&"canopy_line"] = true
+	_radio_later([_radio_line(Radio.CANOPY, CONFIG.canopy_line_intro_line)])
 
 
 ## Signal handler: the director wants one machine sent in.

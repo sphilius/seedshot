@@ -137,6 +137,7 @@ func _ready() -> void:
 	await _test_s19_phase1()
 	await _test_s19_contact()
 	await _test_s19_snare()
+	await _test_s19_canopy_line_line()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -3215,3 +3216,29 @@ func _test_s19_snare() -> void:
 
 	# Item 5 (numbers only): the forest's grip is shorter than it was.
 	_check(CONFIG.canopy_line_bind_seconds < 2.5 and CONFIG.trellis_bind_seconds < 2.0, "the forest's snares are shorter than the old binds (%.1f s and %.1f s)" % [CONFIG.canopy_line_bind_seconds, CONFIG.trellis_bind_seconds])
+
+
+## s19 item 6: Canopy FM explains the forest's vines the first time one forms.
+func _test_s19_canopy_line_line() -> void:
+	await _fresh_arena()
+	_arena.ng_plus = true
+	_arena.tutorial_on = false  # New Game +, no reminder: the line must still come
+	var a: ForestTree = _arena.spawn_tree(Vector2i(3, 12), true)
+	var b: ForestTree = _arena.spawn_tree(Vector2i(9, 12), true)
+	_check(_radio_copies_of(CONFIG.canopy_line_intro_line) == 0, "nothing is said before a line forms")
+	a.mature()
+	b.mature()
+	await _wait_frames(3)
+	_check(_arena.great_powers.lines.size() == 1, "two great sunroots string a canopy line")
+	_check(_radio_copies_of(CONFIG.canopy_line_intro_line) == 1, "the first canopy line makes Canopy FM explain the vines")
+	_check(not CONFIG.canopy_line_intro_line.contains("\n") and CONFIG.canopy_line_intro_line.count(". ") == 0, "and it is one sentence")
+	# Said once: clear the radio, then form another line between two more trees.
+	_arena._story_queue.clear()
+	_arena.radio.clear()
+	_arena._current_line = {}
+	var c: ForestTree = _arena.spawn_tree(Vector2i(3, 6), true)
+	var d: ForestTree = _arena.spawn_tree(Vector2i(9, 6), true)
+	c.mature()
+	d.mature()
+	await _wait_frames(3)
+	_check(_arena.great_powers.lines.size() >= 2 and _radio_copies_of(CONFIG.canopy_line_intro_line) == 0, "a later line says nothing more")

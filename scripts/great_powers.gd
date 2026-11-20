@@ -45,6 +45,10 @@ const WORLD_MASK: int = 1
 ## How long the Sunburst's ring of light takes to spread and fade, in seconds.
 const BURST_SECONDS: float = 0.5
 
+## Emitted when a rebuild strings a cable that was not standing before. The
+## arena answers (once per run) with a Canopy FM line explaining the vines.
+signal line_formed
+
 ## One entry per cable standing right now: {a: ForestTree, b: ForestTree, key: String}.
 ## Public so the tests can read it.
 var lines: Array[Dictionary] = []
@@ -160,6 +164,10 @@ func _forest_signature() -> int:
 ## So each tree ends up tied to its nearest neighbours, and short cables win.
 func _rebuild_lines() -> void:
 	rebuild_count += 1
+	# Remember which cables stood, so a NEW one can be announced below.
+	var stood_before: Dictionary[String, bool] = {}
+	for old_line: Dictionary in lines:
+		stood_before[old_line.key] = true
 	lines.clear()
 	var great: Array[ForestTree] = []
 	for node: Node in get_tree().get_nodes_in_group(ForestTree.GROUP):
@@ -200,8 +208,13 @@ func _rebuild_lines() -> void:
 
 	# Forget the recharge timers of cables that no longer stand.
 	var standing: Dictionary[String, bool] = {}
+	var any_new: bool = false
 	for line: Dictionary in lines:
 		standing[line.key] = true
+		if not stood_before.has(line.key):
+			any_new = true
+	if any_new:
+		line_formed.emit()
 	for key: String in _recharge.keys():
 		if not standing.has(key):
 			_recharge.erase(key)
