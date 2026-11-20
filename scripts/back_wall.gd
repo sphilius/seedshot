@@ -58,6 +58,19 @@ func setup(arena_rect: Rect2, wall_px: float, shop_cell_x: int) -> void:
 	queue_redraw()
 
 
+## The first cell of every front along a wall `cols` cells wide where Lucky's
+## shop can hide: the SHUTTER fronts, so it is always one shutter among others.
+## The very first front is left out (it sits in the corner of the lot, where a
+## seed pod can hardly reach it). `static`: it needs no wall to exist yet, so the
+## arena can ask before it builds one.
+static func shop_cells(cols: int) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	for index: int in range(1, cols / FRONT_CELLS):  # whole-number division
+		if PATTERN[index % PATTERN.size()] == Kind.SHUTTER:
+			cells.append(Vector2i(index * FRONT_CELLS, 0))  # row 0 is the top wall
+	return cells
+
+
 ## How many fronts fit along the wall. Public for the tests.
 func front_count() -> int:
 	return int(_arena_rect.size.x / (_wall_px * FRONT_CELLS))

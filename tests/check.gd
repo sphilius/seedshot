@@ -124,6 +124,7 @@ func _ready() -> void:
 	await _test_s18_sunburst_chain()
 	await _test_s18_wear_and_big_moments()
 	await _test_s18_entrances()
+	await _test_s18_lucky_moves()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -155,6 +156,8 @@ func _fresh_arena(with_heart: bool = false) -> void:
 	# The heavy machines' intro clips slow the whole game down; only the test
 	# written for them switches them back on.
 	_arena.intro_clips_on = false
+	# Lucky's shop moves each run; the tests keep it where they know to shoot.
+	_arena.random_cat_shop = false
 	add_child(_arena)
 	# Give the physics engine two steps to register the new bodies.
 	await get_tree().physics_frame
@@ -2726,3 +2729,52 @@ func _test_s18_entrances() -> void:
 	_arena._on_spawn_requested(WaveDirector.LINEBREAKER, 6)
 	_check(_arena.clip_left <= 0.0, "a second Linebreaker drops in without a clip")
 	_check(Sfx.stream_for(&"crash") != null and Sfx.stream_for(&"drop") != null and Sfx.stream_for(&"gate") != null, "the crash, the falling whistle and the gate each have a sound")
+
+
+## s18 round 3: Lucky's shop hides behind a random shutter each run, and the
+## heavy landing has a real recorded sound.
+func _test_s18_lucky_moves() -> void:
+	# The places it may hide: shutter fronts of the back wall, never the corner one.
+	var places: Array[Vector2i] = BackWall.shop_cells(CONFIG.grid_cols)
+	_check(places.size() >= 3 and places.has(Arena.CAT_SHOP_CELL), "the shop has %d shutters to hide behind, the old spot among them" % places.size())
+	var all_shutters: bool = true
+	for place: Vector2i in places:
+		var index: int = place.x / BackWall.FRONT_CELLS
+		all_shutters = all_shutters and index > 0 and place.y == 0 and BackWall.PATTERN[index % BackWall.PATTERN.size()] == BackWall.Kind.SHUTTER
+	_check(all_shutters, "every hiding place is a shutter front in the top wall, away from the corner")
+
+	# Build a dozen arenas with the knob ON and note where the shop went.
+	# (_fresh_arena switches the knob off, so these are built by hand here.)
+	var seen: Dictionary[Vector2i, bool] = {}
+	var always_lined_up: bool = true
+	for i: int in 12:
+		if _arena != null:
+			_arena.queue_free()
+			await get_tree().physics_frame
+		_arena = ARENA_SCENE.instantiate()
+		_arena.autostart_waves = false
+		_arena.intro_clips_on = false
+		add_child(_arena)
+		await get_tree().physics_frame
+		seen[_arena.cat_shop_cell] = true
+		# The shop node, the gap left in the back wall and the chosen cell must agree.
+		var front: int = _arena.cat_shop_cell.x / BackWall.FRONT_CELLS
+		var lined_up: bool = places.has(_arena.cat_shop_cell) and _arena.back_wall.is_shop_front(front)
+		lined_up = lined_up and is_equal_approx(_arena.back_wall.front_rect(front).get_center().x, _arena.cat_shop.global_position.x)
+		always_lined_up = always_lined_up and lined_up
+	_check(always_lined_up, "wherever it is, the shop stands exactly in the gap the back wall leaves for it")
+	_check(seen.size() >= 2, "over 12 runs the shop turned up in %d different places" % seen.size())
+
+	# It still opens to three pods in its new place.
+	var shop: CatShop = _arena.cat_shop
+	for i: int in CONFIG.cat_hits_needed:
+		var pod: SeedPod = Arena.SEED_POD_SCENE.instantiate()
+		# Start each pod two cells below the shop, flying straight up at it.
+		pod.position = shop.global_position + Vector2(0.0, CONFIG.cell_size * 2.0)
+		pod.direction = Vector2.UP
+		_arena.get_node("Pods").add_child(pod)
+		await _wait_frames(20)
+	_check(shop.is_open, "three pods open the shop wherever it is hiding")
+
+	# The landing crash is a real recording now, not the generated one.
+	_check(Sfx.stream_for(&"crash") is AudioStreamMP3, "the heavy landing plays the recorded crash")

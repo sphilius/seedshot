@@ -21,6 +21,7 @@ $targets = @{
 	fire = -27; saw = -28; thunk = -25; plink = -25; spit = -23; zip = -23; grow = -23
 	windup = -23; hurt = -19; bind = -22; enemy_down = -21; unlock = -24
 	player_down = -20; wave_clear = -16; cat = -19
+	crash = -17   # rare and meant to be felt: a heavy machine landing
 }
 
 foreach ($pick in $Picks) {

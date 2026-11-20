@@ -52,3 +52,4 @@ One line per asset or system: tool, date, what it did. This feeds the itch page'
 - Hit flash, screen shake and hurt cue (s18): code and numbers by Claude Code from Sasha's playtest notes (hit-read, impact). No new assets.
 - Playtest round 2 (s18): machine roles and cover AI, force-field shields, lightning shots, roof graffiti tags, Sunburst chain, wear and tear on Seven, slow-motion knock-out and fuse revive: code and numbers by Claude Code from Sasha's playtest notes. No new assets; staged screenshots in itch/ retaken.
 - Entrances (s18): wall gates, heavy-machine drops, the first-heavy intro clip, and the crash / drop / gate sounds (generated in code, no audio files): Claude Code from Sasha's notes. Title screen restyle likewise. Fourth staged screenshot added to itch/.
+- crash.mp3 (s18): ElevenLabs Sound Effects, prompt in audio/SOUNDS.md row 16, take 2 of 2, levelled with tools/pick_sfx.ps1. Plays when a Linebreaker or Arc Spitter lands.

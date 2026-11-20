@@ -35,8 +35,9 @@ const TEST_TREE_CELLS: Array[Vector2i] = [Vector2i(9, 4), Vector2i(13, 10), Vect
 const PLAYER_START_CELL: Vector2i = Vector2i(6, 7)
 ## The Heart Tree's cell: the middle of the lot (see forest_tree.gd is_heart).
 const HEART_TREE_CELL: Vector2i = Vector2i(13, 7)
-## The hidden shop fills this wall cell and the one to its right: top wall, well
-## to the right, away from where the fight naturally happens.
+## The hidden shop fills a wall cell and the one to its right, in the top wall.
+## This is where it stood in every run until s18 round 3, and where it stands
+## when random_cat_shop is switched off (the tests do that). See cat_shop_cell.
 const CAT_SHOP_CELL: Vector2i = Vector2i(20, 0)
 ## Physics layers 2 + 3 ("player" + "enemies") as a bit mask: 2 + 4 = 6.
 const BODIES_MASK: int = 6
@@ -168,6 +169,12 @@ var heart_tree: ForestTree
 var heart_alarms: int = 0
 ## Seconds until Canopy FM may raise the Heart Tree alarm again.
 var _heart_alarm_left: float = 0.0
+## Knob: Lucky's shop hides behind a different shutter of the back wall each
+## run. The tests switch it off so they know where to shoot.
+@export var random_cat_shop: bool = true
+## Where the shop is THIS run (its left cell). Picked once in _ready, so a
+## restarted wave does not move it; a new run picks again. Public for the tests.
+var cat_shop_cell: Vector2i = CAT_SHOP_CELL
 ## Knob: plant the Heart Tree at the start. The tests switch it off for the
 ## older checks that count trees, since writes to the shared config are ignored.
 @export var plant_heart_tree: bool = true
@@ -249,8 +256,15 @@ func _ready() -> void:
 	add_child(graffiti)
 	# The back (top) wall: a row of home and shop fronts. Lucky's shop is added
 	# further down and draws itself into the gap this leaves for it.
+	# LUCKY'S SHOP MOVES (s18 round 3): one of the back wall's shutter fronts is
+	# picked at random, so finding the cat is a hunt in every run, not a place
+	# to remember. Canopy FM's hints only say "the north wall", which stays true.
+	if random_cat_shop:
+		var hiding_places: Array[Vector2i] = BackWall.shop_cells(grid.cols)
+		if not hiding_places.is_empty():
+			cat_shop_cell = hiding_places[_rng.randi_range(0, hiding_places.size() - 1)]
 	back_wall = BackWall.new()
-	back_wall.setup(Rect2(origin, arena_px), float(CONFIG.cell_size), CAT_SHOP_CELL.x)
+	back_wall.setup(Rect2(origin, arena_px), float(CONFIG.cell_size), cat_shop_cell.x)
 	add_child(back_wall)
 	# Lantern strings across the lot. Added before the trees and machines, so
 	# they hang underneath them and never hide the action.
@@ -321,7 +335,7 @@ func _ready() -> void:
 	# The hidden lucky cat's shop. It is two cells wide, so its centre sits on
 	# the line between its two cells: half a cell right of the first one's centre.
 	cat_shop = CatShop.new()
-	cat_shop.position = grid.cell_to_world(CAT_SHOP_CELL) + Vector2(CONFIG.cell_size / 2.0, 0.0)
+	cat_shop.position = grid.cell_to_world(cat_shop_cell) + Vector2(CONFIG.cell_size / 2.0, 0.0)
 	cat_shop.opened.connect(_on_cat_shop_opened)
 	add_child(cat_shop)
 

@@ -23,6 +23,7 @@
 | 12 | `wave_clear.mp3` | A wave is cleared | 1.5 s | `Bright triumphant four-note rising fanfare on marimba and small bells, clear, loud and joyful, short, clean ending` |
 | 13 | `cat.mp3` | The hidden shop opens | 2.0 s | `A small brass bell rings twice, then a happy short cat meow, bright and lucky, clean` |
 | 14 | `unlock.mp3` | Your very first click (proves sound is on) | 0.5 s | `Two quick soft plastic clicks, a small switch being flicked on, gentle interface sound, dry` |
+| 16 | `crash.mp3` | A Linebreaker or Arc Spitter drops in and lands | 1.5 s | `A heavy steel machine dropped from a height slamming onto a concrete floor, one deep booming impact with a short metallic clang and a little falling grit and rubble, dry, no reverb tail, no voices, no music` |
 
 **Do these first if time is short:** 1, 3, 4, 7, 13. They are heard most, or matter most (7 is the "dodge now" warning, 13 is the jam's hidden cat).
 
