@@ -448,6 +448,15 @@ func _touch_controls() -> TouchControls:
 
 
 ## Lets the game run for a number of physics steps (60 steps = one second).
+## Waits for `count` DRAWN frames. _process (where the arena updates the HUD,
+## the tints and the sheets) runs once per drawn frame, and on a busy computer
+## several physics frames can pass between two of them, so a check that needs
+## _process to have run must wait with this and not with _wait_frames.
+func _wait_drawn_frames(count: int) -> void:
+	for i: int in count:
+		await get_tree().process_frame  # `process_frame` fires once per drawn frame
+
+
 func _wait_frames(count: int) -> void:
 	for i: int in count:
 		await get_tree().physics_frame
@@ -2061,7 +2070,7 @@ func _test_plating_and_grove_rest() -> void:
 	# The HUD: with the longest wave label and every pip, the row starts after
 	# the label and ends before the right margin.
 	_arena._wave_label.text = "Wave 10 / 10    Homes lit 40 / 40    Trees 100    Brambles 2 / 2"
-	await _wait_frames(2)  # let the arena's _process hand the label's end to the pips
+	await _wait_drawn_frames(4)  # let the arena's _process hand the label's end to the pips
 	var label_end: float = _arena._wave_label.position.x + _arena._wave_label.get_minimum_size().x
 	var last: Rect2 = pips.pip_rect(pips.maximum - 1)
 	_check(pips.maximum == CONFIG.player_hp_cap and pips.pip_rect(0).position.x >= label_end, "the full row of pips starts after the wave label")
@@ -2475,11 +2484,11 @@ func _test_s18_shields_and_bolts() -> void:
 	var great: ForestTree = _arena.spawn_tree(Vector2i(5, 11), true)
 	great.mature()
 	# (The arena sets ForestTree.sunburst_ready itself every frame, from the charges.)
-	await _wait_frames(2)
+	await _wait_drawn_frames(4)
 	var glow := great.get_node(Glow.NODE_NAME) as Sprite2D
 	_check(glow.modulate.is_equal_approx(CONFIG.sunburst_glow_color), "a ready Sunburst turns a great sunroot's light gold")
 	_arena.great_powers.sunburst_charges = 0
-	await _wait_frames(2)
+	await _wait_drawn_frames(4)
 	_check(glow.modulate.is_equal_approx(CONFIG.tree_glow_color), "and it goes back to green when none is ready")
 
 
@@ -2631,7 +2640,7 @@ func _test_s18_wear_and_big_moments() -> void:
 	_check(player.hp == CONFIG.fuse_revive_hp and not player.is_dead, "the fuse puts Seven back up")
 	_check(is_equal_approx(player.fuse_shield_left, CONFIG.fuse_invulnerable_time), "with a shield for %.0f seconds" % CONFIG.fuse_invulnerable_time)
 	_check(_arena.drama_left > 0.0 and is_equal_approx(Engine.time_scale, CONFIG.drama_slow_scale), "the game drops into slow motion for the moment")
-	await _wait_frames(3)
+	await _wait_drawn_frames(4)
 	_check(_arena.dim_sheet.color.a > 0.0, "and the screen darkens")
 	_check(not player.take_damage(1), "nothing can hurt Seven while the shield is up")
 	# The slow motion ends by itself after fuse_drama_seconds of REAL time.
