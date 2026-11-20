@@ -98,6 +98,7 @@ func _ready() -> void:
 
 	# Layer 2i: the story words (STORY.md step 1).
 	await _test_story_words()
+	await _test_radio_voices()
 	# Layer 2j: the night look and the windows (STORY.md step 2).
 	await _test_windows_and_night()
 	await _test_tree_pictures()
@@ -244,6 +245,58 @@ func _test_art_is_the_right_size() -> void:
 	# 1.3333 x 48 is 63.998, not exactly 64, so allow a tenth of a pixel of slack.
 	# absf() gives the size of a number without its sign.
 	_check(absf(CONFIG.sprite_size_cells * CONFIG.cell_size - 64.0) < 0.1, "sprites are drawn at their real size")
+
+
+## The spoken radio lines (audio/voice, made by tools/gen_voices.py): every line the
+## radio can say has a recording, the recording matches the words now in the config,
+## and the radio plays and stops it.
+func _test_radio_voices() -> void:
+	# 1. Every spoken variable has a file for every entry, and the words the tool
+	#    spoke (manifest.json) are the words in the config today.
+	var manifest_file: FileAccess = FileAccess.open("res://audio/voice/manifest.json", FileAccess.READ)
+	_check(manifest_file != null, "the voice manifest is there")
+	var manifest: Dictionary = {}
+	if manifest_file != null:
+		manifest = JSON.parse_string(manifest_file.get_as_text())
+	var missing: Array[String] = []
+	var stale: Array[String] = []
+	var spoken_count: int = 0
+	for variable: StringName in Radio.VOICE_VARS:
+		var value: Variant = CONFIG.get(variable)
+		var texts: Array = value if value is Array else [value]
+		for index: int in texts.size():
+			var id: String = "%s_%d" % [variable, index]
+			spoken_count += 1
+			if not ResourceLoader.exists("res://audio/voice/%s.mp3" % id):
+				missing.append(id)
+			if not manifest.has(id) or manifest[id]["text"] != texts[index]:
+				stale.append(id)
+	_check(missing.is_empty(), "every spoken line has a recording (%d lines; missing: %s)" % [spoken_count, ", ".join(missing)])
+	_check(stale.is_empty(), "the recordings were made from today's words (run tools/gen_voices.py speak --force if not; stale: %s)" % ", ".join(stale))
+	# 2. A line is found by its words, with the Sunburst number filled in as the arena sends it.
+	_check(Radio.voice_path_for(CONFIG.helios_lines[0]) == "res://audio/voice/helios_lines_0.mp3", "Helios's first line finds its recording")
+	_check(Radio.voice_path_for(CONFIG.sunburst_intro_line % CONFIG.sunburst_charges_per_wave).ends_with("sunburst_intro_line_0.mp3"), "the Sunburst tip finds its recording with its number filled in")
+	_check(Radio.voice_path_for("Lucky speaks.") == "", "an unspoken line has no recording")
+	# 3. The radio plays it, cuts it when a new line comes, and stops it when taken off the air.
+	await _fresh_arena()
+	var was_unlocked: bool = Sfx.is_unlocked
+	var was_effects: bool = Sfx.effects_on
+	Sfx.is_unlocked = true
+	Sfx.effects_on = true
+	var radio: Radio = _arena.radio
+	radio.say(Radio.HELIOS, CONFIG.helios_lines[0], CONFIG.helios_lines[0])
+	_check(radio.is_voice_playing(), "Helios's line is spoken")
+	radio.say(Radio.LUCKY, "Lucky speaks.", "Lucky speaks.")
+	_check(not radio.is_voice_playing(), "a line with no recording cuts the voice that was speaking")
+	radio.say(Radio.CANOPY, CONFIG.dj_intro[0], CONFIG.dj_intro[0])
+	_check(radio.is_voice_playing(), "a Canopy FM line is spoken")
+	radio.clear()
+	_check(not radio.is_voice_playing(), "taking the radio off the air stops the voice")
+	Sfx.effects_on = false
+	radio.say(Radio.HELIOS, CONFIG.helios_lines[0], CONFIG.helios_lines[0])
+	_check(not radio.is_voice_playing(), "with Sound effects off there is no voice")
+	Sfx.is_unlocked = was_unlocked
+	Sfx.effects_on = was_effects
 
 
 ## Layer 3b: the ElevenLabs sounds. Every sound name the game plays must come

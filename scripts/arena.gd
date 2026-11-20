@@ -1085,7 +1085,7 @@ func _show_next_story_line() -> void:
 	var shown: String = line.text
 	if radio_static_on and line.speaker == Radio.CANOPY:
 		shown = with_static(shown, light_level())
-	radio.say(line.speaker, shown)
+	radio.say(line.speaker, shown, line.text)  # line.text is the words as the config has them
 	_story_time_left = _hold_seconds_for(line.speaker) + float(line.text.length()) / CONFIG.radio_chars_per_second
 
 
@@ -1640,7 +1640,7 @@ func _on_all_waves_cleared() -> void:
 	windows.light_next_block()  # the light jumps the wall
 	# Helios gets the last word, and it stays up with the banner.
 	_story_queue.clear()
-	radio.say(Radio.HELIOS, CONFIG.helios_end_line)
+	radio.say(Radio.HELIOS, CONFIG.helios_end_line, CONFIG.helios_end_line)
 	_story_time_left = 0.0
 
 

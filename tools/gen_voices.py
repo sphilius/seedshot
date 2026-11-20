@@ -17,6 +17,7 @@ USAGE (from the project root; needs the ELEVENLABS_API_KEY user environment vari
     python tools/gen_voices.py design --only helios   (or canopy_girl, canopy_boy)
     python tools/gen_voices.py speak               speak every line that has no file yet
     python tools/gen_voices.py speak --only helios (or canopy)
+    python tools/gen_voices.py level               even out every line's loudness (run after speak)
     python tools/gen_voices.py count               how many characters speak would use
 
 OUT
@@ -293,6 +294,25 @@ def speak(only, force: bool) -> None:
     print(f"done; this run cost {credits_used() - spent_before} credits")
 
 
+def level() -> None:
+    """Even out the loudness of every spoken file with ffmpeg's `loudnorm` filter, so the
+    two DJs and Helios sit at the same volume. Each file is processed into a temporary
+    file, then moved over the original. Needs ffmpeg on the PATH. Run it once after
+    `speak`; running it again is harmless (a levelled file stays levelled).
+    subprocess.run starts another program and waits for it; check=True raises an error
+    if that program fails, so a broken file is never quietly kept."""
+    import subprocess
+    for file in sorted(OUT.glob("*.mp3")):
+        temporary = file.with_suffix(".tmp.mp3")
+        subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error", "-i", str(file),
+             "-af", "loudnorm=I=-18:TP=-2:LRA=9", "-ar", "44100", "-b:a", "64k", str(temporary)],
+            check=True,
+        )
+        temporary.replace(file)  # replace() overwrites the original with the new file
+        print(f"levelled {file.name}")
+
+
 def count() -> None:
     """Show how many characters `speak` would send, per speaker, and the credit estimate."""
     totals = {}
@@ -305,12 +325,14 @@ def count() -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=["design", "use", "speak", "count"])
+    parser.add_argument("command", choices=["design", "use", "speak", "level", "count"])
     parser.add_argument("--only", help="design: helios|canopy_girl|canopy_boy; speak: helios|canopy")
     parser.add_argument("--force", action="store_true", help="speak again even if the file exists")
     args = parser.parse_args()
     if args.command == "design":
         design(args.only)
+    elif args.command == "level":
+        level()
     elif args.command == "use":
         use_library()
     elif args.command == "speak":

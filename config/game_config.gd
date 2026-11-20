@@ -769,6 +769,11 @@ extends Resource
 @export var radio_chars_per_second: float = 22.0
 ## Chance (0 to 1) that a letter of Helios's broadcast flickers into static.
 @export var radio_helios_static: float = 0.03
+## The spoken voices (audio/voice, played by radio.gd): their loudness in decibels
+## (0 = as the file is; each -6 is about half as loud), and how many decibels quieter
+## Canopy FM's voices are while the block is dark and the signal weak.
+@export var radio_voice_db: float = -4.0
+@export var radio_voice_dark_drop_db: float = -9.0
 ## Canopy FM's DJ, wave 1 (keyboard and mouse): the tutorial. Feeble signal.
 @export var dj_intro: Array[String] = [
 	"...is this thing on? Hello? Meter-bot? Seven? If you can hear me, move. WASD, you know the drill. Or you don't, so: WASD.",
