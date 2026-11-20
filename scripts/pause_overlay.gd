@@ -10,10 +10,16 @@ extends Node2D
 ##   Mute     press M, or tap/click the speaker button (left of the pause button)
 ##
 ## THE PAUSE MENU (s18; before that it was only the word "Paused"):
-##   left side    six buttons: Resume, Restart this wave, Sound effects on/off,
-##                Music on/off, Full screen on/off (s23), Quit to main menu.
-##                Click or tap one, or press its number. P or Esc also resumes.
-##   right side   this run's numbers (wave, homes lit, trees...) and the controls.
+##   left side    seven buttons: Resume, Restart this wave, Sound effects on/off,
+##                Music on/off, Full screen on/off (s23), Logbook (s25), Quit to
+##                main menu. Click or tap one, or press its number. P or Esc also
+##                resumes.
+##   right side   this run's numbers (wave, homes lit, trees...) and the controls,
+##                or, after a press on Logbook, a page of the Logbook.
+##   THE LOGBOOK (s25): every Canopy FM and Lucky line said this run, newest
+##   first (see logbook.gd). Each press on Logbook shows the next, older page;
+##   a press on the last page goes back to this run's numbers. A new pause always
+##   opens on this run's numbers.
 ##   Restart and Quit throw progress away, so they ask first: the first press
 ##   changes the button to "Sure? ...", the second press does it.
 ##
@@ -44,11 +50,14 @@ const PAUSED_TEXT: String = "PAUSED"
 const NO_PRESS: Vector2 = Vector2.INF
 
 ## The menu buttons, top to bottom. The numbers are their places in the list.
-## (Full screen sits above Quit so the button that throws the run away stays last.)
-enum Item { RESUME, RESTART, EFFECTS, MUSIC, FULLSCREEN, QUIT }
-const ITEM_COUNT: int = 6
-const MENU_BUTTON_SIZE: Vector2 = Vector2(440.0, 62.0)
-const MENU_BUTTON_GAP: float = 14.0
+## (Full screen and Logbook sit above Quit so the button that throws the run away
+## stays last.)
+enum Item { RESUME, RESTART, EFFECTS, MUSIC, FULLSCREEN, LOGBOOK, QUIT }
+const ITEM_COUNT: int = 7
+## s25: 8 px shorter and 4 px closer than before, so seven buttons fit the
+## 720 px tall screen with the hint line under them.
+const MENU_BUTTON_SIZE: Vector2 = Vector2(440.0, 54.0)
+const MENU_BUTTON_GAP: float = 10.0
 ## Top-left corner of the first button, in screen pixels.
 const MENU_TOP_LEFT: Vector2 = Vector2(120.0, 190.0)
 ## Left edge of the right-hand column (stats and controls).
@@ -58,6 +67,11 @@ const EDGE_COLOR: Color = Color(0.35, 0.90, 0.85)
 const WARN_COLOR: Color = Color(1.0, 0.45, 0.35)
 const TITLE_COLOR: Color = Color(1.0, 0.82, 0.50)
 const TEXT_COLOR: Color = Color(0.92, 0.94, 0.96)
+## s25: the Logbook's text size and row spacing, in pixels.
+const LOGBOOK_FONT_SIZE: int = 17
+const LOGBOOK_ROW_GAP: float = 26.0
+## Extra space between two Logbook lines, so each tip reads as its own block.
+const LOGBOOK_LINE_GAP: float = 8.0
 ## The words that mark the bind line in the two lists below.
 const BIND_MARK: String = "bind it"
 ## s24: the words that mark the Bramble Seed line (hidden until its card is picked).
@@ -94,6 +108,12 @@ var bind_unlocked: bool = false
 ## s24: true once Seven has Bramble Seeds (its card is picked, or the run started
 ## with them). Until then the Bramble line is left out. Set by the arena.
 var bramble_unlocked: bool = true
+## s25: the book the arena writes radio lines into. null until the arena sets it
+## (the menu then shows an empty Logbook).
+var logbook: Logbook
+## Which Logbook page is on the right (0 = the newest lines). -1 = no Logbook:
+## this run's numbers and the controls are shown instead.
+var logbook_page: int = -1
 
 ## The mute state the speaker icon was last drawn with (see _process).
 var _drawn_muted: bool = false
@@ -201,6 +221,8 @@ func choose(index: int) -> void:
 		Item.FULLSCREEN:
 			# The menu stays up, so the player sees the switch and resumes when ready.
 			toggle_fullscreen()
+		Item.LOGBOOK:
+			next_logbook_page()
 		Item.QUIT:
 			set_paused(false)
 			quit_requested.emit()
@@ -241,6 +263,20 @@ func toggle_fullscreen() -> bool:
 	return true
 
 
+## s25: shows the next, older Logbook page; past the last page (or with an empty
+## book, on the second press) it goes back to this run's numbers. Public for tests.
+func next_logbook_page() -> void:
+	logbook_page += 1
+	# maxi(..., 1): an empty book still gets one page, the "nothing yet" one.
+	if logbook_page >= maxi(_logbook_pages().size(), 1):
+		logbook_page = -1
+
+
+## The Logbook as pages of rows (see Logbook.pages). Empty without a book.
+func _logbook_pages() -> Array:
+	return logbook.pages() if logbook != null else []
+
+
 ## The text on menu button `index`, with its number in front.
 func menu_label(index: int) -> String:
 	var text: String = ""
@@ -258,9 +294,20 @@ func menu_label(index: int) -> String:
 				text = "Full screen: not in this browser"
 			else:
 				text = "Full screen: %s" % ("On" if is_fullscreen() else "Off")
+		Item.LOGBOOK:
+			text = _logbook_label()
 		Item.QUIT:
 			text = "Sure? This run will be lost" if _armed == index else "Quit to main menu"
 	return "%d   %s" % [index + 1, text]
+
+
+## What the Logbook button says: what the next press will do.
+func _logbook_label() -> String:
+	if logbook_page < 0:
+		return "Logbook: tips so far"
+	if logbook_page + 1 < _logbook_pages().size():
+		return "Logbook: older tips"
+	return "Logbook: close"
 
 
 ## While the speaker button / M key has muted the game, the two sound rows add
@@ -296,11 +343,14 @@ func _draw() -> void:
 		var edge: Color = WARN_COLOR if _armed == i else EDGE_COLOR
 		draw_rect(rect, PANEL_COLOR)
 		draw_rect(rect, edge, false, 2.0)  # false = outline only
-		draw_string(font, rect.position + Vector2(20.0, 40.0), menu_label(i), HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 40.0, 24, TEXT_COLOR)
+		draw_string(font, rect.position + Vector2(20.0, 36.0), menu_label(i), HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 40.0, 24, TEXT_COLOR)
 	var hint_y: float = menu_button_rect(ITEM_COUNT - 1).end.y + 34.0
 	draw_string(font, Vector2(MENU_TOP_LEFT.x, hint_y), "P or Esc also resumes. New Game + stays unlocked if you quit.", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 15, Color(TEXT_COLOR, 0.7))
 
-	# Right side: this run's numbers, then the controls.
+	# Right side: a Logbook page, or this run's numbers and the controls.
+	if logbook_page >= 0:
+		_draw_logbook(font)
+		return
 	var y: float = 130.0
 	draw_string(font, Vector2(INFO_LEFT, y), "THIS RUN", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 24, TITLE_COLOR)
 	# is_valid() is false until the arena has handed its function over.
@@ -313,6 +363,28 @@ func _draw() -> void:
 	for line: String in controls_lines(DisplayServer.is_touchscreen_available()):
 		y += 28.0
 		draw_string(font, Vector2(INFO_LEFT, y), line, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 18, Color(TEXT_COLOR, 0.85))
+
+
+## s25: draws Logbook page `logbook_page` in the right-hand column. Each row is
+## tinted with its speaker's radio colour (Canopy FM gold, Lucky pink).
+func _draw_logbook(font: Font) -> void:
+	var pages: Array = _logbook_pages()
+	var y: float = 130.0
+	var title: String = "LOGBOOK"
+	if pages.size() > 1:
+		title += "   page %d / %d" % [logbook_page + 1, pages.size()]
+	draw_string(font, Vector2(INFO_LEFT, y), title, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 24, TITLE_COLOR)
+	if pages.is_empty():
+		draw_string(font, Vector2(INFO_LEFT, y + 34.0), "Nothing yet. Canopy FM's and Lucky's tips land here.", HORIZONTAL_ALIGNMENT_LEFT, -1.0, LOGBOOK_FONT_SIZE, Color(TEXT_COLOR, 0.7))
+		return
+	var right_edge: float = get_viewport_rect().size.x - 30.0
+	var page: Array = pages[logbook_page]
+	for i: int in page.size():
+		var row: Dictionary = page[i]
+		# The first row of each line after the top one gets a small gap above it.
+		y += LOGBOOK_ROW_GAP + (LOGBOOK_LINE_GAP if row.first and i > 0 else 0.0)
+		var colour: Color = Radio.TEXT_COLORS.get(row.speaker, TEXT_COLOR)
+		draw_string(font, Vector2(INFO_LEFT, y), row.text, HORIZONTAL_ALIGNMENT_LEFT, right_edge - INFO_LEFT, LOGBOOK_FONT_SIZE, colour)
 
 
 ## The controls to list: the keyboard or the touch set, without the bind line
@@ -333,6 +405,7 @@ func controls_lines(touch: bool) -> Array[String]:
 func set_paused(paused: bool) -> void:
 	get_tree().paused = paused
 	_armed = -1  # a half-confirmed Restart or Quit never carries over
+	logbook_page = -1  # a new pause opens on this run's numbers, not the Logbook
 	queue_redraw()  # swap between the icon and the menu
 
 
