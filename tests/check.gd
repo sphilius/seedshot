@@ -238,6 +238,20 @@ func _test_s25_logbook() -> void:
 	var pages: Array = Logbook.pages_from(made_up, 5, 30)
 	_check(pages.size() == 3 and pages[0].size() == 4 and pages[2].size() == 2, "rows pack onto pages, two lines of two rows per five-row page")
 	_check(pages[1][0].first, "and every page starts on the first row of a line")
+	# Blocks: a two-line tip still reads top to bottom, under one tag.
+	var said_in_order: Array[Dictionary] = [
+		{speaker = Radio.CANOPY, text = "New toy: press Q.", wave = 4},
+		{speaker = Radio.CANOPY, text = "You hold three.", wave = 4},
+		{speaker = Radio.LUCKY, text = "Mrrp.", wave = 4},
+	]
+	var shown: Array[Dictionary] = Logbook.newest_blocks_first(said_in_order)
+	_check(shown[0].text == "Mrrp." and shown[1].text == "New toy: press Q." and shown[2].text == "You hold three.", "the newest block comes first, but a tip's own lines keep their order")
+	_check(shown[0].tagged and shown[1].tagged and not shown[2].tagged, "and only a block's first line carries the speaker tag")
+	var block_rows: Array = Logbook.pages_from(shown, 10, 60)[0]
+	_check(block_rows[2].text == "You hold three." and not block_rows[2].new_block and block_rows[1].new_block, "the tip's second line is drawn untagged, with no gap above it")
+	# A block that runs onto the next page names its speaker again there.
+	var split: Array = Logbook.pages_from(shown, 2, 60)
+	_check(split.size() == 2 and split[1][0].text.begins_with("W4 Canopy FM: You hold"), "a block that spills onto a new page is tagged again at its top")
 	# The cap: the oldest line goes.
 	var full := Logbook.new()
 	for i: int in CONFIG.logbook_max_entries + 5:

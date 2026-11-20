@@ -12,9 +12,12 @@ extends RefCounted
 ##   words    the clean words from the config, never the "[static]" version the
 ##            radio panel shows while the block is dark (see Arena.with_static).
 ##
-## HOW PAGES WORK: the newest line comes first. Each line becomes one or more
-## rows of text (long lines are wrapped). Rows are packed onto pages of
-## `rows_per_page`, and a line is never split across two pages.
+## HOW PAGES WORK: lines said one after another by the same speaker in the same
+## wave make one BLOCK (Canopy FM's two-line Bramble tip, say). The newest block
+## comes first, but inside a block the lines keep the order they were said, so a
+## tip still reads top to bottom. A block's first line starts "W4 Canopy FM:".
+## Each line becomes one or more rows of text (long lines are wrapped). Rows are
+## packed onto pages of `rows_per_page`, and a line is never split across pages.
 
 const CONFIG: GameConfig = preload("res://config/game_config.tres")
 
@@ -55,17 +58,41 @@ func size() -> int:
 	return entries.size()
 
 
-## The book as pages, newest line first. See pages_from().
+## The book as pages, newest block first. See newest_blocks_first() and pages_from().
 func pages(rows_per_page: int = CONFIG.logbook_lines_per_page, wrap_chars: int = CONFIG.logbook_wrap_chars) -> Array:
-	var newest_first: Array[Dictionary] = entries.duplicate()
-	newest_first.reverse()  # reverse() flips the list in place
-	return pages_from(newest_first, rows_per_page, wrap_chars)
+	return pages_from(newest_blocks_first(entries), rows_per_page, wrap_chars)
+
+
+## `lines` (oldest first) in the order the Logbook shows them: blocks newest
+## first, the lines inside a block oldest first. The first line of each block
+## gets `tagged = true` (it carries the "W4 Canopy FM:" tag). `static` for tests.
+static func newest_blocks_first(lines: Array[Dictionary]) -> Array[Dictionary]:
+	# Step 1: cut the list into blocks. A new block starts whenever the speaker or
+	# the wave differs from the line before.
+	var blocks: Array = []
+	for line: Dictionary in lines:
+		var last_block: Array = blocks[-1] if not blocks.is_empty() else []
+		var same: bool = not last_block.is_empty() and last_block[-1].speaker == line.speaker and last_block[-1].wave == line.wave
+		if same:
+			last_block.append(line)  # Arrays are shared, so this grows the block in `blocks`
+		else:
+			blocks.append([line])
+	# Step 2: newest block first; each line copied with its `tagged` flag.
+	blocks.reverse()  # reverse() flips the list in place
+	var ordered: Array[Dictionary] = []
+	for block: Array in blocks:
+		for i: int in block.size():
+			var copy: Dictionary = block[i].duplicate()
+			copy.tagged = i == 0
+			ordered.append(copy)
+	return ordered
 
 
 ## Turns `lines` (already in the order to show) into pages. Each page is an Array
-## of rows, and each row is {speaker, text, first}: the first row of a line
-## (first = true) starts with "W4 Canopy FM:", the rows after it are the rest of
-## the wrapped words.
+## of rows, and each row is {speaker, text, first, new_block}: `first` marks the
+## first row of a line, `new_block` the first row of a block. A line with
+## `tagged` (or with no such field, or the first on a page) starts with
+## "W4 Canopy FM:"; the rows after it are the rest of the wrapped words.
 ## A page is closed when the next line would not fit on it. A line longer than a
 ## whole page gets a page of its own (cut at rows_per_page rows).
 ## `static`: it needs no Logbook, so tests can call it with made-up lines.
@@ -73,18 +100,30 @@ static func pages_from(lines: Array[Dictionary], rows_per_page: int, wrap_chars:
 	var result: Array = []
 	var page: Array[Dictionary] = []
 	for line: Dictionary in lines:
-		var label: String = "W%d %s: %s" % [line.wave, SPEAKER_NAMES.get(line.speaker, "?"), line.text]
-		var rows: Array[Dictionary] = []
-		for row_text: String in wrap_words(label, wrap_chars):
-			rows.append({speaker = line.speaker, text = row_text, first = rows.is_empty()})
+		var tagged: bool = line.get("tagged", true)
+		var rows: Array[Dictionary] = _rows_for(line, tagged, wrap_chars)
 		if not page.is_empty() and page.size() + rows.size() > rows_per_page:
 			result.append(page)
 			page = []
+			# A block that runs onto a new page names its speaker again up top.
+			if not tagged:
+				rows = _rows_for(line, true, wrap_chars)
 		# slice(0, n) keeps the first n rows: an extra-long line is cut to one page.
 		page.append_array(rows.slice(0, rows_per_page))
 	if not page.is_empty():
 		result.append(page)
 	return result
+
+
+## The wrapped rows of one line, with or without its "W4 Canopy FM:" tag.
+static func _rows_for(line: Dictionary, tagged: bool, wrap_chars: int) -> Array[Dictionary]:
+	var label: String = line.text
+	if tagged:
+		label = "W%d %s: %s" % [line.wave, SPEAKER_NAMES.get(line.speaker, "?"), line.text]
+	var rows: Array[Dictionary] = []
+	for row_text: String in wrap_words(label, wrap_chars):
+		rows.append({speaker = line.speaker, text = row_text, first = rows.is_empty(), new_block = rows.is_empty() and tagged})
+	return rows
 
 
 ## Splits `text` into rows of at most about `chars` letters, breaking only

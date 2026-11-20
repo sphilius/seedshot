@@ -70,7 +70,7 @@ const TEXT_COLOR: Color = Color(0.92, 0.94, 0.96)
 ## s25: the Logbook's text size and row spacing, in pixels.
 const LOGBOOK_FONT_SIZE: int = 17
 const LOGBOOK_ROW_GAP: float = 26.0
-## Extra space between two Logbook lines, so each tip reads as its own block.
+## Extra space between two Logbook blocks, so each moment reads on its own.
 const LOGBOOK_LINE_GAP: float = 8.0
 ## The words that mark the bind line in the two lists below.
 const BIND_MARK: String = "bind it"
@@ -381,8 +381,9 @@ func _draw_logbook(font: Font) -> void:
 	var page: Array = pages[logbook_page]
 	for i: int in page.size():
 		var row: Dictionary = page[i]
-		# The first row of each line after the top one gets a small gap above it.
-		y += LOGBOOK_ROW_GAP + (LOGBOOK_LINE_GAP if row.first and i > 0 else 0.0)
+		# Each block (one speaker's lines from one wave) after the top one gets a
+		# small gap above it, so the blocks read apart.
+		y += LOGBOOK_ROW_GAP + (LOGBOOK_LINE_GAP if row.new_block and i > 0 else 0.0)
 		var colour: Color = Radio.TEXT_COLORS.get(row.speaker, TEXT_COLOR)
 		draw_string(font, Vector2(INFO_LEFT, y), row.text, HORIZONTAL_ALIGNMENT_LEFT, right_edge - INFO_LEFT, LOGBOOK_FONT_SIZE, colour)
 
