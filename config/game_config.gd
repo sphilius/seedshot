@@ -813,6 +813,14 @@ extends Resource
 ## Canopy FM's voices are while the block is dark and the signal weak.
 @export var radio_voice_db: float = -4.0
 @export var radio_voice_dark_drop_db: float = -9.0
+## THE LOGBOOK (s25, logbook.gd): every Canopy FM and Lucky line said this run,
+## kept for the pause menu. The oldest are dropped past this many lines.
+@export var logbook_max_entries: int = 60
+## How many lines of text one Logbook page shows in the pause menu.
+@export var logbook_lines_per_page: int = 16
+## A Logbook line is wrapped onto the next line after about this many letters,
+## so it stays inside the pause menu's right-hand column.
+@export var logbook_wrap_chars: int = 62
 ## Canopy FM's DJ, wave 1 (keyboard and mouse): the tutorial. Feeble signal.
 @export var dj_intro: Array[String] = [
 	"...is this thing on? Hello? Meter-bot? Seven? If you can hear me, move. WASD, you know the drill. Or you don't, so: WASD.",
