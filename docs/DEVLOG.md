@@ -384,6 +384,26 @@ From the kickoff. `config/game_config.tres` holds every speed, cooldown and size
 - The thunk and spit candidates came back very quiet (mean below -36 dB) and need a lot of gain; listen for hiss.
 - The listening page now plays every take evened out to its in-game loudness.
 
+## D-054: Round 4, from Sasha's playtest of round 3 (Made, 2026-11-19)
+
+Sasha played the round 3 build to the end of the regular game and sent 22 notes plus three in chat. What was built, and what each choice rests on:
+
+- **Restarts.** A restarted wave now cancels the upgrade cards, the wave end slow-down and a held break (`_restart_pending`); a wave that "clears" as Seven goes down does not count; shots in the air vanish when a wave is won. I could not reproduce "the cards come up on a restarted wave" by reading the code, so all three ways it could happen are closed rather than one proven cause. Seven comes back with the health it had when the wave first began (`_hp_at_wave_start`), not full. The fuse is once per run: `revive` no longer refits it. Consequence to watch: entering a wave on 1 pip and dying means restarting on 1 pip, every time.
+- **Seven stays put.** The cards lock Seven where it stands instead of moving it beside the Heart Tree (`park_cell` is kept for a later use).
+- **Saplings wait.** Trees do not grow in the break between waves or while the cards are up (`ForestTree.growth_paused`), and the growing countdown moved from a SceneTree timer into `_process`, because that timer kept running behind the pause menu (the "growing sound while paused").
+- **Sawbot reach.** The Heart Tree's lure was also applied to "is it in reach", so a Sawbot cut it from two cells off. Reach now uses the real distance.
+- **Escorts** drop in around their Linebreaker, a beat apart, instead of rolling out of far gates.
+- **Stuck Linebreaker.** Floor cells beside a wall cost 2.5 times as much to route through (`ArenaGrid.BORDER_WEIGHT`), and a Linebreaker (or Ripsaw) that makes no headway for `stuck_seconds` shoulders straight through for `stuck_shoulder_seconds`.
+- **Arc Spitters** step out to the nearest firing spot within the leash of their Sawbot and reload in 65% of the time. Spitters search 6 cells for cover (was 4).
+- **The Ripsaw:** an upgraded Sawbot (`sawbot.gd` `big`): 14 hit points, 1.4 times the size, 30% faster, bites twice as often. Regular game from wave 7, at most 3 in a wave; New Game + from wave 4, at most 5 (`wave_ripsaws`, `ng_plus_wave_ripsaws`). It reuses the Sawbot sprite with a red tint: no new art.
+- **Clips.** Every kind of machine gets an intro clip the first time (`intro_titles`), 4.6 s (was 2.6). Lucky's shop opening nearly freezes the game for 5 s with the gift spelled out. New Game + shows a Sunburst clip on the first great sunroot. Knock-out and fuse revive run about twice as long, with the camera on Seven and the screen 80% dark except a pool of light round the subject (`dim_sheet.gd`).
+- **Radio.** Lines type slower (28 letters a second, was 40) and hold 4.5 s (was 3). A tap on the panel finishes or skips a line. The box grows to fit its words. Helios cuts in and out with static. Canopy FM is quieter and hisses in the dark and clears as the block lights: the web build has no low-pass filter (see `uses_music_bus`), so until now the radio never changed there at all.
+- **Music switch.** The pause menu's Music button now stops the song and remembers its place; `stream_paused` did nothing in the web build.
+- **Graffiti** is spread over three walls: four roofs, two back wall shutters (never Lucky's), four stretches of side wall painted sideways.
+- **End screen.** A dark rounded panel sized to the words.
+- **Saw sound** plays through instead of restarting on every bite (`Sfx.play_steady`). It is still the same short clip.
+
+Not built, and why: a real tutorial (note 22: too large for the last two hours), a Klad icon for "Repairing" (15), a new look for Lucky's shop (5: needs an art direction from Sasha), a longer recorded chainsaw (20: needs ElevenLabs credits and a yes), ElevenLabs voices. Nothing in this round has been played by a person.
 ## D-053: Entrances: gates, drops and an intro clip; title screen; two more numbers (Made, 2026-11-19)
 
 Sasha, after round 2. Not played by a person yet.
