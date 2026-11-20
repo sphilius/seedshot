@@ -81,9 +81,11 @@ VOICES = {
     "canopy_girl": {
         "name": "Seedshot Canopy Girl",
         "description": (
-            "A teenage girl, about sixteen, hosting a pirate radio show from a bedroom studio. "
-            "Fast, fun, a little breathless, quick to laugh. American accent with a light "
+            "A young woman, about twenty, hosting a pirate radio show from a bedroom studio. "
+            "Youthful, fast, fun, a little breathless, quick to laugh. American accent with a light "
             "bilingual Spanish-English lilt. Energetic and warm, like a friend whispering a secret."
+            # (ElevenLabs blocks descriptions of minors, so the voice is a young adult; the
+            # character can still be written as a teen.)
         ),
         "sample": (
             "Okay, new toy: press Q or Space to throw a Bramble Seed. Thorns grow where it lands, "
