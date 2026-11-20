@@ -1064,6 +1064,24 @@ extends Resource
 ## quieter floor, so the sprites stand out more.
 @export var floor_tint: Color = Color(0.85, 0.85, 0.88)
 ## Drawn size of a sprite relative to one cell (1.0 = exactly one cell wide).
-## 64 / 48 = 1.3333 draws a 64 px sprite at its real size, so no pixel is
-## stretched or squeezed.
+## 64 / 48 = 1.3333 draws a sprite 64 layout pixels wide (the game's layout is
+## 1280 x 720). s26: this is the ONLY thing that sets a sprite's on-screen size;
+## the picture's own pixel size never does, so 128 px art shows at the same size.
 @export var sprite_size_cells: float = 1.3333
+## s26 HD art: how many picture pixels the art has per layout pixel. 1 = the old
+## 64 px art (64 px sprites, 48 px floor tiles, 52 x 32 roofs); 2 = the 128 px art
+## (128 px sprites, 96 px tiles, 104 x 64 roofs). Unit: picture pixels per layout
+## pixel. It does NOT change any on-screen size; the checks use it to confirm
+## every picture has the size the art set should have.
+@export var art_texture_scale: int = 2
+## How much bigger the great sunroot is drawn than a normal tree (its picture is
+## 72 to the others' 64, so 1.125). Unit: a multiplier of the normal tree size.
+@export var tree_great_size_ratio: float = 1.125
+
+@export_group("HD display")
+## s26: below this window scale the art is drawn SMOOTHED (linear filtering with
+## mipmaps, so nothing shimmers when the 128 px art is shrunk); at or above it,
+## with hard pixel edges (nearest). Window scale = min(window width / 1280,
+## window height / 720), in real screen pixels. Unit: a multiplier (1.5 = a
+## 1920 x 1080 window or a 1280 x 720 one on a 150% display).
+@export var pixel_filter_min_scale: float = 1.5

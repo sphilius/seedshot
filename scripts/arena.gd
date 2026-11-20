@@ -548,13 +548,16 @@ func _draw() -> void:
 	var floor_rect: Rect2 = arena_rect.grow(-cell_px)  # grow(-n) shrinks each side by n
 	draw_rect(floor_rect, FLOOR_COLOR)
 	if CONFIG.floor_tiles != null:
-		# One slab per floor cell. The tiles sit side by side in one picture, so
-		# tile number n is the 48 x 48 square starting n cells from its left edge.
-		var tile_count: int = CONFIG.floor_tiles.get_width() / CONFIG.cell_size
+		# One slab per floor cell. The tiles are squares side by side in one row,
+		# so a tile is as wide as the picture is tall (96 px in the s26 HD art),
+		# and tile number n starts n tiles from the left. The SOURCE square is in
+		# picture pixels; the TARGET is one cell on screen, whatever the art's size.
+		var tile_px: float = float(CONFIG.floor_tiles.get_height())
+		var tile_count: int = floor_tile_count(CONFIG.floor_tiles.get_width(), CONFIG.floor_tiles.get_height())
 		for y: int in range(1, grid.rows - 1):        # skip row 0 and the last row: they are wall
 			for x: int in range(1, grid.cols - 1):
 				var pick: int = floor_tile_for(Vector2i(x, y), tile_count, CONFIG.floor_plain_count, CONFIG.floor_detail_chance)
-				var source := Rect2(pick * cell_px, 0.0, cell_px, cell_px)
+				var source := Rect2(pick * tile_px, 0.0, tile_px, tile_px)
 				var target := Rect2(grid.origin + Vector2(x, y) * cell_px, Vector2.ONE * cell_px)
 				# draw_texture_rect_region copies one square of a picture onto the screen.
 				draw_texture_rect_region(CONFIG.floor_tiles, target, source, CONFIG.floor_tint)
@@ -574,6 +577,16 @@ func _draw() -> void:
 	for y: int in range(1, grid.rows):
 		var line_y: float = grid.origin.y + y * cell_px
 		draw_line(Vector2(arena_rect.position.x, line_y), Vector2(arena_rect.end.x, line_y), GRID_LINE_COLOR)
+
+
+## How many square tiles a one-row floor picture holds: its width divided by its
+## height (each tile is as wide as the row is tall). s26: worked out from the
+## picture, so the 64-class (48 px) and HD (96 px) floor sheets both work.
+## `static`, so the tests can call it without an arena.
+static func floor_tile_count(picture_width: int, picture_height: int) -> int:
+	if picture_height <= 0:
+		return 0
+	return picture_width / picture_height  # whole-number division: 864 / 96 = 9
 
 
 ## Which floor tile cell `cell` shows: a number from 0 to tile_count - 1.
