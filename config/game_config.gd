@@ -511,6 +511,9 @@ extends Resource
 @export var bramble_recharge_seconds: float = 6.0
 ## Colour of the thorns.
 @export var bramble_color: Color = Color(0.40, 0.62, 0.30)
+## s19: the faint ring that shows where a Bramble Seed would land, while Seven has
+## a charge. Its alpha (0 = invisible, 1 = solid); the disc inside is a third as strong.
+@export_range(0.0, 1.0) var bramble_preview_alpha: float = 0.45
 
 ## TRELLIS (great_powers.gd): a zip from beside one tree to another leaves the
 ## vine strung between them. Seconds it lasts:

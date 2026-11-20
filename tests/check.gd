@@ -138,6 +138,7 @@ func _ready() -> void:
 	await _test_s19_contact()
 	await _test_s19_snare()
 	await _test_s19_canopy_line_line()
+	await _test_s19_bramble_preview()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -3242,3 +3243,38 @@ func _test_s19_canopy_line_line() -> void:
 	d.mature()
 	await _wait_frames(3)
 	_check(_arena.great_powers.lines.size() >= 2 and _radio_copies_of(CONFIG.canopy_line_intro_line) == 0, "a later line says nothing more")
+
+
+## s19 item 7: a faint ring shows where the Bramble Seed will land.
+func _test_s19_bramble_preview() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	var floor_rect: Rect2 = _arena.bramble_floor_rect()
+	_check(player.bramble_bounds == floor_rect, "the player knows the floor a bramble can land on")
+	# In the open: exactly bramble_range_cells along the aim.
+	player.global_position = _arena.grid.cell_to_world(Vector2i(10, 7))
+	player.aim_direction = Vector2.RIGHT
+	var open_spot: Vector2 = player.global_position + Vector2.RIGHT * CONFIG.bramble_range_cells * CONFIG.cell_size
+	_check(player.bramble_landing_point().is_equal_approx(open_spot), "in the open the ring sits bramble_range_cells away")
+	# Aimed at a wall: the ring sits at the clamped spot, one cell in from the wall.
+	player.global_position = _arena.grid.cell_to_world(Vector2i(22, 7))
+	var wall_spot: Vector2 = player.bramble_landing_point()
+	_check(floor_rect.has_point(wall_spot) or is_equal_approx(wall_spot.x, floor_rect.end.x), "aimed at a wall the ring is kept on the floor")
+	_check(is_equal_approx(wall_spot.x, floor_rect.end.x), "at the foot of the wall (x = %.0f)" % wall_spot.x)
+	# What is drawn is where the patch grows.
+	var thrown_at: Array[Vector2] = []
+	player.bramble_thrown.connect(func(at: Vector2) -> void: thrown_at.append(at))
+	var patches_before: int = _arena._brambles.get_child_count()
+	_check(player.throw_bramble() and thrown_at.size() == 1, "a throw is announced")
+	_check(thrown_at[0].is_equal_approx(wall_spot), "the seed is announced at the spot the ring showed")
+	_check(_arena._brambles.get_child_count() == patches_before + 1 and _arena._brambles.get_child(patches_before).position.is_equal_approx(wall_spot), "and the patch grows exactly there")
+	# The ring shows only while there is a seed in hand, and Seven is up and free.
+	player.bramble_charges = 2
+	_check(player.is_bramble_preview_shown(), "the ring shows while Seven holds a seed")
+	player.bramble_charges = 0
+	_check(not player.is_bramble_preview_shown(), "and not when there is none to throw")
+	player.bramble_charges = 1
+	player.locked = true
+	_check(not player.is_bramble_preview_shown(), "nor while the upgrade cards have Seven locked")
+	player.locked = false
+	_check(Bramble.radius_px() == CONFIG.bramble_radius_cells * CONFIG.cell_size, "the ring is the size of the patch")

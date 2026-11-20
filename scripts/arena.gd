@@ -372,6 +372,7 @@ func _ready() -> void:
 
 	player.zip_finished.connect(_on_player_zip_finished)
 	player.bramble_thrown.connect(spawn_bramble)
+	player.bramble_bounds = bramble_floor_rect()
 
 	# Listen to the wave director: it says when, the arena does the spawning.
 	waves.wave_started.connect(_on_wave_started)
@@ -598,11 +599,17 @@ func spawn_tree(cell: Vector2i, grown: bool) -> ForestTree:
 	return tree
 
 
+## The floor a bramble can land on: the whole arena minus the one-cell wall ring.
+## The player draws its landing preview from the same rectangle.
+func bramble_floor_rect() -> Rect2:
+	return Rect2(grid.origin, Vector2(grid.cols, grid.rows) * float(CONFIG.cell_size)).grow(-float(CONFIG.cell_size))
+
+
 ## Grows a bramble patch where a Bramble Seed lands. The landing point is kept
 ## on the floor (one cell in from the walls), so a throw at a wall lands at its
 ## foot. Connected to the player's bramble_thrown signal; public for the tests.
 func spawn_bramble(at: Vector2) -> Bramble:
-	var floor_rect := Rect2(grid.origin, Vector2(grid.cols, grid.rows) * float(CONFIG.cell_size)).grow(-float(CONFIG.cell_size))
+	var floor_rect: Rect2 = bramble_floor_rect()
 	var bramble := Bramble.new()
 	bramble.position = at.clamp(floor_rect.position, floor_rect.end)
 	_brambles.add_child(bramble)
