@@ -146,6 +146,8 @@ func _ready() -> void:
 	await _test_s19_fuse_saves_once()
 	# s22: phase 3, the seed shooter's reload.
 	await _test_s22_reload()
+	# s23: a Full screen button in the pause menu (for phones in a browser).
+	await _test_s23_fullscreen()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -188,6 +190,41 @@ func _fresh_arena(with_heart: bool = false) -> void:
 	# Give the physics engine two steps to register the new bodies.
 	await get_tree().physics_frame
 	await get_tree().physics_frame
+
+
+## s23 FULL SCREEN: the pause menu gains a sixth button, above Quit, that switches
+## full screen. Headless Godot has no real window, so these check the button, its
+## words, where it sits and that pressing it keeps the menu up; whether a phone's
+## browser really goes full screen needs a person with a phone.
+func _test_s23_fullscreen() -> void:
+	await _fresh_arena()
+	var pause: PauseOverlay = _arena.get_node("Hud/PauseOverlay") as PauseOverlay
+	_check(PauseOverlay.ITEM_COUNT == 6 and PauseOverlay.Item.FULLSCREEN == 4 and PauseOverlay.Item.QUIT == 5, "Full screen is button 5, and Quit stays last as button 6")
+	_check(PauseOverlay.fullscreen_available(), "outside a browser, full screen is always offered")
+	_check(pause.menu_label(PauseOverlay.Item.FULLSCREEN).begins_with("5   Full screen: "), "its label reads '5   Full screen: On / Off'")
+	_check(pause.menu_label(PauseOverlay.Item.QUIT).begins_with("6   "), "Quit is now key 6")
+	# All six buttons, and the hint line under them, fit on the 720 px tall screen.
+	var last: Rect2 = pause.menu_button_rect(PauseOverlay.ITEM_COUNT - 1)
+	_check(last.end.y + 34.0 < 720.0, "the six buttons and the hint below them fit on screen")
+	_check(CONFIG.fullscreen_lock_landscape, "a full-screen phone is asked to hold landscape")
+
+	pause.set_paused(true)
+	# A pretend click on the Full screen button, the way a player would press it.
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	click.position = pause.menu_button_rect(PauseOverlay.Item.FULLSCREEN).get_center()
+	pause._input(click)
+	_check(get_tree().paused, "pressing Full screen keeps the menu up")
+	# Key 5 presses it too (and puts the window back as it was).
+	var key := InputEventKey.new()
+	key.physical_keycode = KEY_5
+	key.pressed = true
+	pause._input(key)
+	_check(get_tree().paused, "and so does key 5")
+	_check(not PauseOverlay.is_fullscreen(), "after two presses the window is back as it was")
+	pause.choose(PauseOverlay.Item.RESUME)
+	_check(not get_tree().paused, "Resume still carries on")
 
 
 ## s22 RELOAD: the shooter holds seed_clip_size pods, reloads by itself when empty

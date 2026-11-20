@@ -946,6 +946,11 @@ extends Resource
 ## On touch there is no pointer to draw the reticle at, so it floats this far in
 ## front of the bot, along the aim direction.
 @export var touch_reticle_distance_cells: float = 2.5
+## FULL SCREEN (s23, pause menu). In a web browser, once the game is full screen,
+## also ask the phone to hold the screen sideways (landscape), so turning the
+## phone does not squash the lot. Android Chrome honours this; most other browsers
+## ignore it, which is harmless.
+@export var fullscreen_lock_landscape: bool = true
 
 @export_group("Contact")
 ## s19: touching a machine hurts. How many pips one touch costs Seven.
