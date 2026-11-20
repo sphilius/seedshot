@@ -59,6 +59,10 @@ const CARDS_TOP: float = 400.0
 const CARD_COLOR: Color = Color(0.05, 0.07, 0.09, 0.9)
 const EDGE_COLOR: Color = Color(0.35, 0.90, 0.85)
 const TITLE_COLOR: Color = Color(1.0, 0.82, 0.50)
+## A card's title is drawn this big, or smaller (down to the minimum) if it
+## would not fit on the card otherwise.
+const TITLE_FONT_SIZE: int = 24
+const TITLE_FONT_MIN: int = 16
 const TEXT_COLOR: Color = Color(0.92, 0.94, 0.96)
 
 ## The ids on offer right now (empty = hidden). Public so the tests can read them.
@@ -216,6 +220,17 @@ static func _describe(id: StringName) -> String:
 	return template
 
 
+## The biggest font size, from TITLE_FONT_SIZE down to TITLE_FONT_MIN, at which
+## `title` fits in `width` pixels. (s24: "Seed Loader Pouch" was cut off at the
+## card's edge.) get_string_size measures text without drawing it. Static and
+## public so the tests can ask it.
+static func title_font_size(font: Font, title: String, width: float) -> int:
+	var size: int = TITLE_FONT_SIZE
+	while size > TITLE_FONT_MIN and font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size).x > width:
+		size -= 1
+	return size
+
+
 ## _draw paints the heading and the three cards.
 func _draw() -> void:
 	if not is_open():
@@ -239,5 +254,5 @@ func _draw() -> void:
 			draw_texture_rect(_icons[id], icon_rect, false)  # false = stretch, do not tile
 			text_left = ICON_MARGIN + ICON_SIZE + 14.0
 		var text_width: float = rect.size.x - text_left - ICON_MARGIN
-		draw_string(font, rect.position + Vector2(text_left, 38.0), title, HORIZONTAL_ALIGNMENT_LEFT, text_width, 24, TITLE_COLOR)
+		draw_string(font, rect.position + Vector2(text_left, 38.0), title, HORIZONTAL_ALIGNMENT_LEFT, text_width, title_font_size(font, title, text_width), TITLE_COLOR)
 		draw_multiline_string(font, rect.position + Vector2(text_left, 66.0), _describe(id), HORIZONTAL_ALIGNMENT_LEFT, text_width, 17, 3, TEXT_COLOR)

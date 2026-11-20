@@ -392,10 +392,11 @@ Phase 3 item 2, from Sasha's approved proposal (branch `s24-skill-unlocks`). A r
 - The pause menu's Q line now has its own row and says "Q or Space". R reload, missing since s22, joins M mute.
 - The bottom hint row said "Q: brambles" from wave 1. It now says "R: reload". The touch hint lost its bramble part.
 - The card screen's three-line text limit cut off the Trip Line card's last word, so the text was shortened.
+- "Seed Loader Pouch" was cut off at the card's edge (open since s22). A title now shrinks its font, down to 16 from 24, until it fits. Seen fixed in `docs/s24/skills_6_card_titles.png`, and a check covers every card.
 - `make_upgrade_icons.py` wrote into the main folder whatever checkout it ran from. It now writes next to itself.
 - The Trip Line tip has no recorded voice; its words show on the radio only.
 
-**Checked:** 943 headless checks, 45 of them new (`_test_s24_skill_unlocks`). Pictures from the real renderer are in `docs/s24/`: the wave 1 HUD, the wave 3 cards, the Bramble clip, the HUD after, and the pause list. In the web build (browser pane): wave 1 shows no Brambles counter and no landing ring, the hint row shows "R: reload", Q left nothing on the floor, and there were no console errors. **Not checked:** play feel. Waves 2 and 3 without brambles may now be too hard (wave 3 sends 3 Spitters). Also unchecked: the trip line tip being heard (it has no voice) and a real phone.
+**Checked:** 944 headless checks, 46 of them new (`_test_s24_skill_unlocks`). Pictures from the real renderer are in `docs/s24/`: the wave 1 HUD, the wave 3 cards, the Bramble clip, the HUD after, and the pause list. In the web build (browser pane): wave 1 shows no Brambles counter and no landing ring, the hint row shows "R: reload", Q left nothing on the floor, and there were no console errors. **Not checked:** play feel. Waves 2 and 3 without brambles may now be too hard (wave 3 sends 3 Spitters). Also unchecked: the trip line tip being heard (it has no voice) and a real phone.
 
 ## D-068: A Full screen button in the pause menu (Made, 2026-11-20)
 

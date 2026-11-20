@@ -58,6 +58,17 @@ func _ready() -> void:
 	await get_tree().create_timer(0.5).timeout
 	await _save(full, 1, "skills_5_pause_controls.png")
 	arena._pause.set_paused(false)
+
+	# 6. The longest card title, "Seed Loader Pouch", fits on its card now.
+	arena.waves.hold_break = true
+	arena._end_wave_end_beat()
+	# Swap in a chosen row (not a random deal) so the picture always holds the
+	# longest title; queue_redraw asks the picker to run its _draw again.
+	var deal: Array[StringName] = [&"seed_pouch", &"long_trellis", &"quick_reload"]
+	arena.upgrade_picker.offered = deal
+	arena.upgrade_picker.queue_redraw()
+	await get_tree().create_timer(0.8).timeout
+	await _save(Rect2i(40, 390, 1200, 140), 1, "skills_6_card_titles.png")
 	get_tree().quit()
 
 

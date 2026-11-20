@@ -3686,6 +3686,17 @@ func _test_s24_skill_unlocks() -> void:
 	_check(_arena.upgrades_always_shown().is_empty() and not later.has(&"bramble_seed") and not later.has(&"trip_line"), "after wave 4 a skipped unlock is an ordinary random card")
 	_check(UpgradePicker._describe(&"bramble_seed").contains(str(CONFIG.bramble_max_charges)) and UpgradePicker._describe(&"trip_line").contains("%.0f" % CONFIG.trellis_seconds), "the unlock cards name their numbers")
 	_check(_arena.upgrade_picker.has_icon(&"bramble_seed") and _arena.upgrade_picker.has_icon(&"trip_line"), "both unlock cards have a picture")
+	# Every card title fits on its card (the space beside the picture), shrinking
+	# its font if it has to. "Seed Loader Pouch" used to be cut off.
+	var font: Font = ThemeDB.fallback_font
+	var title_width: float = UpgradePicker.CARD_SIZE.x - UpgradePicker.ICON_MARGIN * 2.0 - UpgradePicker.ICON_SIZE - 14.0
+	var all_fit: bool = true
+	for id: StringName in UpgradePicker.CATALOG.keys():
+		var title: String = "%d   %s" % [3, UpgradePicker.CATALOG[id][0]]
+		var size: int = UpgradePicker.title_font_size(font, title, title_width)
+		if font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size).x > title_width:
+			all_fit = false
+	_check(all_fit, "every card title fits on its card")
 
 	# --- Picking Bramble Seed. ---
 	# apply_upgrade is what the arena runs when the picker's `picked` signal fires,
