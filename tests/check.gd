@@ -2318,6 +2318,16 @@ func _test_pause_menu() -> void:
 	pause.choose(PauseOverlay.Item.MUSIC)
 	_check(CanopyFM.music_on, "and on again")
 
+	# s19: while the game is muted, both sound rows say so; each keeps its own setting.
+	Sfx.set_muted(true)
+	_check(pause.menu_label(PauseOverlay.Item.EFFECTS).contains("muted") and pause.menu_label(PauseOverlay.Item.MUSIC).contains("muted"), "while muted, the Sound and Music rows say so")
+	_check(pause.menu_label(PauseOverlay.Item.EFFECTS).contains("On") and pause.menu_label(PauseOverlay.Item.MUSIC).contains("On"), "and still show their own On / Off setting")
+	pause.choose(PauseOverlay.Item.MUSIC)
+	_check(not CanopyFM.music_on and Sfx.is_muted and pause.menu_label(PauseOverlay.Item.MUSIC).contains("Off"), "a switch still changes only itself while muted")
+	pause.choose(PauseOverlay.Item.MUSIC)
+	Sfx.set_muted(false)
+	_check(not pause.menu_label(PauseOverlay.Item.EFFECTS).contains("muted") and not pause.menu_label(PauseOverlay.Item.MUSIC).contains("muted"), "unmuted, the note goes away")
+
 	# Restart this wave: asks first, then puts the wave back.
 	_arena.waves.start_wave(2)
 	_arena.player.take_damage(1)

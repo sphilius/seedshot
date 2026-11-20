@@ -181,12 +181,19 @@ func menu_label(index: int) -> String:
 		Item.RESTART:
 			text = "Sure? Press again to restart" if _armed == index else "Restart this wave"
 		Item.EFFECTS:
-			text = "Sound effects: %s" % ("On" if Sfx.effects_on else "Off")
+			text = "Sound effects: %s%s" % ["On" if Sfx.effects_on else "Off", _muted_note()]
 		Item.MUSIC:
-			text = "Music: %s" % ("On" if CanopyFM.music_on else "Off")
+			text = "Music: %s%s" % ["On" if CanopyFM.music_on else "Off", _muted_note()]
 		Item.QUIT:
 			text = "Sure? This run will be lost" if _armed == index else "Quit to main menu"
 	return "%d   %s" % [index + 1, text]
+
+
+## While the speaker button / M key has muted the game, the two sound rows add
+## this note, so their On / Off never claims a sound you cannot hear (s19: the
+## mute is a master switch on top; each row keeps its own setting underneath).
+func _muted_note() -> String:
+	return "   (muted: M to unmute)" if Sfx.is_muted else ""
 
 
 ## The screen rectangle of menu button `index` (0 = top).
