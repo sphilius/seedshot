@@ -84,6 +84,12 @@ func restart_wave() -> void:
 	start_wave(maxi(wave, 1))  # maxi = the larger of two whole numbers
 
 
+## The arena calls this when it sends in a machine the timetable did not ask
+## for (a Linebreaker's escort), so the wave also waits for that one to fall.
+func enemy_added() -> void:
+	_alive += 1
+
+
 ## The arena calls this whenever a machine is gone (shot, or could not be placed).
 func enemy_gone() -> void:
 	_alive = maxi(_alive - 1, 0)

@@ -120,6 +120,7 @@ func _ready() -> void:
 	await _test_harder_waves_aim_line_sunburst()
 	await _test_hit_feedback()
 	await _test_s18_shields_and_bolts()
+	await _test_s18_machine_roles()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -397,7 +398,12 @@ func _test_kill_becomes_sapling_then_tree() -> void:
 	# The array is a one-item box the lambda can write into.
 	var fell_at: Array[Vector2] = []
 	scrapper.died.connect(func(dead: Scrapper) -> void: fell_at.append(dead.global_position))
-	_check(await _wait_until(func() -> bool: return not fell_at.is_empty(), 2.0), "Scrapper dies to one pod")
+	# Keep firing while we wait (fire() itself refuses to shoot faster than the
+	# cooldown allows): a Scrapper takes scrapper_hp pods since s18 round 2.
+	var down: Callable = func() -> bool:
+		_arena.player.fire(Vector2.RIGHT)
+		return not fell_at.is_empty()
+	_check(await _wait_until(down, 3.0), "a Scrapper dies to %d pods" % CONFIG.scrapper_hp)
 	if fell_at.is_empty():
 		return
 	# The sapling is planted at the end of the frame (deferred), so wait one step.
@@ -887,7 +893,10 @@ func _test_spitter_warns_then_hits_the_player() -> void:
 	_check(await _wait_until(fired, CONFIG.spitter_windup + 0.5), "when the windup ends it fires one shot")
 	if shots.get_child_count() == 1:
 		var shot := shots.get_child(0) as SpitShot
-		_check(shot.direction.is_equal_approx(Vector2.LEFT), "the shot flies straight at the player")
+		# dot() of two unit vectors is 1 when they point the same way. (The
+		# Spitter may have stepped aside to hide first, so "left" is no longer exact.)
+		var to_player: Vector2 = (player.global_position - spitter.global_position).normalized()
+		_check(shot.direction.dot(to_player) > 0.97, "the shot flies straight at the player")
 
 	var was_hit: Callable = func() -> bool: return player.hp < CONFIG.player_max_hp
 	_check(await _wait_until(was_hit, 2.0), "the shot reaches the player")
@@ -2102,7 +2111,7 @@ func _test_s18_machines_heart_cards_light() -> void:
 	await get_tree().physics_frame
 	_check(heavy.hp == CONFIG.linebreaker_hp and heavy.max_hp == heavy.hp, "a Linebreaker starts with %d hit points" % CONFIG.linebreaker_hp)
 	_check(arc.hp == CONFIG.arc_spitter_hp, "an Arc Spitter starts with %d hit points" % CONFIG.arc_spitter_hp)
-	_check(heavy._speed() < CONFIG.scrapper_speed and heavy._speed() > 84.0 * 1.1, "a Linebreaker is faster than it was (84) but still slower than a Scrapper")
+	_check(heavy._speed() < CONFIG.scrapper_speed * 0.5, "a Linebreaker is slow: under half a Scrapper's speed (%.0f px/s)" % heavy._speed())
 	_check(is_equal_approx(arc._speed(), CONFIG.spitter_speed * CONFIG.arc_spitter_speed_factor), "an Arc Spitter walks at its own speed")
 	heavy.toughen(CONFIG.ng_plus_heavy_hp_multiplier, CONFIG.ng_plus_speed_multiplier)
 	_check(heavy.hp == ceili(CONFIG.linebreaker_hp * CONFIG.ng_plus_heavy_hp_multiplier) and heavy.speed_scale > 1.0, "New Game + makes it tougher and faster still")
@@ -2334,7 +2343,7 @@ func _test_harder_waves_aim_line_sunburst() -> void:
 	for list: Array[int] in [CONFIG.wave_scrappers, CONFIG.wave_spitters, CONFIG.wave_sawbots]:
 		for count: int in list:
 			total += count
-	_check(total >= 110 and total <= 116, "a run sends about a third more machines than the old 85 (%d)" % total)
+	_check(total >= 116 and total <= 126, "a run sends about 40%% more machines than the old 85 (%d), escorts not counted" % total)
 	_check(CONFIG.wave_scrappers[0] == 1 and CONFIG.wave_spitters[0] == 1 and CONFIG.wave_sawbots[0] == 0, "the tutorial wave is unchanged")
 
 	# Group 8: the aim line runs along the aim and stops at the first tree.
@@ -2465,3 +2474,74 @@ func _test_s18_shields_and_bolts() -> void:
 	_arena.great_powers.sunburst_charges = 0
 	await _wait_frames(2)
 	_check(glow.modulate.is_equal_approx(CONFIG.tree_glow_color), "and it goes back to green when none is ready")
+
+
+## s18 playtest round 2: double hit points, a Linebreaker's three escorts, Arc
+## Spitters that guard Sawbots, and Spitters that hide behind trees to reload.
+func _test_s18_machine_roles() -> void:
+	await _fresh_arena()
+	var player: Player = _arena.player
+	_check(CONFIG.scrapper_hp == 2 and CONFIG.spitter_hp == 4 and CONFIG.sawbot_hp == 6 and CONFIG.linebreaker_hp == 30 and CONFIG.arc_spitter_hp == 12, "every machine has double its old hit points")
+
+	# A Linebreaker sent in by the wave director brings its escorts.
+	_arena.waves.wave = 6
+	_arena.waves.state = WaveDirector.State.FIGHTING
+	_arena._on_spawn_requested(WaveDirector.LINEBREAKER, 6)
+	await get_tree().physics_frame
+	var heavy: Scrapper = null
+	var escorts: Array[Spitter] = []
+	for node: Node in get_tree().get_nodes_in_group(Enemy.GROUP):
+		if node is Scrapper:
+			heavy = node as Scrapper
+		elif node is Spitter:
+			escorts.append(node as Spitter)
+	_check(heavy != null and heavy.heavy and escorts.size() == CONFIG.linebreaker_escorts, "a Linebreaker walks in with %d Spitters" % CONFIG.linebreaker_escorts)
+	var all_guard: bool = true
+	for escort: Spitter in escorts:
+		all_guard = all_guard and escort.ward == heavy
+	_check(all_guard, "and every one of them guards it")
+	_check(_arena.waves._alive == CONFIG.linebreaker_escorts, "the wave director counts the escorts, so the wave waits for them too")
+
+	# An escort dragged far away walks back to its ward instead of hunting Seven.
+	var escort: Spitter = escorts[0]
+	var leash: float = CONFIG.escort_leash_cells * CONFIG.cell_size
+	heavy.set_physics_process(false)  # hold the Linebreaker still for the check
+	heavy.global_position = _arena.grid.cell_to_world(Vector2i(22, 3))
+	escort.global_position = _arena.grid.cell_to_world(Vector2i(14, 3))
+	var back: Callable = func() -> bool: return escort.global_position.distance_to(heavy.global_position) <= leash + 8.0
+	_check(await _wait_until(back, 6.0), "an escort left behind walks back to within %.0f cells of its Linebreaker" % CONFIG.escort_leash_cells)
+	# With its ward gone it is an ordinary Spitter again.
+	heavy.take_damage(999)
+	await get_tree().physics_frame
+	_check(not is_instance_valid(escort.ward) or escort.ward.is_dead, "when the Linebreaker falls the escort has nothing left to guard")
+
+	# An Arc Spitter picks the nearest Sawbot as its ward.
+	await _fresh_arena()
+	player = _arena.player
+	var sawbot: Sawbot = _arena.spawn_sawbot_at(Vector2i(22, 12))
+	var arc: Spitter = _arena.spawn_spitter_at(Vector2i(20, 12), true)
+	var plain: Spitter = _arena.spawn_spitter_at(Vector2i(22, 2))
+	_check(await _wait_until(func() -> bool: return arc.ward == sawbot, 1.5), "an Arc Spitter guards the nearest Sawbot")
+	_check(plain.ward == null and not plain.guards_sawbots, "a plain Spitter guards nobody")
+
+	# Cover: a reloading Spitter with a tree nearby hides behind it.
+	await _fresh_arena()
+	player = _arena.player
+	var player_cell: Vector2i = _arena.grid.world_to_cell(player.global_position)
+	# A tree six cells to Seven's right; the Spitter stands in the open, one row down.
+	var tree_cell: Vector2i = player_cell + Vector2i(6, 0)
+	_arena.spawn_tree(tree_cell, true)
+	var spitter: Spitter = _arena.spawn_spitter_at(tree_cell + Vector2i(1, 1))
+	spitter._cooldown_left = 30.0  # a long reload, so it has time to hide
+	var world_mask: int = Spitter.WORLD_MASK
+	# "Hidden" = a ray from the Spitter to Seven hits a wall or a tree.
+	var hidden: Callable = func() -> bool:
+		var ray := PhysicsRayQueryParameters2D.create(spitter.global_position, player.global_position, world_mask)
+		# The test scene is a plain Node, so it borrows the arena's physics world.
+		return not _arena.get_world_2d().direct_space_state.intersect_ray(ray).is_empty()
+	_check(not hidden.call(), "the Spitter starts in the open, in Seven's sight")
+	_check(await _wait_until(hidden, 3.0), "while reloading it walks behind a tree, out of Seven's sight")
+	_check(spitter.cover_cell != ArenaGrid.NO_CELL, "and it remembers that hiding cell")
+	# Ready to fire again: it comes back out for a clear line.
+	spitter._cooldown_left = 0.0
+	_check(await _wait_until(func() -> bool: return spitter.is_winding_up, 4.0), "with the shot ready it steps out and winds up")

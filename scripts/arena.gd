@@ -544,6 +544,7 @@ func spawn_sawbot_at(cell: Vector2i) -> Sawbot:
 func spawn_spitter_at(cell: Vector2i, arc: bool = false) -> Spitter:
 	var spitter: Spitter = SPITTER_SCENE.instantiate()
 	spitter.arc = arc  # true = an Arc Spitter
+	spitter.guards_sawbots = arc  # an Arc Spitter stays beside the nearest Sawbot
 	spitter.position = grid.cell_to_world(cell)
 	spitter.setup(grid)
 	spitter.aim_at(player)
@@ -953,6 +954,7 @@ func _on_spawn_requested(kind: StringName, wave_number: int) -> void:
 		var scrapper: Scrapper = spawn_scrapper_at(cell, kind == WaveDirector.LINEBREAKER)
 		if kind == WaveDirector.LINEBREAKER:
 			_dj_once(&"linebreaker", CONFIG.dj_first_linebreaker)
+			_send_escorts(scrapper, cell)
 		# Faster every wave: wave 1 is 1.0, wave 2 is 1.12, wave 3 is 1.24, ...
 		scrapper.speed_scale = 1.0 + CONFIG.scrapper_speed_gain_per_wave * (wave_number - 1)
 		machine = scrapper
@@ -960,6 +962,19 @@ func _on_spawn_requested(kind: StringName, wave_number: int) -> void:
 	if ng_plus and machine != null:
 		var is_heavy_kind: bool = kind == WaveDirector.LINEBREAKER or kind == WaveDirector.ARC_SPITTER
 		machine.toughen(CONFIG.ng_plus_heavy_hp_multiplier if is_heavy_kind else 1.0, CONFIG.ng_plus_speed_multiplier)
+
+
+## A Linebreaker never walks in alone: linebreaker_escorts Spitters come in with
+## it and are told to guard it (see spitter.gd `ward`). The wave director did
+## not ask for them, so it is told about each one (enemy_added), and they get
+## the same New Game + toughening as every other machine.
+func _send_escorts(linebreaker: Scrapper, cell: Vector2i) -> void:
+	for i: int in CONFIG.linebreaker_escorts:
+		var escort: Spitter = spawn_spitter_at(cell)
+		escort.ward = linebreaker
+		waves.enemy_added()
+		if ng_plus:
+			escort.toughen(1.0, CONFIG.ng_plus_speed_multiplier)
 
 
 ## Signal handler: every machine of a wave is down.

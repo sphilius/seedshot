@@ -93,8 +93,9 @@ extends Resource
 @export_group("Scrapper")
 ## s18: every machine walks 20% faster than before (this was 120).
 @export var scrapper_speed: float = 144.0
-## 1 = dies to a single seed pod.
-@export var scrapper_hp: int = 1
+## s18 round 2 (Sasha: "too easy"): every machine has double the hit points it
+## had. A Scrapper now takes two seed pods (it was 1).
+@export var scrapper_hp: int = 2
 @export_range(0.1, 0.49) var scrapper_radius_cells: float = 0.33
 ## How often a Scrapper recalculates its route to the player.
 @export var scrapper_repath_interval: float = 0.35
@@ -114,11 +115,18 @@ extends Resource
 ## Slower than a Scrapper (120): you have time to reach it before a tree falls.
 ## LINEBREAKER (a heavy Scrapper, scrapper.gd `heavy`): hit points, size (1 =
 ## a Scrapper's), speed (share of a Scrapper's), melee damage and colour.
-## s18: 15 hit points (was 5), and 15% faster than before: 0.67 of the new
-## Scrapper speed is about 97 px/s (it was 84). Still a third slower than a Scrapper.
-@export var linebreaker_hp: int = 15
+## s18 round 2: 30 hit points (15 before, 5 before that), and 30% SLOWER than
+## in round 1: 0.47 of a Scrapper's speed is about 68 px/s. It is a slow wall
+## that arrives with its own escort (see linebreaker_escorts).
+@export var linebreaker_hp: int = 30
+## Spitters that walk in with each Linebreaker and stay beside it.
+@export var linebreaker_escorts: int = 3
+## ESCORTS (spitter.gd): a Spitter guarding another machine (a Linebreaker's
+## escort, or an Arc Spitter guarding a Sawbot) stays within this many cells of
+## it, and walks back if it is left behind.
+@export var escort_leash_cells: float = 3.0
 @export var linebreaker_scale: float = 1.35
-@export var linebreaker_speed_factor: float = 0.67
+@export var linebreaker_speed_factor: float = 0.47
 @export var linebreaker_damage: int = 2
 ## Hazard gold (s18: the old red-brown looked like any other Scrapper).
 @export var linebreaker_tint: Color = Color(1.45, 1.10, 0.35)
@@ -133,9 +141,9 @@ extends Resource
 @export var shield_hit_flare: float = 2.2
 ## ARC SPITTER (spitter.gd `arc`): hit points, the angle between the shots of
 ## its three-shot fan, and colour.
-## s18: 6 hit points (was 3), and 15% faster than before (115 px/s): 0.96 of
-## the new Spitter speed.
-@export var arc_spitter_hp: int = 6
+## s18 round 2: 12 hit points (6 before, 3 before that). 0.96 of a Spitter's
+## speed (115 px/s). It guards the Sawbots: it stays beside the nearest one.
+@export var arc_spitter_hp: int = 12
 @export var arc_spitter_speed_factor: float = 0.96
 @export var arc_spitter_spread_degrees: float = 18.0
 ## Electric cyan. Its force field is the same blue, with small lightning arcs
@@ -144,8 +152,9 @@ extends Resource
 @export var arc_spitter_spark_color: Color = Color(0.50, 1.70, 1.90)
 ## s18: 20% faster (was 90).
 @export var sawbot_speed: float = 108.0
-## Takes three pods. It ignores you, so the cost of leaving it alone is trees.
-@export var sawbot_hp: int = 3
+## Takes six pods (three before s18 round 2). It ignores you, so the cost of
+## leaving it alone is trees.
+@export var sawbot_hp: int = 6
 @export_range(0.1, 0.49) var sawbot_radius_cells: float = 0.36
 ## How often a Sawbot picks its next tree and recalculates its route.
 @export var sawbot_repath_interval: float = 0.5
@@ -160,15 +169,21 @@ extends Resource
 @export_group("Spitter")
 ## s18: 20% faster (was 100).
 @export var spitter_speed: float = 120.0
-## Takes two pods.
-@export var spitter_hp: int = 2
+## Takes four pods (two before s18 round 2).
+@export var spitter_hp: int = 4
 @export_range(0.1, 0.49) var spitter_radius_cells: float = 0.33
 ## How often a Spitter recalculates its route while closing in.
 @export var spitter_repath_interval: float = 0.4
 ## It backs away if the player comes closer than this...
-@export var spitter_min_range_cells: float = 3.5
+## (s18 round 2: they keep further off now. These were 3.5 and 7.)
+@export var spitter_min_range_cells: float = 4.5
 ## ...and walks closer if the player is further than this (or out of sight).
-@export var spitter_max_range_cells: float = 7.0
+@export var spitter_max_range_cells: float = 8.0
+## COVER (s18 round 2): between shots a Spitter hides behind one of YOUR trees.
+## It looks for a hiding cell within this many cells of where it stands...
+@export var spitter_cover_search_cells: int = 4
+## ...and steps back out this many seconds before its next shot is ready.
+@export var spitter_peek_seconds: float = 0.4
 ## The warning: it glows red for this long before the shot leaves.
 @export var spitter_windup: float = 0.5
 ## Rest time between shots.
@@ -438,10 +453,13 @@ extends Resource
 ## s18: about a third more Scrappers, Spitters and Sawbots from wave 2 on (85
 ## machines over a run became 113). Wave 1 is the tutorial and is unchanged.
 ## Linebreakers and Arc Spitters keep their numbers: they got tougher instead.
-@export var wave_scrappers: Array[int] = [1, 4, 4, 5, 5, 7, 7, 8, 8, 9]
+## s18 round 2: more Scrappers again (they are the ones that hunt Seven).
+@export var wave_scrappers: Array[int] = [1, 5, 5, 6, 7, 8, 9, 10, 11, 12]
 ## How many Spitters each wave sends, lined up with the list above. They arrive
 ## first (wave 2), so cover matters before anything starts cutting it down.
-@export var wave_spitters: Array[int] = [1, 1, 3, 3, 3, 3, 4, 4, 5, 5]
+## s18 round 2: fewer lone Spitters from wave 6, because every Linebreaker now
+## brings linebreaker_escorts more of them (wave 10: 3 + 3 x 3 = 12 Spitters).
+@export var wave_spitters: Array[int] = [1, 1, 3, 3, 3, 2, 2, 3, 3, 3]
 ## How many Sawbots each wave sends, lined up with the list above.
 @export var wave_sawbots: Array[int] = [0, 0, 0, 1, 3, 3, 3, 4, 4, 5]
 ## UPGRADES (upgrade_picker.gd): after clearing this wave and each later one
@@ -526,7 +544,8 @@ extends Resource
 ## Each wave's Scrappers are this much faster than the wave before
 ## (0.08 = 8%). Wave 10 Scrappers therefore walk at 172% speed: about 206,
 ## still slower than the bot's 260. (Was 0.12 when there were only five waves.)
-@export var scrapper_speed_gain_per_wave: float = 0.08
+## s18 round 2: 0.09. The top-speed cap (enemy_top_speed_share) still holds.
+@export var scrapper_speed_gain_per_wave: float = 0.09
 
 @export_group("Story")
 ## The words of the story (see STORY.md). Edit them here or in the Inspector;
@@ -612,10 +631,10 @@ extends Resource
 ]
 ## Canopy FM, the first time a Linebreaker or an Arc Spitter is sent in.
 @export var dj_first_linebreaker: Array[String] = [
-	"Big one! That's a Linebreaker. Armoured, slow, hits twice as hard. Keep your distance and keep planting.",
+	"Big one! That's a Linebreaker. Shielded, slow, hits twice as hard, and it brings three Spitters to cover it.",
 ]
 @export var dj_first_arc_spitter: Array[String] = [
-	"Arc Spitter. Fires a fan of three. One tree won't cover you from all of it: find a thicket.",
+	"Arc Spitter. Fires a fan of three bolts and guards the Sawbots. One tree won't cover you: find a thicket.",
 ]
 ## NEW GAME + OPENING (s18). Before wave 1, Canopy FM wakes Seven up and asks
 ## whether a reminder is wanted (see tutorial_offer.gd). The wave waits for the
