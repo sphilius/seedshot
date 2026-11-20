@@ -678,7 +678,7 @@ extends Resource
 @export var story_hook: String = "Helios owns the sun. Your block stopped paying for it."
 ## What Helios customer service says as each wave starts. Entry 0 is wave 1.
 @export var helios_lines: Array[String] = [
-	"Courtesy notice: your account is 90 days past due.",
+	"Courtesy Notice: This sector's account is 90 minutes past due.",
 	"A technician is on the way to help you.",
 	"Unlicensed generation is theft of sunlight.",
 	"Disconnection crews dispatched. Thank you for your patience.",
