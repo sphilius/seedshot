@@ -384,6 +384,10 @@ From the kickoff. `config/game_config.tres` holds every speed, cooldown and size
 - The thunk and spit candidates came back very quiet (mean below -36 dB) and need a lot of gain; listen for hiss.
 - The listening page now plays every take evened out to its in-game loudness.
 
+## D-065: Robot redesign, round 1: new shapes in two art directions (Proposed, 2026-11-20)
+
+Sasha asked for proper redesigns of all six machines with different shapes, in Brutalist and Corporate Cheerful, starting with the Arc Spitter, Linebreaker and Ripsaw. `tools/gen_concepts.py` (Gemini `gemini-nano-banana-2.1`) made 12 concept pictures (2 takes each) in `art/concept/robot_redesign_v2/`, each with a black silhouette panel. New shapes: **Arc Spitter** = a squat three-barrel tripod battery (brutalist) / a round pod with three petal emitters (cheerful); **Linebreaker** = a battering-ram plough on tracks / a giant round bumper-car mascot with a striped bumper; **Ripsaw** = a rolling giant saw blade with an engine behind it / a smiling sunburst blade on stubby legs. Honest read: the cheerful silhouettes are cleaner at 64 px; the brutalist ones fit the story better but blob together when small (the Linebreaker's reads as a rock). Nothing is in the game yet: these are pictures to steer by. The Scrapper, Sawbot and Spitter come after Sasha reacts, and the chosen direction is rebuilt as pixel art with Klad. Status: Proposed.
+
 ## D-064: s20 merged and uploaded; corporate cheerful machines; radio voices generated, not wired (Made, 2026-11-20)
 
 - **s20 merged, pushed, uploaded.** Merge `351b8f5` into `main`, both pushed; itch build #2445318 (`56651ff`), uploaded at 2:53 AM ET, before the 3:00 AM Jam 4 close.
