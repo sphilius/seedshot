@@ -1,0 +1,50 @@
+/* intro.css - styles for the intro clip that plays while the game downloads.
+   Loaded by the web page through the export preset's "head include" (see
+   export_presets.cfg) and copied next to index.html by tools\godot.ps1.
+   The script that uses these styles is intro.js. */
+
+/* The clip itself. It covers the whole game area, on top of Godot's own
+   loading screen and (later) on top of the running game. */
+#intro-clip {
+	position: fixed;      /* pinned to the window, not to the page's flow */
+	inset: 0;             /* shorthand for top, right, bottom and left = 0 */
+	width: 100%;
+	height: 100%;
+	/* "contain" keeps the clip's own shape and fits it inside the area: black
+	   bars appear (a letterbox) if the window has a different shape. */
+	object-fit: contain;
+	background: black;
+	z-index: 5;           /* above the loading screen, below the progress bar */
+	opacity: 1;
+	transition: opacity 0.4s;  /* when opacity changes, glide there in 0.4 s */
+}
+
+/* intro.js adds this class to fade the clip out before removing it. */
+#intro-clip.intro-leaving {
+	opacity: 0;
+	pointer-events: none;  /* clicks go straight through to the game now */
+}
+
+/* While the clip is up (intro.js puts the class "intro-on" on <body>), Godot's
+   own progress bar is kept, but made thin and moved to the bottom edge, drawn
+   OVER the clip. So a slow connection never looks frozen. */
+body.intro-on #status-progress {
+	z-index: 10;
+	bottom: 3%;
+	width: 40%;
+	height: 6px;
+	opacity: 0.85;
+}
+
+/* The small "press any key" line shown once the game is ready but the clip is
+   still playing. */
+#intro-skip {
+	position: fixed;
+	right: 2%;
+	bottom: 3%;
+	z-index: 10;
+	color: #ffd180;                 /* the game's amber */
+	font: 14px 'Noto Sans', Arial, sans-serif;
+	text-shadow: 0 0 4px black;     /* a dark halo so it reads over the clip */
+	pointer-events: none;
+}
