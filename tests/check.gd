@@ -148,6 +148,8 @@ func _ready() -> void:
 	await _test_s22_reload()
 	# s23: a Full screen button in the pause menu (for phones in a browser).
 	await _test_s23_fullscreen()
+	# s24: Bramble Seeds and the Vine Trip Line are cards, from wave 3 on.
+	await _test_s24_skill_unlocks()
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
@@ -165,7 +167,9 @@ func _check(condition: bool, message: String) -> void:
 ## Throws away the old arena (if any) and starts a fresh one with no enemies.
 ## `with_heart`: plant the Heart Tree. Off by default, because the older checks
 ## were written before it existed and expect only the three hand-placed trees.
-func _fresh_arena(with_heart: bool = false) -> void:
+## `locked_skills` (s24): start without Bramble Seeds and the Trip Line, as the
+## real game does. Off by default: the older checks throw brambles from the start.
+func _fresh_arena(with_heart: bool = false, locked_skills: bool = false) -> void:
 	if _arena != null:
 		_arena.queue_free()
 		await get_tree().physics_frame
@@ -186,6 +190,7 @@ func _fresh_arena(with_heart: bool = false) -> void:
 	_arena.pause_growth_between_waves = false
 	# Canopy FM's "[static]" breaks change the words; the checks compare them exactly.
 	_arena.radio_static_on = false
+	_arena.skills_locked = locked_skills
 	add_child(_arena)
 	# Give the physics engine two steps to register the new bodies.
 	await get_tree().physics_frame
@@ -3622,3 +3627,137 @@ func _test_s19_fuse_saves_once() -> void:
 		_arena.cat_shop.hit_by_seed()
 	_arena._restart_current_wave()
 	_check(not player.has_fuse and saves[0] == 1, "more pods on the open shop and another restart do not refit it")
+
+
+## s24 SKILL UNLOCKS: Bramble Seeds and the Vine Trip Line are not there at the
+## start of a run. They are upgrade cards, both on the screen after wave
+## skill_unlock_after_wave (3), and ordinary random cards after that.
+func _test_s24_skill_unlocks() -> void:
+	_check(CONFIG.skill_unlock_after_wave == 3, "the skill cards first come after wave 3")
+	await _fresh_arena(false, true)  # locked_skills: as the real game starts
+	var player: Player = _arena.player
+	var powers: GreatPowers = _arena.great_powers
+	_check(_arena.skill_cards_on and not _arena.trip_line_unlocked, "a run starts with skill cards on and no trip line")
+
+	# --- Locked: no seeds, no throw, none grow back, nothing on screen. ---
+	_check(not player.bramble_unlocked and player.bramble_charges == 0, "and no Bramble Seeds in hand")
+	_check(not player.throw_bramble(), "Q / Space throws nothing")
+	_check(not player.is_bramble_preview_shown(), "and no landing ring shows")
+	player._tick_brambles(100.0)  # far longer than a recharge
+	_check(player.bramble_charges == 0, "no seed grows back while locked")
+	player.revive(player.global_position)
+	_check(player.bramble_charges == 0, "a revive does not hand back locked seeds")
+	_arena.waves.time_scale = 0.0  # no machines arrive: only the HUD is under test
+	_arena.waves.start_wave(1)
+	await _wait_drawn_frames(2)  # the arena's _process rewrites the label once per drawn frame
+	var label: String = (_arena.get_node("Hud/WaveLabel") as Label).text
+	_check(label.begins_with("Wave 1") and not label.contains("Brambles"), "the HUD has no Brambles counter yet")
+	_check(not " ".join(_arena._pause.controls_lines(false)).contains("Bramble") and not " ".join(_arena._pause.controls_lines(true)).contains("Bramble"), "the pause menu does not list the Bramble Seed yet")
+	_check(" ".join(_arena._pause.controls_lines(false)).contains("R   reload"), "but it does list R for reload")
+	var touch: TouchControls = _touch_controls()
+	var button_spot: Vector2 = TouchControls.BRAMBLE_SPOT * touch.get_viewport_rect().size
+	_check(not touch.is_bramble_button_shown() and not touch.bramble_button_hit(button_spot), "the touch bramble button is hidden and cannot be tapped")
+	_check(not " ".join(_arena.dj_lines_for_wave(2)).contains(CONFIG.dj_bramble[0]), "wave 2 no longer explains the Bramble Seed")
+	# A tree-to-tree zip leaves no trip line yet (same zip as _test_trellis).
+	var a: ForestTree = _arena.spawn_tree(Vector2i(3, 12), true)
+	var b: ForestTree = _arena.spawn_tree(Vector2i(9, 12), true)
+	player.zip_from = a.global_position + Vector2(CONFIG.cell_size, 0.0)
+	player.zip_tree = b
+	_arena._on_player_zip_finished()
+	_check(powers.trellises.is_empty(), "a tree-to-tree zip strings no trip line before its card")
+
+	# --- Which cards are dealt, screen by screen. ---
+	# The arena reads waves.wave to know which screen it is dealing, so setting it
+	# by hand stands in for "wave N was just cleared" without fighting it.
+	for wave: int in [1, 2]:
+		_arena.waves.wave = wave
+		var early: Array[StringName] = _arena.upgrades_left_out()
+		_check(early.has(&"bramble_seed") and early.has(&"trip_line") and _arena.upgrades_always_shown().is_empty(), "after wave %d neither unlock card is dealt" % wave)
+	_check(_arena.upgrades_left_out().has(&"long_trellis"), "and the 'lasts longer' card waits for the trip line")
+	_arena.waves.wave = 3
+	var must: Array[StringName] = _arena.upgrades_always_shown()
+	_check(must.size() == 2 and must[0] == &"bramble_seed" and must[1] == &"trip_line", "after wave 3 both unlock cards must be shown")
+	_arena.upgrade_picker.offer(CONFIG.upgrade_choices, _arena.upgrades_left_out(), must)
+	var row: Array[StringName] = _arena.upgrade_picker.offered
+	_check(row.size() == CONFIG.upgrade_choices and row[0] == &"bramble_seed" and row[1] == &"trip_line" and not row.slice(2).has(&"bramble_seed"), "the wave 3 screen shows both, plus a random card")
+	_arena.upgrade_picker.cancel()
+	_arena.waves.wave = 4
+	var later: Array[StringName] = _arena.upgrades_left_out()
+	_check(_arena.upgrades_always_shown().is_empty() and not later.has(&"bramble_seed") and not later.has(&"trip_line"), "after wave 4 a skipped unlock is an ordinary random card")
+	_check(UpgradePicker._describe(&"bramble_seed").contains(str(CONFIG.bramble_max_charges)) and UpgradePicker._describe(&"trip_line").contains("%.0f" % CONFIG.trellis_seconds), "the unlock cards name their numbers")
+	_check(_arena.upgrade_picker.has_icon(&"bramble_seed") and _arena.upgrade_picker.has_icon(&"trip_line"), "both unlock cards have a picture")
+	# Every card title fits on its card (the space beside the picture), shrinking
+	# its font if it has to. "Seed Loader Pouch" used to be cut off.
+	var font: Font = ThemeDB.fallback_font
+	var title_width: float = UpgradePicker.CARD_SIZE.x - UpgradePicker.ICON_MARGIN * 2.0 - UpgradePicker.ICON_SIZE - 14.0
+	var all_fit: bool = true
+	for id: StringName in UpgradePicker.CATALOG.keys():
+		var title: String = "%d   %s" % [3, UpgradePicker.CATALOG[id][0]]
+		var size: int = UpgradePicker.title_font_size(font, title, title_width)
+		if font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size).x > title_width:
+			all_fit = false
+	_check(all_fit, "every card title fits on its card")
+
+	# --- Picking Bramble Seed. ---
+	# apply_upgrade is what the arena runs when the picker's `picked` signal fires,
+	# so calling it straight is the same as clicking the card.
+	_arena.apply_upgrade(&"bramble_seed")
+	_check(player.bramble_unlocked and player.bramble_charges == CONFIG.bramble_max_charges, "the Bramble Seed card hands over a full hand of seeds")
+	_check(_arena.upgrades_left_out().has(&"bramble_seed"), "and is not dealt again")
+	_check(" ".join(_arena._pause.controls_lines(false)).contains("Q or Space   throw a Bramble Seed"), "the pause menu now lists Q or Space")
+	_check(touch.is_bramble_button_shown() and touch.bramble_button_hit(button_spot), "the touch button shows and can be tapped")
+	_check(_arena.skill_tip_lines() == CONFIG.dj_bramble, "Canopy FM will explain it when the next wave starts")
+	# "await get_tree().process_frame" waits for one drawn frame, so the arena's
+	# _process has rewritten the HUD label before it is read.
+	await get_tree().process_frame
+	label = (_arena.get_node("Hud/WaveLabel") as Label).text
+	_check(label.contains("Brambles %d / %d" % [CONFIG.bramble_max_charges, CONFIG.bramble_max_charges]), "the HUD counter appears")
+	_check(player.throw_bramble(), "and a seed can be thrown")
+
+	# --- Picking Vine Trip Line, then its "lasts longer" card. ---
+	_arena.apply_upgrade(&"trip_line")
+	_check(_arena.trip_line_unlocked and _arena.upgrades_left_out().has(&"trip_line"), "the Trip Line card unlocks the trip line, once")
+	_check(not _arena.upgrades_left_out().has(&"long_trellis"), "and the 'lasts longer' card can now be dealt")
+	var tips: Array[String] = _arena.skill_tip_lines()
+	_check(tips.size() == CONFIG.dj_bramble.size() + CONFIG.dj_trip_line.size() and tips[-1] == CONFIG.dj_trip_line[0], "both tips are waiting, in the order picked")
+	_arena._on_player_zip_finished()
+	_check(powers.trellises.size() == 1 and is_equal_approx(powers.trellises[0].time_left, CONFIG.trellis_seconds), "the same zip now strings a trip line for %.0f s" % CONFIG.trellis_seconds)
+
+	# --- The next wave says the tips once; a restart does not say them again. ---
+	_arena.waves.start_wave(4)
+	_check(_arena.skill_tip_lines().is_empty(), "the tips are said when the next wave starts, then cleared")
+	_arena._restart_current_wave()
+	_check(_arena.skill_tip_lines().is_empty() and player.bramble_unlocked and _arena.trip_line_unlocked, "a restarted wave keeps the skills and does not repeat the tips")
+
+	# --- The Bramble clip plays right after the card, never while the cards are up. ---
+	await _fresh_arena(false, true)
+	player = _arena.player
+	_arena.intro_clips_on = true
+	_arena.waves.time_scale = 0.0
+	_arena.waves.start_wave(1)
+	await _wait_drawn_frames(3)
+	_check(_arena.clip_left <= 0.0, "no Bramble clip while the seeds are locked")
+	_arena.waves.wave = 3
+	_arena.upgrade_picker.offer(CONFIG.upgrade_choices, _arena.upgrades_left_out(), _arena.upgrades_always_shown())
+	player.locked = true  # the cards park Seven
+	player.unlock_brambles()  # seeds in hand, cards still up
+	await _wait_drawn_frames(3)
+	_check(_arena.clip_left <= 0.0, "nor while the cards are still up")
+	_arena.upgrade_picker.choose(0)  # Bramble Seed
+	await _wait_drawn_frames(3)
+	_check(_arena.clip_left > 0.0 and _arena.clip_label.text == CONFIG.intro_titles[Arena.BRAMBLE_KIND], "the clip plays as soon as the card is picked")
+	_arena.clip_left = 0.0
+	_arena.intro_clips_on = false
+	Engine.time_scale = 1.0
+
+	# --- Set to 0 in the config, the skills are there from the start. ---
+	# The rule is a static function (it needs no arena), so the 0 case can be
+	# asked directly without changing the shared config.
+	_check(not Arena.skill_cards_wanted(true, 0), "skill_unlock_after_wave = 0 means no skill cards")
+	_check(Arena.skill_cards_wanted(true, 3) and not Arena.skill_cards_wanted(false, 3), "otherwise the cards are on unless the arena was told not to lock")
+	# With the cards off (here: an older-check arena) both skills are there from
+	# the start and their cards are never dealt.
+	await _fresh_arena()
+	_check(not _arena.skill_cards_on and _arena.player.bramble_unlocked and _arena.trip_line_unlocked, "without skill cards both skills are there from the start")
+	_arena.waves.wave = 3
+	_check(_arena.upgrades_left_out().has(&"bramble_seed") and _arena.upgrades_left_out().has(&"trip_line") and _arena.upgrades_always_shown().is_empty(), "and their cards are never dealt")

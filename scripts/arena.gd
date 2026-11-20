@@ -222,6 +222,19 @@ var sapling_time_scale: float = 1.0
 var quick_roots_taken: int = 0
 ## How many Quick Reload cards have been picked (s22). Public for the tests.
 var quick_reloads_taken: int = 0
+## s24 SKILL UNLOCKS. Set before the arena enters the scene: true (the game)
+## means Bramble Seeds and the Vine Trip Line start locked and come as cards;
+## the older checks set it false and get both from the start.
+var skills_locked: bool = true
+## True for this run when the skills really are cards: skills_locked, and the
+## config's skill_unlock_after_wave is above 0. Decided in _ready. Public for tests.
+var skill_cards_on: bool = false
+## False until the Vine Trip Line card is picked (when skill_cards_on): until
+## then a tree-to-tree zip leaves no trip line. Public for the tests.
+var trip_line_unlocked: bool = true
+## Skill cards picked since the last wave began, waiting for Canopy FM to
+## explain them when the next wave starts (see skill_tip_lines).
+var _skill_tips_due: Array[StringName] = []
 ## Pips the last Patch Kit gave back. Public for the tests.
 var last_repair_pips: int = 0
 ## Every upgrade picked this run, in order. Public for tests.
@@ -377,6 +390,13 @@ func _ready() -> void:
 	player.zip_finished.connect(_on_player_zip_finished)
 	player.bramble_thrown.connect(spawn_bramble)
 	player.bramble_bounds = bramble_floor_rect()
+	# s24 SKILL UNLOCKS: the run starts without Bramble Seeds or the Trip Line;
+	# their cards hand them over (apply_upgrade).
+	skill_cards_on = skill_cards_wanted(skills_locked, CONFIG.skill_unlock_after_wave)
+	if skill_cards_on:
+		player.lock_brambles()
+		trip_line_unlocked = false
+	_pause.bramble_unlocked = player.bramble_unlocked
 
 	# Listen to the wave director: it says when, the arena does the spawning.
 	waves.wave_started.connect(_on_wave_started)
@@ -445,10 +465,12 @@ func _process(delta: float) -> void:
 	_tick_bramble_clip()
 	# The corner label doubles as the score: every standing tree powers one home.
 	if waves.wave > 0:
-		# Bramble Seeds in hand, out of the most Seven can hold.
-		_wave_label.text = "Wave %d / %d    Homes lit %d / %d    Trees %d    Brambles %d / %d" % [
-			waves.wave, waves.total_waves(), windows.homes_lit(), windows.home_count(), count_grown_trees(),
-			player.bramble_charges, CONFIG.bramble_max_charges]
+		_wave_label.text = "Wave %d / %d    Homes lit %d / %d    Trees %d" % [
+			waves.wave, waves.total_waves(), windows.homes_lit(), windows.home_count(), count_grown_trees()]
+		# Bramble Seeds in hand, out of the most Seven can hold: only once Seven
+		# has them (s24: before the card, the counter would only confuse).
+		if player.bramble_unlocked:
+			_wave_label.text += "    Brambles %d / %d" % [player.bramble_charges, CONFIG.bramble_max_charges]
 		# Sunburst charges, once there is a great sunroot to use them on.
 		if count_great_trees() > 0:
 			_wave_label.text += "    Sunburst %d / %d" % [great_powers.sunburst_charges, CONFIG.sunburst_charges_per_wave]
@@ -1142,7 +1164,10 @@ func helios_line_for(number: int) -> String:
 ##   cat-hint waves  a hint about the lucky cat, only while the shop is shut.
 func dj_lines_for_wave(number: int) -> Array[String]:
 	var lines: Array[String] = []
-	if number == 2 and tutorial_on:
+	# Wave 2 explains the Bramble Seed only when Seven starts the run with it (no
+	# skill cards). With skill cards it is explained after its card instead
+	# (skill_tip_lines).
+	if number == 2 and tutorial_on and not skill_cards_on:
 		lines.append_array(CONFIG.dj_bramble_touch if _is_touch() else CONFIG.dj_bramble)
 	if number == 1:
 		# The controls, for a first run or a New Game + player who asked.
@@ -1156,6 +1181,21 @@ func dj_lines_for_wave(number: int) -> Array[String]:
 	var hint: int = CONFIG.dj_cat_hint_waves.find(number)
 	if hint >= 0 and hint < CONFIG.dj_cat_hints.size() and cat_shop != null and not cat_shop.is_open:
 		lines.append(CONFIG.dj_cat_hints[hint])
+	return lines
+
+
+## s24: what Canopy FM says about the skills unlocked since the last wave
+## began (the Bramble Seed and the Vine Trip Line), in the order they were
+## picked. Said in every mode, New Game + included: the card is the only other
+## place the skill is explained. Public for the tests; it does not clear the list.
+func skill_tip_lines() -> Array[String]:
+	var lines: Array[String] = []
+	for id: StringName in _skill_tips_due:
+		match id:
+			&"bramble_seed":
+				lines.append_array(CONFIG.dj_bramble_touch if _is_touch() else CONFIG.dj_bramble)
+			&"trip_line":
+				lines.append_array(CONFIG.dj_trip_line_touch if _is_touch() else CONFIG.dj_trip_line)
 	return lines
 
 
@@ -1206,6 +1246,10 @@ func _on_wave_started(number: int, total: int) -> void:
 	if number == 1 and is_instance_valid(heart_tree):
 		lines.append(_radio_line(Radio.CANOPY, CONFIG.heart_intro_line))
 	lines.append_array(_dj(dj_lines_for_wave(number)))
+	# s24: explain any skill whose card was picked in the break just ended.
+	# Cleared once said, so a restarted wave does not say it again.
+	lines.append_array(_dj(skill_tip_lines()))
+	_skill_tips_due.clear()
 	# The first wave with tap points on the floor: say what the gold-ringed soil
 	# patches are. (Sasha, after a full run: "it's not clear what they are".)
 	if not tap_points.is_empty() and not _dj_said.has(&"tap_points"):
@@ -1363,14 +1407,20 @@ func _play_intro_once(kind: StringName, machine: Enemy) -> void:
 	start_clip(machine, CONFIG.intro_titles[kind], CONFIG.heavy_intro_seconds)
 
 
-## The Bramble Seed's intro clip (s19): once per run, the first moment in wave 2
-## that Seven holds a seed and no other clip is playing. It waits its turn like the
+## The Bramble Seed's intro clip (s19): once per run, the first moment that Seven
+## holds a seed and no other clip is playing. With skill cards (s24) that is
+## right after the Bramble Seed card is picked; without them it is in wave 2.
+## Never while the cards are up (Seven is parked then). It waits its turn like the
 ## machines' clips do, and a restarted wave does not replay it (_intro_done).
 ## In New Game + it plays too: that mode shows every intro (s18 round 5).
 func _tick_bramble_clip() -> void:
-	if not intro_clips_on or _intro_done.has(BRAMBLE_KIND) or waves.wave != 2 or clip_left > 0.0:
+	if not intro_clips_on or _intro_done.has(BRAMBLE_KIND) or clip_left > 0.0:
 		return
-	if player.is_dead or player.bramble_charges <= 0 or _restart_pending:
+	if not skill_cards_on and waves.wave != 2:
+		return
+	if player.is_dead or player.locked or not player.bramble_unlocked or player.bramble_charges <= 0 or _restart_pending:
+		return
+	if upgrade_picker.is_open():
 		return
 	_intro_done[BRAMBLE_KIND] = true
 	var title: String = CONFIG.bramble_intro_title_touch if _is_touch() else CONFIG.intro_titles[BRAMBLE_KIND]
@@ -1447,7 +1497,7 @@ func _end_wave_end_beat() -> void:
 	_beat_left = 0.0
 	Engine.time_scale = 1.0
 	if waves.hold_break and not is_run_finished and not upgrade_picker.is_open() and not _restart_pending and not player.is_dead:
-		upgrade_picker.offer(CONFIG.upgrade_choices, upgrades_left_out())
+		upgrade_picker.offer(CONFIG.upgrade_choices, upgrades_left_out(), upgrades_always_shown())
 		_park_player_for_cards()
 
 
@@ -1739,8 +1789,9 @@ func _on_player_zip_finished() -> void:
 	_vine_hint_done = true
 	var tree: ForestTree = player.zip_tree
 	# TRELLIS: a zip that started beside another tree strings a vine between them.
+	# (s24: only once the Vine Trip Line card has been picked.)
 	var from_tree: ForestTree = _grown_tree_near(player.zip_from, CONFIG.trellis_start_reach_cells * CONFIG.cell_size)
-	if is_instance_valid(tree) and from_tree != null and from_tree != tree:
+	if trip_line_unlocked and is_instance_valid(tree) and from_tree != null and from_tree != tree:
 		great_powers.add_trellis(from_tree.global_position, tree.global_position)
 	# A zip that ends at a great sunroot sets off its Sunburst.
 	if is_instance_valid(tree) and tree.is_great and tree.stage == ForestTree.Stage.GROWN:
@@ -1827,6 +1878,15 @@ func apply_upgrade(id: StringName) -> void:
 		&"quick_reload":
 			quick_reloads_taken += 1
 			player.reload_seconds = reload_seconds_after(quick_reloads_taken)
+		# s24 SKILL UNLOCKS: hand the skill over, list it in the pause menu, and
+		# have Canopy FM explain it when the next wave starts.
+		&"bramble_seed":
+			player.unlock_brambles()
+			_pause.bramble_unlocked = true
+			_skill_tips_due.append(id)
+		&"trip_line":
+			trip_line_unlocked = true
+			_skill_tips_due.append(id)
 	_show_banner(UpgradePicker.CATALOG[id][0] + "!", 1.2)
 	Sfx.play(&"grow")
 	player.locked = false  # the cards are gone: Seven can move again
@@ -1834,7 +1894,9 @@ func apply_upgrade(id: StringName) -> void:
 
 
 ## Upgrades that must not be dealt right now: the Patch Kit while Seven is at
-## full health (the card would do nothing). Public so the tests can read it.
+## full health (the card would do nothing), a maxed Quick Reload, and the s24
+## skill cards when they are too early or already taken. Public so the tests
+## can read it. (Array[StringName] is a typed array: it only holds StringNames.)
 func upgrades_left_out() -> Array[StringName]:
 	var left_out: Array[StringName] = []
 	if player.hp >= player.max_hp:
@@ -1842,7 +1904,41 @@ func upgrades_left_out() -> Array[StringName]:
 	# Quick Reload stops being dealt once it has been taken as often as it stacks.
 	if quick_reloads_taken >= CONFIG.upgrade_reload_max_picks:
 		left_out.append(&"quick_reload")
+	# s24 SKILL UNLOCKS. Each unlock card is left out before its wave and once it
+	# has been taken. (Without skill cards both skills are already there, so their
+	# cards are never dealt.)
+	var too_early: bool = waves.wave < CONFIG.skill_unlock_after_wave
+	if not skill_cards_on or too_early or player.bramble_unlocked:
+		left_out.append(&"bramble_seed")
+	if not skill_cards_on or too_early or trip_line_unlocked:
+		left_out.append(&"trip_line")
+	# "Lasts longer" means nothing until there is a trip line to lengthen.
+	if not trip_line_unlocked:
+		left_out.append(&"long_trellis")
 	return left_out
+
+
+## s24: are the skills cards this run? Only when the arena locks them (the game
+## does; the older checks do not) and the config names a wave for them (0 = no
+## cards, both skills from the start). `static`: the tests can ask it directly.
+static func skill_cards_wanted(locked: bool, after_wave: int) -> bool:
+	return locked and after_wave > 0
+
+
+## s24: the cards that must be on this screen: on the screen after wave
+## skill_unlock_after_wave, every skill unlock not yet taken (so luck can never
+## hide them). On later screens they are ordinary random cards. Public for tests.
+func upgrades_always_shown() -> Array[StringName]:
+	var shown: Array[StringName] = []
+	# The array returned by upgrades_left_out() already knows which unlocks are
+	# taken or switched off; only the screen number is checked here.
+	if not skill_cards_on or waves.wave != CONFIG.skill_unlock_after_wave:
+		return shown
+	var left_out: Array[StringName] = upgrades_left_out()
+	for id: StringName in [&"bramble_seed", &"trip_line"]:
+		if not left_out.has(id):
+			shown.append(id)
+	return shown
 
 
 ## How long a reload takes after `picks` Quick Reload cards: the config's

@@ -60,12 +60,19 @@ const TITLE_COLOR: Color = Color(1.0, 0.82, 0.50)
 const TEXT_COLOR: Color = Color(0.92, 0.94, 0.96)
 ## The words that mark the bind line in the two lists below.
 const BIND_MARK: String = "bind it"
+## s24: the words that mark the Bramble Seed line (hidden until its card is picked).
+const BRAMBLE_MARK: String = "Bramble Seed"
+## The CONTROLS list on the right of the pause menu, one entry per drawn line:
+## first for mouse and keyboard, then for touch. controls_lines() picks one of
+## the two and drops the lines that would give away a skill not yet earned.
+## (s24: Q got its own line so it can be hidden; R reload joined M mute.)
 const CONTROLS_KEYS: Array[String] = [
 	"WASD / arrows   move",
 	"Mouse   aim        Left click   shoot seeds",
 	"Right click a tree   vine to it",
 	"Right click a machine   bind it",
-	"Q   throw a Bramble Seed        M   mute",
+	"Q or Space   throw a Bramble Seed",
+	"R   reload        M   mute",
 	"Stand by 4 grown trees   repair",
 ]
 const CONTROLS_TOUCH: Array[String] = [
@@ -73,6 +80,7 @@ const CONTROLS_TOUCH: Array[String] = [
 	"Right thumb   aim and shoot",
 	"Tap a tree   vine to it",
 	"Tap a machine   bind it",
+	"Bramble button   throw a Bramble Seed",
 	"Stand by 4 grown trees   repair",
 ]
 
@@ -83,6 +91,9 @@ var stats_provider: Callable
 ## True once Lucky's gift lets the vine bind machines. Until then the controls
 ## list leaves that line out, so it does not give the secret away. Set by the arena.
 var bind_unlocked: bool = false
+## s24: true once Seven has Bramble Seeds (its card is picked, or the run started
+## with them). Until then the Bramble line is left out. Set by the arena.
+var bramble_unlocked: bool = true
 
 ## The mute state the speaker icon was last drawn with (see _process).
 var _drawn_muted: bool = false
@@ -305,12 +316,16 @@ func _draw() -> void:
 
 
 ## The controls to list: the keyboard or the touch set, without the bind line
-## until Lucky's gift has unlocked it. Public for the tests.
+## until Lucky's gift has unlocked it, and without the Bramble line until its
+## card is picked (s24). Public for the tests.
 func controls_lines(touch: bool) -> Array[String]:
 	var lines: Array[String] = []
 	for line: String in (CONTROLS_TOUCH if touch else CONTROLS_KEYS):
-		if bind_unlocked or not line.contains(BIND_MARK):
-			lines.append(line)
+		if not bind_unlocked and line.contains(BIND_MARK):
+			continue  # "continue" skips to the next line of the list
+		if not bramble_unlocked and line.contains(BRAMBLE_MARK):
+			continue
+		lines.append(line)
 	return lines
 
 

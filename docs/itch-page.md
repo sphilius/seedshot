@@ -46,10 +46,11 @@ a window flickers.
 Ten waves. One night. Keep the lights on.
 
 - Shoot seed pods. A downed machine roots and grows into a tree.
-- Zip to any tree on a live vine. Zip tree to tree and the vine stays strung as a trap.
+- Zip to any tree on a live vine.
 - Guard the Heart Tree: the Sawbots want it, and if it falls the wave starts over.
-- Throw Bramble Seeds: thorn patches that slow machines and chew them up.
 - Pick an upgrade between waves, because Helios sends heavier machines as the night goes on.
+- After wave 3, unlock two new skills: Bramble Seeds (thorn patches that slow machines and chew them up) and the
+  Vine Trip Line (zip tree to tree and the vine stays strung as a trap).
 - Canopy FM, the block's pirate radio, talks you through it, and gets clearer as the block lights up.
 
 ### 🐱 There is a hidden lucky cat in this game
@@ -68,7 +69,8 @@ bind machines, and a spare fuse that gets you back up once when you'd go down.**
 | Aim and shoot | mouse; hold left click | slide and hold a thumb on the right half |
 | Zip to a tree | right click on the tree | tap the tree |
 | Bind a machine (after Lucky) | right click on the machine | tap the machine |
-| Throw a Bramble Seed | Q or Space | the "thorns" button, right side |
+| Reload (it also reloads by itself) | R | (automatic) |
+| Throw a Bramble Seed (once unlocked) | Q or Space | the "bramble" button, right side |
 | Talk to Lucky | E near the open shop | tap the shop |
 | Pick an upgrade (between waves) | 1, 2 or 3, or click a card | tap a card |
 | Pause | P or Esc | the pause button, top right |
