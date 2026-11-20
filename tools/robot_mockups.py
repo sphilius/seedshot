@@ -9,7 +9,17 @@ WHY
            plates and a sunny uniform stripe. The menace comes from the contrast.
         3. "Brutalist utility": faceless, concrete-grey, rust-streaked, with small red
            status lights. Hardware following orders.
-    These are MOCKUPS: the real sprites in art/sprites/ are not touched.
+    These are MOCKUPS: the real sprites in art/sprites/ are not touched ... until
+    `--apply`. Sasha first locked option 3 (brutalist) on 2026-11-20, then changed to
+    option 2 (corporate cheerful) the same night, so `--apply` writes the corporate
+    cheerful versions into art/sprites/ (the files the game loads). Option 3 stays here
+    as a mockup; to switch, change APPLIED_OPTION below.
+
+    The starting pictures live in art/source/robot_base/ (copies of the sprites as they
+    were before the redesign). The script always starts from THOSE, never from
+    art/sprites/, so running it twice gives the same result and never paints over
+    its own work. NOTE: tools/klad_art.ps1 rebuilds the OLD look from the Klad recipes
+    in art/source/klad/; run this script with --apply after it if you rebuild.
 
 HOW
     Each mockup starts from the machine's current 64 x 64 sprite. Two steps:
@@ -22,7 +32,8 @@ HOW
     picks a direction.
 
 USAGE (from the project root)
-    python tools/robot_mockups.py
+    python tools/robot_mockups.py            make the mockups and the contact sheet
+    python tools/robot_mockups.py --apply    ...and write the locked option into art/sprites/
 
 OUT
     art/concept/robot_redesign/<machine>_<option>.png   64 x 64 each
@@ -31,6 +42,7 @@ OUT
 Needs: Pillow, numpy
 """
 import random
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -38,6 +50,8 @@ from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "art/concept/robot_redesign"
+APPLIED_OPTION = 2  # the locked art direction: 1, 2 or 3 (column in the contact sheet)
+BASE = ROOT / "art/source/robot_base"  # the pre-redesign sprites; the script's starting point
 MACHINES = ("scrapper", "sawbot", "spitter")
 
 
@@ -187,20 +201,26 @@ def option_3(name: str, base: np.ndarray, seed: int) -> np.ndarray:
 
 
 def main() -> None:
-    """Build the nine mockups, then a labelled contact sheet with the current art first."""
+    """Build the nine mockups, then a labelled contact sheet with the original art first.
+    With `--apply` on the command line, also write the locked option over the game's sprites.
+    sys.argv is the list of words typed after the script name."""
+    apply_locked = "--apply" in sys.argv
     OUT.mkdir(parents=True, exist_ok=True)
     scale = 5
     # A row per machine; a column per version: current, then options 1, 2, 3.
-    titles = ["current", "1 same family", "2 corporate cheerful", "3 brutalist"]
+    titles = ["original", "1 same family", "2 corporate cheerful", "3 brutalist"]
     sheet = Image.new("RGBA", (4 * 64 * scale + 5 * 12, 3 * (64 * scale + 22) + 12), (58, 66, 72, 255))
     draw = ImageDraw.Draw(sheet)
     for row, name in enumerate(MACHINES):
-        base = np.array(Image.open(ROOT / f"art/sprites/{name}.png").convert("RGBA"))
+        base = np.array(Image.open(BASE / f"{name}.png").convert("RGBA"))
         versions = [base, option_1(name, base), option_2(name, base), option_3(name, base, seed=7 + row)]
         for column, version in enumerate(versions):
             picture = Image.fromarray(version, "RGBA")
             if column > 0:  # the three options are saved on their own too
                 picture.save(OUT / f"{name}_{column}.png")
+            if column == APPLIED_OPTION and apply_locked:  # the locked option goes into the game
+                picture.save(ROOT / f"art/sprites/{name}.png")
+                print(f"applied option {APPLIED_OPTION}:", name)
             big = picture.resize((64 * scale, 64 * scale), Image.NEAREST)  # NEAREST = hard pixels
             left = 12 + column * (64 * scale + 12)
             top = 12 + row * (64 * scale + 22)
