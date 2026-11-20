@@ -384,6 +384,10 @@ From the kickoff. `config/game_config.tres` holds every speed, cooldown and size
 - The thunk and spit candidates came back very quiet (mean below -36 dB) and need a lot of gain; listen for hiss.
 - The listening page now plays every take evened out to its in-game loudness.
 
+## D-067: s22 merged; playable web builds through GitHub (Made, 2026-11-20)
+
+Sasha asked to merge and push s22-reload, then make a playable web export available through the GitHub repo. Main is at `4e0fa3f` (it also brings in s21: voices, robot mockups, concept art). The repo is private, and GitHub refused Pages on it ("Your current plan does not support GitHub Pages for this repository"). So, for now, each web build goes on a GitHub Release as a zip (`web-4e0fa3f`, 25 MB), played with `python -m http.server`. That zip was downloaded back, served and played to wave 1. `tools/publish_pages.ps1` puts the build on an orphan `gh-pages` branch (already pushed), so Pages is one switch away if the repo goes public or the plan changes. Not uploaded to itch: that waits for the v2.0 update.
+
 ## D-066: Reload: a 10-pod load and the Quick Reload card (Made, 2026-11-20)
 
 Phase 3, item 1 (s22, branch `s22-reload`). Sasha approved a five-line proposal with three changes: the first reload is 3 s (not 4), the best is 0.6 s (not 1 s), and the card stacks 4 times (not 5). Built:
