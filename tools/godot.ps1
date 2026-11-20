@@ -47,6 +47,14 @@ switch ($Task) {
     "export" {
         New-Item -ItemType Directory -Force (Join-Path $project "build\web") | Out-Null
         & $console --headless --path $project --export-release "Web" "build/web/index.html"
+        $exportCode = $LASTEXITCODE
+        # THE INTRO CLIP: Godot's export only writes its own files, so the clip and
+        # the small style and script that play it over the loading screen are
+        # copied in afterwards. (The page asks for them through the Web preset's
+        # "head include" in export_presets.cfg. If they are missing the game
+        # still loads; it just shows the plain loading bar.)
+        Copy-Item (Join-Path $project "web\intro.mp4"), (Join-Path $project "web\intro.css"), (Join-Path $project "web\intro.js") -Destination (Join-Path $project "build\web") -Force
+        exit $exportCode
     }
     "editor" { & $editor --path $project --editor }
 }
