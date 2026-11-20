@@ -154,6 +154,10 @@ var tutorial_on: bool = true
 var seed_damage_bonus: int = 0
 var tree_hp_bonus: int = 0
 var sapling_time_scale: float = 1.0
+## How many Quick Roots have been picked (each one adds to the rooting rate).
+var quick_roots_taken: int = 0
+## Pips the last Patch Kit gave back. Public for the tests.
+var last_repair_pips: int = 0
 ## Every upgrade picked this run, in order. Public for tests.
 var upgrades_taken: Array[StringName] = []
 ## How many times "Quit to main menu" was confirmed. Public for the tests.
@@ -1226,8 +1230,10 @@ func apply_upgrade(id: StringName) -> void:
 		&"heavy_seeds":
 			seed_damage_bonus += CONFIG.upgrade_seed_damage
 		&"thick_plating":
-			# More pips, filled, but no repair of old damage (see Player.add_plating).
-			player.add_plating(CONFIG.upgrade_max_hp)
+			# PATCH KIT: a random refill. randi_range picks a whole number between
+			# the two, both included. No max health, so it never stacks.
+			last_repair_pips = _rng.randi_range(CONFIG.upgrade_repair_min_pips, CONFIG.upgrade_repair_max_pips)
+			player.heal(last_repair_pips)
 		&"hardwood":
 			tree_hp_bonus += CONFIG.upgrade_tree_hp
 			# Trees already standing get it too.
@@ -1237,7 +1243,10 @@ func apply_upgrade(id: StringName) -> void:
 					tree.hp += CONFIG.upgrade_tree_hp
 					tree.queue_redraw()
 		&"quick_roots":
-			sapling_time_scale *= CONFIG.upgrade_sapling_time_factor
+			# Each pick adds 15% to the rooting RATE. Time is 1 / rate: one pick
+			# divides the sapling time by 1.15, two picks by 1.30, and so on.
+			quick_roots_taken += 1
+			sapling_time_scale = 1.0 / (1.0 + CONFIG.upgrade_sapling_rate_gain * float(quick_roots_taken))
 		&"long_trellis":
 			great_powers.trellis_bonus_seconds += CONFIG.upgrade_trellis_seconds
 	_show_banner(UpgradePicker.CATALOG[id][0] + "!", 1.2)
@@ -1246,11 +1255,11 @@ func apply_upgrade(id: StringName) -> void:
 	waves.hold_break = false
 
 
-## Upgrades that must not be dealt right now: Thick Plating once Seven's health
-## is at the cap (the card would do nothing). Public so the tests can read it.
+## Upgrades that must not be dealt right now: the Patch Kit while Seven is at
+## full health (the card would do nothing). Public so the tests can read it.
 func upgrades_left_out() -> Array[StringName]:
 	var left_out: Array[StringName] = []
-	if player.max_hp >= CONFIG.player_hp_cap:
+	if player.hp >= player.max_hp:
 		left_out.append(&"thick_plating")
 	return left_out
 
@@ -1272,7 +1281,7 @@ func grown_trees_near(point: Vector2, radius_cells: float) -> int:
 ## Stepping away (or being at full health) resets the count. Called every frame
 ## from _process; public so the tests can step it by hand.
 func tick_grove_rest(delta: float) -> void:
-	var hurt: bool = not player.is_dead and player.hp < player.max_hp
+	var hurt: bool = not player.is_dead and player.hp < player.max_hp and is_grove_rest_allowed()
 	# Trees in reach are only counted (and shown under Seven) while Seven is hurt.
 	var near: int = grown_trees_near(player.global_position, CONFIG.grove_rest_radius_cells) if hurt else 0
 	var resting: bool = near >= CONFIG.grove_rest_trees
@@ -1289,6 +1298,19 @@ func tick_grove_rest(delta: float) -> void:
 		player.heal(1)
 		Sfx.play(&"grow")  # a small leafy sound for each pip
 		_show_rest_progress()
+
+
+## Grove rest only works while a wave is being fought (s18, Sasha): not between
+## waves or while the upgrade cards are up, and not before the wave's first
+## machine has walked in. Otherwise Seven healed for free in every pause.
+## (With no wave started at all, as in the tests, it is allowed.)
+func is_grove_rest_allowed() -> bool:
+	if waves.wave == 0:
+		return true
+	if player.locked:
+		return false
+	var fighting: bool = waves.state == WaveDirector.State.SPAWNING or waves.state == WaveDirector.State.FIGHTING
+	return fighting and _enemies.get_child_count() > 0
 
 
 ## Hands the Grove rest progress (0 to 1) to the two places that draw it: the

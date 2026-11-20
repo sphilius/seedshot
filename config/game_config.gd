@@ -84,7 +84,8 @@ extends Resource
 ## Hit points of a grown tree. Nothing damages trees yet; Sawbots will (waves 5+).
 @export var tree_hp: int = 6
 ## A downed enemy is a walk-through sapling for this long, then a solid tree.
-@export var sapling_time: float = 1.0
+## s18 (Sasha): doubled from 1.0, so the Quick Roots upgrade has something to speed up.
+@export var sapling_time: float = 2.0
 ## If someone is standing on a sapling when it should turn solid, it waits this
 ## long and tries again (so nobody gets trapped inside a tree).
 @export var sapling_retry_time: float = 0.25
@@ -187,8 +188,10 @@ extends Resource
 ## HIT FEEDBACK (s18, "make it clear when a shot lands and what is hurting Seven").
 ## A machine that takes a hit and survives flashes this colour for this long,
 ## with a ring that closes in on it.
-@export var hit_flash_seconds: float = 0.14
-@export var hit_flash_color: Color = Color(1.0, 1.0, 0.9, 0.85)
+## (First try was 0.14 s and plain white: Sasha found it too faint. Values above
+## 1 keep it bright under the night tint.)
+@export var hit_flash_seconds: float = 0.24
+@export var hit_flash_color: Color = Color(2.4, 2.4, 2.0, 1.0)
 ## SCREEN SHAKE: the playfield (not the HUD) jitters by up to this many pixels,
 ## dying away over shake_seconds. One size for a machine going down, a bigger
 ## one for Seven being hurt. Set shake_scale to 0 to switch all shaking off.
@@ -201,7 +204,10 @@ extends Resource
 ## hurt_arc_seconds (a full ring if the source is unknown).
 @export var hurt_flash_seconds: float = 0.35
 @export var hurt_flash_color: Color = Color(1.0, 0.12, 0.08, 0.3)
-@export var hurt_arc_seconds: float = 0.6
+## (First try was 0.6 s and an arc only: Sasha could not tell what hit Seven. Now
+## it lasts longer and a red beam of hurt_beam_cells points at the attacker.)
+@export var hurt_arc_seconds: float = 1.1
+@export var hurt_beam_cells: float = 2.2
 @export var hurt_arc_color: Color = Color(1.6, 0.25, 0.2)
 ## KNOCK-OUT animation: Seven jolts, tips over and greys out, throwing sparks,
 ## over this many seconds. (Keep it shorter than death_restart_delay.)
@@ -442,12 +448,16 @@ extends Resource
 @export var light_trees_per_wave: float = 4.0
 ## How often the windows are brought up to date with the forest, in seconds.
 @export var light_refresh_seconds: float = 0.4
-## Seed Pouch multiplies the time between pods by this (0.8 = 20% faster).
-@export var upgrade_fire_cooldown_factor: float = 0.8
+## Seed Pouch multiplies the time between pods by this (0.9 = 10% faster). Every
+## pick multiplies again, so the upgrade stacks.
+@export var upgrade_fire_cooldown_factor: float = 0.9
 ## Heavy Seeds: extra damage per pod.
 @export var upgrade_seed_damage: int = 1
-## Thick Plating: extra max health.
-@export var upgrade_max_hp: int = 2
+## PATCH KIT (the card that used to be Thick Plating): refills a random number
+## of pips between these two, and adds no max health, so picking it again never
+## stacks. It is not dealt while Seven is unhurt.
+@export var upgrade_repair_min_pips: int = 1
+@export var upgrade_repair_max_pips: int = 3
 ## The most pips Seven can ever have, however many Thick Platings are taken, so
 ## the row of pips on the HUD always fits. At the cap the card stops being dealt.
 @export var player_hp_cap: int = 10
@@ -461,7 +471,9 @@ extends Resource
 ## (First try was 2 cells and 4 s: Sasha could not tell it was working.)
 @export var grove_rest_radius_cells: float = 3.0
 @export var grove_rest_trees: int = 4
-@export var grove_rest_seconds_per_pip: float = 2.5
+## s18 (Sasha): half as fast as before (was 2.5), and only while a wave is being
+## fought: not between waves, and not before the wave's first machine walks in.
+@export var grove_rest_seconds_per_pip: float = 5.0
 ## The small words under Seven: trees in reach while hurt, and while repairing.
 @export var grove_rest_count_text: String = "Grove %d / %d"
 @export var grove_rest_working_text: String = "Repairing"
@@ -472,10 +484,11 @@ extends Resource
 @export var grove_rest_glow_radius_cells: float = 0.85
 ## Canopy FM explains it the first time Seven is hurt in a run.
 @export var grove_rest_line: String = "Dented? Stand close to four grown trees and the grove patches you up, one pip at a time."
-## Hardwood: extra hit points for every tree.
-@export var upgrade_tree_hp: int = 2
-## Quick Roots multiplies the sapling time by this (0.6 = 40% faster).
-@export var upgrade_sapling_time_factor: float = 0.6
+## Hardwood: extra hit points for every tree, per pick (it stacks).
+@export var upgrade_tree_hp: int = 1
+## Quick Roots: each pick makes saplings root this much faster (0.15 = 15%), and
+## the picks add up: two picks is 30% faster, so the time is divided by 1.30.
+@export var upgrade_sapling_rate_gain: float = 0.15
 ## Long Trellis: extra seconds for every trellis vine.
 @export var upgrade_trellis_seconds: float = 4.0
 ## Linebreakers (heavy Scrappers) per wave. They arrive once the player has had
@@ -493,7 +506,8 @@ extends Resource
 ## runs at wave_end_slow_scale speed (0.3 = 30%) for wave_end_slow_seconds of
 ## real time. Then the upgrade cards come up, then the next wave.
 @export var wave_end_slow_scale: float = 0.3
-@export var wave_end_slow_seconds: float = 0.9
+## (Was 0.9: Sasha found it too short.)
+@export var wave_end_slow_seconds: float = 1.6
 ## After clearing this wave, the banner tells the player it is a fine place to
 ## stop and rate the game. Jam judges play many entries; this tells them they
 ## have seen the core of it. 0 switches the marker off.
@@ -646,7 +660,8 @@ extends Resource
 ## The pool of light each lit window throws onto the lot: reach in cells, and
 ## strength at full brightness (0 to 1).
 @export var window_spill_radius_cells: float = 2.4
-@export_range(0.0, 1.0) var window_spill_strength: float = 0.45
+## s18 (Sasha): the homes and the trees were too bright; both are down 20%.
+@export_range(0.0, 1.0) var window_spill_strength: float = 0.36
 ## How much brighter than its window the pool of light is. The whole lot is
 ## darkened by the night tint, lights included; values above 1 make a light
 ## shine through that darkness instead of being dimmed with everything else.
@@ -674,7 +689,7 @@ extends Resource
 ## How far a grown tree's glow reaches, in cells, and its colour. The alpha
 ## (last number) is the strength of the light.
 @export var tree_glow_radius_cells: float = 1.7
-@export var tree_glow_color: Color = Color(0.35, 0.95, 0.60, 0.30)
+@export var tree_glow_color: Color = Color(0.35, 0.95, 0.60, 0.24)
 ## Seven's lamp: reach in cells, and colour.
 @export var player_glow_radius_cells: float = 2.2
 @export var player_glow_color: Color = Color(1.0, 0.85, 0.60, 0.22)

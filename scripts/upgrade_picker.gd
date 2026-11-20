@@ -21,12 +21,14 @@ const CONFIG: GameConfig = preload("res://config/game_config.tres")
 ## Every upgrade: id -> [name, description]. The numbers in the descriptions are
 ## filled in from the config in _describe(), so they always match the game.
 const CATALOG: Dictionary[StringName, Array] = {
-	&"seed_pouch": ["Seed Pouch", "Fire %d%% faster."],
-	&"heavy_seeds": ["Heavy Seeds", "Seed pods hit %d harder."],
-	&"thick_plating": ["Thick Plating", "+%d max health. No repair: rest by 4 trees."],
-	&"hardwood": ["Hardwood", "Every tree gets +%d hit points."],
-	&"quick_roots": ["Quick Roots", "Saplings root %d%% faster."],
-	&"long_trellis": ["Long Trellis", "Trellis vines last %d s longer."],
+	&"seed_pouch": ["Seed Pouch", "Fire %d%% faster. Stacks."],
+	&"heavy_seeds": ["Heavy Seeds", "Seed pods hit %d harder. Stacks."],
+	# The id is still "thick_plating" (its picture file is named after it), but
+	# since s18 the card is a repair, not extra max health.
+	&"thick_plating": ["Patch Kit", "Repairs %d to %d pips, by luck. Does not stack."],
+	&"hardwood": ["Hardwood", "Every tree gets +%d hit points. Stacks."],
+	&"quick_roots": ["Quick Roots", "Saplings root %d%% faster. Stacks."],
+	&"long_trellis": ["Long Trellis", "Trellis vines last %d s longer. Stacks."],
 }
 
 ## (Wider and taller since s18, to make room for the picture on the left.)
@@ -75,7 +77,7 @@ func has_icon(id: StringName) -> bool:
 
 
 ## Deals `count` different upgrades at random and shows them. Ids in `left_out`
-## are not dealt (the arena leaves out Thick Plating once health is at its cap).
+## are not dealt (the arena leaves out the Patch Kit while Seven is unhurt).
 func offer(count: int, left_out: Array[StringName] = []) -> void:
 	var ids: Array[StringName] = []
 	for id: StringName in CATALOG.keys():
@@ -163,11 +165,12 @@ static func _describe(id: StringName) -> String:
 		&"heavy_seeds":
 			return template % CONFIG.upgrade_seed_damage
 		&"thick_plating":
-			return template % CONFIG.upgrade_max_hp
+			# Two numbers to fill in, so they go in a list.
+			return template % [CONFIG.upgrade_repair_min_pips, CONFIG.upgrade_repair_max_pips]
 		&"hardwood":
 			return template % CONFIG.upgrade_tree_hp
 		&"quick_roots":
-			return template % roundi((1.0 - CONFIG.upgrade_sapling_time_factor) * 100.0)
+			return template % roundi(CONFIG.upgrade_sapling_rate_gain * 100.0)
 		&"long_trellis":
 			return template % roundi(CONFIG.upgrade_trellis_seconds)
 	return template

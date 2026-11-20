@@ -485,9 +485,10 @@ func park(world_position: Vector2) -> void:
 	locked = true
 
 
-## Thick Plating: raises the maximum by up to `amount`, never past the config's
-## player_hp_cap. The NEW pips arrive filled; damage Seven already had stays
-## (repair is Grove rest's job now). Returns how many pips were really added.
+## Raises the maximum by up to `amount`, never past the config's player_hp_cap.
+## The NEW pips arrive filled; damage Seven already had stays. Returns how many
+## pips were really added. (No upgrade uses this since s18, when Thick Plating
+## became the Patch Kit; it is kept for the tests and for a later upgrade.)
 func add_plating(amount: int) -> int:
 	# clampi keeps a whole number between two bounds: here 0 and the room left under the cap.
 	var added: int = clampi(amount, 0, CONFIG.player_hp_cap - max_hp)
@@ -520,7 +521,15 @@ func _draw_hurt_arc() -> void:
 	# angle() is the direction of a vector in radians; the arc spans an eighth of
 	# a turn (PI / 4) to each side of it.
 	var toward: float = (hurt_from - global_position).angle()
-	_aim_overlay.draw_arc(Vector2.ZERO, radius, toward - PI / 4.0, toward + PI / 4.0, 16, color, 6.0)
+	_aim_overlay.draw_arc(Vector2.ZERO, radius, toward - PI / 4.0, toward + PI / 4.0, 16, color, 8.0)
+	# A red beam from the arc out toward the attacker, ending in an arrowhead, so
+	# it is plain which way the hit came from. It shortens as it fades.
+	var out: Vector2 = Vector2.from_angle(toward)
+	var tip: Vector2 = out * (radius + CONFIG.hurt_beam_cells * float(CONFIG.cell_size) * left)
+	_aim_overlay.draw_line(out * radius, tip, color, 5.0)
+	# orthogonal() is the same vector turned a quarter turn: the arrowhead's width.
+	var side: Vector2 = out.orthogonal() * 9.0
+	_aim_overlay.draw_colored_polygon(PackedVector2Array([tip + out * 14.0, tip + side, tip - side]), color)
 
 
 ## Counts down the "cannot be hurt" time and blinks the bot while it lasts.

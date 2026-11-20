@@ -1707,7 +1707,7 @@ func _test_upgrades() -> void:
 	var player: Player = _arena.player
 	var hp_before: int = player.max_hp
 	_arena.apply_upgrade(&"thick_plating")
-	_check(player.max_hp == hp_before + CONFIG.upgrade_max_hp and player.hp == player.max_hp, "Thick Plating: more max health, and the new pips arrive filled")
+	_check(player.max_hp == hp_before, "Patch Kit: no extra max health")
 	_arena.apply_upgrade(&"seed_pouch")
 	_check(player.fire_cooldown_scale < 1.0, "Seed Pouch: pods come faster")
 	_arena.apply_upgrade(&"heavy_seeds")
@@ -1722,8 +1722,18 @@ func _test_upgrades() -> void:
 	var trellis_before: float = _arena.great_powers.trellis_bonus_seconds
 	_arena.apply_upgrade(&"long_trellis")
 	_check(is_equal_approx(_arena.great_powers.trellis_bonus_seconds - trellis_before, CONFIG.upgrade_trellis_seconds), "Long Trellis: trellis vines last longer")
+	# (Count from what is already taken: the random first pick may have been Quick Roots.)
+	var roots_before: int = _arena.quick_roots_taken
+	var gain: float = CONFIG.upgrade_sapling_rate_gain
 	_arena.apply_upgrade(&"quick_roots")
-	_check(_arena.sapling_time_scale < 1.0, "Quick Roots: saplings root faster")
+	# Rooting RATE goes up 15% a pick, so the TIME is divided by 1.15, then 1.30...
+	_check(is_equal_approx(_arena.sapling_time_scale, 1.0 / (1.0 + gain * float(roots_before + 1))), "Quick Roots: saplings root %d%% faster" % roundi(gain * 100.0))
+	_arena.apply_upgrade(&"quick_roots")
+	_check(is_equal_approx(_arena.sapling_time_scale, 1.0 / (1.0 + gain * float(roots_before + 2))), "a second Quick Roots stacks: the rates add up")
+	# Seed Pouch multiplies the time between pods each pick, so it stacks as well.
+	var pouch_before: float = player.fire_cooldown_scale
+	_arena.apply_upgrade(&"seed_pouch")
+	_check(is_equal_approx(player.fire_cooldown_scale, pouch_before * CONFIG.upgrade_fire_cooldown_factor), "a second Seed Pouch stacks too")
 	for id: StringName in UpgradePicker.CATALOG.keys():
 		_check(UpgradePicker._describe(id).find("%d") == -1, "the %s card's text is filled in" % id)
 
@@ -2008,26 +2018,28 @@ func _test_plating_and_grove_rest() -> void:
 	var player: Player = _arena.player
 	var pips: HealthPips = _arena._health_pips
 
-	# Thick Plating on a hurt Seven: the new pips are filled, the old damage stays.
-	player.take_damage(2)
-	var hp_before: int = player.hp
+	# PATCH KIT (the card that was Thick Plating): a random 1 to 3 pip refill and
+	# no extra max health, so it cannot stack.
 	var max_before: int = player.max_hp
+	player.hp = 1  # (set directly: take_damage would be ignored while Seven blinks)
 	_arena.apply_upgrade(&"thick_plating")
-	_check(player.max_hp == max_before + CONFIG.upgrade_max_hp, "Thick Plating adds %d max health" % CONFIG.upgrade_max_hp)
-	_check(player.hp == hp_before + CONFIG.upgrade_max_hp, "the new pips arrive filled")
-	_check(player.max_hp - player.hp == 2, "and the damage Seven already had is NOT repaired")
-
-	# The cap: however many are taken, health never passes player_hp_cap.
+	var gave: int = _arena.last_repair_pips
+	_check(gave >= CONFIG.upgrade_repair_min_pips and gave <= CONFIG.upgrade_repair_max_pips, "a Patch Kit repairs between %d and %d pips" % [CONFIG.upgrade_repair_min_pips, CONFIG.upgrade_repair_max_pips])
+	_check(player.hp == 1 + gave and player.max_hp == max_before, "the pips come back, and max health does not grow")
 	for i: int in 10:
 		_arena.apply_upgrade(&"thick_plating")
-	_check(player.max_hp == CONFIG.player_hp_cap, "max health stops at the cap of %d" % CONFIG.player_hp_cap)
-	_check(_arena.upgrades_left_out().has(&"thick_plating"), "at the cap, Thick Plating is no longer dealt")
+	_check(player.hp == player.max_hp and player.max_hp == max_before, "ten more never take Seven past full health")
+	_check(_arena.upgrades_left_out().has(&"thick_plating"), "at full health the Patch Kit is not dealt")
 	var dealt_it: bool = false
 	for i: int in 20:
 		_arena.upgrade_picker.offer(CONFIG.upgrade_choices, _arena.upgrades_left_out())
 		dealt_it = dealt_it or _arena.upgrade_picker.offered.has(&"thick_plating")
 	_arena.upgrade_picker.choose(0)  # close the cards again
-	_check(not dealt_it, "20 deals at the cap never show the Thick Plating card")
+	_check(not dealt_it, "20 deals at full health never show the Patch Kit")
+
+	# The pips: add_plating still raises the maximum up to the cap (kept for the HUD check).
+	player.add_plating(CONFIG.player_hp_cap)
+	_check(player.max_hp == CONFIG.player_hp_cap, "max health stops at the cap of %d" % CONFIG.player_hp_cap)
 
 	# The HUD: with the longest wave label and every pip, the row starts after
 	# the label and ends before the right margin.
@@ -2062,6 +2074,22 @@ func _test_plating_and_grove_rest() -> void:
 	_arena.tick_grove_rest(CONFIG.grove_rest_seconds_per_pip)
 	_arena.tick_grove_rest(CONFIG.grove_rest_seconds_per_pip)
 	_check(player.hp == player.max_hp and not player.is_resting, "it stops at full health, and the glow goes out")
+
+	# s18: no Grove rest between waves, or before a wave's first machine walks in.
+	player.hp = 1
+	_arena.waves.wave = 3
+	_arena.waves.state = WaveDirector.State.BREAK
+	_arena.tick_grove_rest(CONFIG.grove_rest_seconds_per_pip * 2.0)
+	_check(player.hp == 1 and not player.is_resting, "between waves the grove does not repair Seven")
+	_arena.waves.state = WaveDirector.State.SPAWNING
+	_arena.tick_grove_rest(CONFIG.grove_rest_seconds_per_pip * 2.0)
+	_check(player.hp == 1, "nor before the wave's first machine has walked in")
+	_arena.waves.state = WaveDirector.State.FIGHTING
+	_arena.spawn_sawbot_at(Vector2i(22, 12))
+	_arena.tick_grove_rest(CONFIG.grove_rest_seconds_per_pip * 1.1)
+	_check(player.hp == 2 and player.is_resting, "with a machine on the lot, it repairs again")
+	_arena.waves.state = WaveDirector.State.IDLE
+	_arena.waves.wave = 0
 
 ## s18 batch 2: tougher and faster machines, the Heart Tree's fading label, Seven
 ## parked while the upgrade cards are up, and windows that follow the forest.

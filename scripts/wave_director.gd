@@ -104,6 +104,10 @@ func _physics_process(delta: float) -> void:
 			if _timer > 0.0:
 				return
 			_timer = CONFIG.wave_spawn_interval / pace_multiplier
+			# A staged (teaching) wave gives the machine just downed time to grow
+			# into a tree first, so the next one walks in to find real cover there.
+			if wave <= staged_wave_count():
+				_timer = maxf(_timer, CONFIG.sapling_time + 0.5)  # maxf = the larger of the two
 			var kind: StringName = _queue.pop_front()  # take the next machine off the list
 			_alive += 1
 			spawn_requested.emit(kind, wave)
