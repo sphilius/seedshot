@@ -35,6 +35,8 @@ OUT
     art/source/seven_pixel/<view>_<take>.png       the snapped 64 x 64 frame (and @6x preview)
     art/source/seven_pixel/sheet.png               every snapped take side by side
     art/sprites/gardener_bot_facings.png, art/sprites/gardener_bot.png       (build only)
+    art/sprites/gardener_bot_facings_aiming.png   the same strip with the resting nozzle painted out
+                                                  (the game uses it while its own gold aim arm shows)
     art/source/seven_pixel/strip@4x.png            the finished strip at 4x, for looking
 
 Needs: Pillow, numpy, scipy
@@ -104,20 +106,54 @@ VIEWS = {
         "THIS VIEW: a THREE-QUARTER FRONT view. Seven is turned 45 degrees so it faces toward the "
         "viewer AND toward the RIGHT of the picture: we see the face window turned to the right, the "
         "front of the body and the near side of the body. The nozzle arm is on the far side.",
-        [(1, False), (3, True)],
+        [(1, False)],
     ),
     "side": (
         "THIS VIEW: the SIDE view, exactly the 'SIDE' picture of the model sheet. Seven faces the RIGHT "
         "of the picture in profile, the face window at the right edge of the head, the boots pointing "
         "right.",
-        [(0, False), (4, True)],
+        [],  # no longer used for a frame: West has its own drawing, `side_far` (kept as history)
+    ),
+    "side_far": (
+        "THIS VIEW: the SIDE view facing the LEFT of the picture in profile: the face window at the LEFT "
+        "edge of the head, the boots pointing left. The NEAR arm (the one we can see, hanging at the "
+        "body's side) is the plain-hand arm with the small three-fingered hand; the gold nozzle arm is "
+        "on the far side, hidden behind the body, so NO gold nozzle shows. Keep the hat flat and wide "
+        "like the reference, and the pose and size the same as the reference.",
+        [(4, False)],
     ),
     "three_back": (
         "THIS VIEW: a THREE-QUARTER BACK view. Seven is turned so it faces away from the viewer AND "
         "toward the RIGHT of the picture: we see the back of the body and the back of the hat, and just "
         "a sliver of the face window at the right edge of the head. The gold nozzle arm is on the near "
         "side.",
-        [(7, False), (5, True)],
+        [(7, False)],
+    ),
+    # Seven's NOZZLE arm is its RIGHT arm (the picture's left in the front view). A mirrored view
+    # swaps the arms, so East, SouthWest and NorthWest are drawn for themselves, not flipped.
+    "side_near": (
+        "THIS VIEW: the SIDE view like the 'SIDE' picture of the model sheet: Seven faces the RIGHT of the "
+        "picture in profile, the face window at the right edge of the head, the boots pointing right. "
+        "BUT this time the NEAR arm (the one we can see, hanging at the body's side) is the NOZZLE arm: "
+        "the short gold watering-spout nozzle sticks out of the near hand, pointing forward (to the "
+        "right) and slightly down. The other arm is hidden behind the body.",
+        [(0, False)],
+    ),
+    "three_front_left": (
+        "THIS VIEW: a THREE-QUARTER FRONT view turned the other way. Seven is turned 45 degrees so it "
+        "faces toward the viewer AND toward the LEFT of the picture: the face window is turned to the "
+        "left. The gold nozzle arm is on the FAR side: on the left of the picture, partly hidden behind "
+        "the body, with the gold spout showing past the body's left edge. The plain-hand arm is on the "
+        "near side, on the right of the picture.",
+        [(3, False)],
+    ),
+    "three_back_left": (
+        "THIS VIEW: a THREE-QUARTER BACK view turned to the LEFT. Seven faces away from the viewer AND "
+        "toward the LEFT of the picture: we see the back of the body and the back of the hat, and just a "
+        "sliver of the face window at the LEFT edge of the head. The gold nozzle arm is on the FAR side: "
+        "on the right of the picture, partly hidden behind the body, the gold spout showing past the "
+        "body's right edge. The plain-hand arm is on the near side, on the left of the picture.",
+        [(5, False)],
     ),
     "back": (
         "THIS VIEW: the BACK, exactly the 'BACK' picture of the model sheet. Seven faces away from the "
@@ -138,6 +174,20 @@ def draw(view: str, take: int, key: str, front_raw: Path = None) -> Path:
         references.append(front_raw)
         note = (" The SECOND reference picture is the finished pixel sprite of the FRONT view: draw the "
                 "same character at the same size and in the same pixel style, just turned.")
+    if view == "side_far":
+        # West gets a third reference: the finished East view flipped to face left, so West has the
+        # same hat, size and pose. (Its near hand holds the nozzle, which is wrong for West: said below.)
+        # `OUT / "name"` joins a folder and a file name (pathlib overloads the / operator for this).
+        flipped = OUT / "ref_side_near_flipped.png"
+        # Open the East drawing, mirror it left-to-right, and save it as the extra reference file.
+        # The calls are chained: each one works on the picture the call before it returned.
+        Image.open(OUT / "side_near_raw_2.png").transpose(Image.FLIP_LEFT_RIGHT).save(flipped)
+        references.append(flipped)  # a list's .append adds one item at the end
+        # `+=` on a string glues more text onto the end of `note`; the brackets let one long
+        # string sit across several lines (neighbouring string pieces are joined automatically).
+        note += (" The LAST reference picture is the finished East view flipped to face left: copy its "
+                 "hat, size and pose exactly, but its near hand holds the gold nozzle, which is WRONG for "
+                 "this view: in YOUR drawing the near hand is the plain hand and no nozzle shows.")
     prompt = BASE + note + "\n\n" + VIEWS[view][0]
     raw_path = OUT / f"{view}_raw_{take}.png"
     raw_path.write_bytes(concepts.generate(prompt, key, references=tuple(references), aspect="1:1"))
@@ -257,10 +307,36 @@ def build_sheet() -> None:
     print("saved sheet.png")
 
 
+def without_nozzle(frame: Image.Image) -> Image.Image:
+    """Return a copy of one frame with the resting gold nozzle painted out of the right hand.
+    WHY: while Seven aims, the game draws its own gold nozzle ARM reaching along the aim
+    (scripts/player.gd `_draw_nozzle`); with the painted one still hanging at the side Seven would
+    show two nozzles. So the game swaps to a strip without it whenever the aim arm is showing.
+    HOW: the nozzle is a clump of gold pixels hanging off the body. Gold also appears in the hat
+    rim (high up), the boots' edge (low down) and small chest rivets (tiny separate dots), so we
+    only recolour a gold CLUMP of 4 or more pixels whose middle sits between the hat and the boots.
+    Gold becomes emerald and dark gold becomes dark emerald, so what is left is a plain green fist."""
+    pixels = np.array(frame.convert("RGBA"))
+    palette = {name: tuple(int(code[i:i + 2], 16) for i in (1, 3, 5)) for name, code in PALETTE}
+    gold, gold_dark = palette["gold"], palette["gold-dark"]
+    is_gold = (pixels[..., :3] == gold).all(axis=2) & (pixels[..., 3] > 0)
+    is_dark_gold = (pixels[..., :3] == gold_dark).all(axis=2) & (pixels[..., 3] > 0)
+    # `structure` of all ones makes diagonal neighbours count as touching when we group pixels.
+    clumps, count = ndimage.label(is_gold | is_dark_gold, structure=np.ones((3, 3)))
+    for number in range(1, count + 1):
+        ys, xs = np.where(clumps == number)
+        if len(ys) >= 4 and 28 <= ys.mean() <= 52:
+            for y, x in zip(ys, xs):
+                pixels[y, x, :3] = palette["emerald"] if is_gold[y, x] else palette["emerald-dark"]
+    return Image.fromarray(pixels, "RGBA")
+
+
 def build_strip(picks: dict) -> None:
     """Assemble the 8-frame strip from the chosen take of each view (mirroring where needed)."""
     frames = [None] * 8
     for view, (_, targets) in VIEWS.items():
+        if not targets:
+            continue  # a view that makes no frame (the old `side`) needs no pick
         frame = Image.open(OUT / f"{view}_{picks[view]}.png").convert("RGBA")
         for index, mirrored in targets:
             frames[index] = frame.transpose(Image.FLIP_LEFT_RIGHT) if mirrored else frame
@@ -268,6 +344,11 @@ def build_strip(picks: dict) -> None:
     for index, frame in enumerate(frames):
         strip.paste(frame, (index * SIZE, 0))
     strip.save(ROOT / "art/sprites/gardener_bot_facings.png")
+    # The same eight frames with the resting nozzle painted out: used while the aim arm is drawn.
+    aiming = Image.new("RGBA", strip.size, (0, 0, 0, 0))
+    for index, frame in enumerate(frames):
+        aiming.paste(without_nozzle(frame), (index * SIZE, 0))
+    aiming.save(ROOT / "art/sprites/gardener_bot_facings_aiming.png")
     frames[2].save(ROOT / "art/sprites/gardener_bot.png")
     big = strip.resize((SIZE * 8 * 4, SIZE * 4), Image.NEAREST)
     preview = Image.new("RGBA", big.size, (58, 66, 72, 255))

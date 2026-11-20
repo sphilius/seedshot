@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="GameConfig" load_steps=22 format=3]
+[gd_resource type="Resource" script_class="GameConfig" load_steps=23 format=3]
 
 [ext_resource type="Script" path="res://config/game_config.gd" id="1_config"]
 [ext_resource type="Texture2D" path="res://art/sprites/gardener_bot.png" id="2_player"]
@@ -18,6 +18,7 @@
 [ext_resource type="Texture2D" path="res://art/sprites/lucky_cat_wave.png" id="16_cat_wave"]
 [ext_resource type="Texture2D" path="res://art/sprites/repair_icon.png" id="repair_icon"]
 [ext_resource type="Texture2D" path="res://art/sprites/gardener_bot_facings.png" id="player_facings"]
+[ext_resource type="Texture2D" path="res://art/sprites/gardener_bot_facings_aiming.png" id="player_facings_aiming"]
 [ext_resource type="Texture2D" path="res://art/sprites/linebreaker.png" id="linebreaker_tex"]
 [ext_resource type="Texture2D" path="res://art/sprites/ripsaw.png" id="ripsaw_tex"]
 [ext_resource type="Texture2D" path="res://art/sprites/arc_spitter.png" id="arc_spitter_tex"]
@@ -27,6 +28,7 @@ script = ExtResource("1_config")
 player_texture = ExtResource("2_player")
 repair_icon_texture = ExtResource("repair_icon")
 player_facings_texture = ExtResource("player_facings")
+player_facings_aiming_texture = ExtResource("player_facings_aiming")
 linebreaker_texture = ExtResource("linebreaker_tex")
 ripsaw_texture = ExtResource("ripsaw_tex")
 arc_spitter_texture = ExtResource("arc_spitter_tex")

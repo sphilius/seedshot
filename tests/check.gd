@@ -1575,6 +1575,9 @@ func _test_tree_pictures() -> void:
 	_check(seven_sprite.hframes == CONFIG.player_facing_count, "Seven's sprite is cut into one frame per facing")
 	var facings: Texture2D = CONFIG.player_facings_texture
 	_check(facings != null and facings.get_size() == Vector2(64.0 * CONFIG.player_facing_count, 64.0), "the facings strip is one 64 x 64 frame per facing")
+	var aiming_strip: Texture2D = CONFIG.player_facings_aiming_texture
+	_check(aiming_strip != null and aiming_strip.get_size() == facings.get_size(), "the aiming strip (no resting nozzle) is the same size as the facings strip")
+	_check(seven_sprite.texture == aiming_strip, "Seven shows the no-nozzle strip while its aim arm is drawn")
 	var repair: Texture2D = CONFIG.repair_icon_texture
 	_check(repair != null and repair.get_size() == Vector2(64.0, 64.0), "the repair icon is 64 x 64")
 	await _fresh_arena()
